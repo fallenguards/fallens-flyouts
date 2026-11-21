@@ -22,6 +22,8 @@ local TEXT = {
     prevTip = "The flyout before this one.",
     nextTip = "The next flyout.",
     offTip = "Takes the picked icon off the flyout.",
+    ranks = "Keep a spell's ranks in order",
+    ranksTip = "Ranks of one spell in a flyout stay in rank order, Rank 1 first.",
 }
 A.TEXT = TEXT
 
@@ -52,6 +54,7 @@ function A.Refresh()
     w.prev:SetEnabled(count > 1)
     w.next:SetEnabled(count > 1)
     w.off:SetEnabled(held ~= nil)
+    w.ranks:SetChecked(F.Ranked())
     for i, button in ipairs(w.icons) do
         local entry = flyout and flyout.entries[i]
         button:SetShown(entry ~= nil)
@@ -147,6 +150,13 @@ local function Icon(i)
 end
 
 -- built under the last control of the page, when the page is
+-- the check box: ranks of one spell kept in rank order, or left as they are put
+function A.Ranks(on)
+    local ok, why = F.SetRanked(on)
+    if not ok and why then ns.Warn(why) end
+    A.Refresh()
+end
+
 function A.Build(page, above)
     if page.arrange then return end
     panel = page
@@ -175,6 +185,19 @@ function A.Build(page, above)
     end
     w.off = Button(TEXT.off, TEXT.offTip, A.TakeOff)
     w.off:SetPoint("TOPLEFT", w.icons[1], "BOTTOMLEFT", -GAP / 2, -GAP * 2)
+    -- the game's own check box, beside it
+    w.ranks = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    w.ranks:SetPoint("LEFT", w.off, "RIGHT", GAP * 2, 0)
+    local label = w.ranks.Text or w.ranks.text
+    if not label then
+        label = w.ranks:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        label:SetPoint("LEFT", w.ranks, "RIGHT", GAP / 2, 0)
+    end
+    label:SetText(TEXT.ranks)
+    w.ranks.tip = TEXT.ranksTip
+    w.ranks:SetScript("OnClick", function(self) A.Ranks(self:GetChecked() and true or false) end)
+    w.ranks:SetScript("OnEnter", ShowTip)
+    w.ranks:SetScript("OnLeave", HideTip)
     panel.arrange = w
     -- a flyout changed elsewhere shows here at once
     F.Watch(function(what)

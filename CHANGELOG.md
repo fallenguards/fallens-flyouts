@@ -2,6 +2,9 @@
 
 ## [1.0.1] - 2026-11-21
 
+### Added
+- Ranks of one spell in the same flyout are kept in rank order, Rank 1 first, whichever of them the button holds. Other icons stay where you put them. A check box under Arrange a flyout in the settings (`/ff`) turns this off.
+
 ### Changed
 - In the game's Keybindings options, the flyouts on the bars of gamepad mode have a heading and rows of their own, apart from the flyouts on your action bars.
 - A flyout whose ability is on no bar any more is no longer listed there, and the listed flyouts close up with no gaps between them. A row with a key set on it always keeps its flyout.

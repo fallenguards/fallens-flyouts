@@ -955,6 +955,60 @@ local function Rekey()
     end
 end
 
+-- a spell's name and its rank, for telling the ranks of one spell; nil for anything else
+local function RankOf(entry)
+    if entry.kind ~= "spell" then return nil end
+    local name = C_Spell.GetSpellName and C_Spell.GetSpellName(entry.id)
+    if Hidden(name) or type(name) ~= "string" or name == "" then return nil end
+    local sub = C_Spell.GetSpellSubtext and C_Spell.GetSpellSubtext(entry.id)
+    if Hidden(sub) or type(sub) ~= "string" then return name, nil end
+    return name, tonumber(sub:match("%d+"))
+end
+
+-- The ranks of one spell stand in rank order, in the places they hold
+-- between them, whichever of them the button has. The rest stay put.
+local function Order(flyout)
+    local groups = {}
+    for place, entry in ipairs(flyout.entries) do
+        local name, rank = RankOf(entry)
+        if name then
+            local group = groups[name]
+            if not group then
+                group = { places = {}, members = {}, ranked = true }
+                groups[name] = group
+            end
+            group.places[#group.places + 1] = place
+            group.members[#group.members + 1] = { entry = entry, rank = rank, at = place }
+            if not rank then group.ranked = false end
+        end
+    end
+    local changed = false
+    for _, group in pairs(groups) do
+        if #group.members > 1 then
+            -- by the rank the game names for each; where it names none, by the spells' own numbers
+            for _, member in ipairs(group.members) do
+                member.key = member.entry.id
+                if group.ranked then member.key = member.rank end
+            end
+            table.sort(group.members, function(a, b)
+                if a.key ~= b.key then return a.key < b.key end
+                return a.at < b.at
+            end)
+            local shifted = false
+            for k, place in ipairs(group.places) do
+                local entry = group.members[k].entry
+                if flyout.entries[place] ~= entry then flyout.entries[place], shifted = entry, true end
+            end
+            if shifted then
+                changed = true
+                ns.Log(("ranks: %d of one spell put in order by %s"):format(#group.members,
+                    group.ranked and "the ranks the game names" or "the spells' own numbers"))
+            end
+        end
+    end
+    return changed
+end
+
 -- lays every flyout on its button; waits out a fight
 function F.Apply()
     if InCombatLockdown() then
@@ -970,7 +1024,9 @@ function F.Apply()
     root:Execute("armed, held, picked = nil, nil, nil")
     local taken = {}
     used = 0
+    local ranked = F.Ranked()
     for _, flyout in ipairs(list or {}) do
+        if ranked then Order(flyout) end
         local state = Run(flyout)
         local name = flyout.host
         local host = not state.lost and Bars.Named(name)
@@ -1185,6 +1241,20 @@ function F.SetKey(flyout, i, key, pad)
 end
 
 -- the key and pad button each icon of a flyout on the bars is picked with
+-- whether the ranks of one spell are kept in rank order: the profile's, on unless turned off
+function F.Ranked()
+    local data = P.Data()
+    return not (data and data.unranked)
+end
+function F.SetRanked(on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    data.unranked = not on or nil
+    F.Apply()
+    return true
+end
+
 function F.Picks(flyout)
     local unit = Run(flyout).unit
     return unit and unit.picks

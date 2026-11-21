@@ -767,6 +767,61 @@ do
     page:Hide()
 end
 
+print("ranks of one spell in a flyout stand in rank order, whichever the button holds")
+do
+    local hadPlaced = W.placed
+    W.placed = W.placed or {}
+    W.ranks = { [9001] = { "Mend", 1 }, [9002] = { "Mend", 2 }, [9003] = { "Mend", 3 } }
+    local function ids(flyout)
+        local out = {}
+        for i, entry in ipairs(flyout.entries) do out[i] = tostring(entry.id) end
+        return table.concat(out, " ")
+    end
+    -- the button holds rank 2; rank 1 is dragged onto it
+    W.placed[8] = 9002
+    fire("ACTIONBAR_SLOT_CHANGED", 8)
+    flushAll()
+    stack("ActionButton8", 9001)
+    local ranked = NS.Flyouts.At("ActionButton8")
+    check(ranked ~= nil and ids(ranked) == "9001 9002" and ranked.main.id == 9002,
+        "rank 1 put onto rank 2: rank 1 is the first icon, and the button keeps its own")
+    stack("ActionButton8", 777)
+    stack("ActionButton8", 9003)
+    check(ids(ranked) == "9001 9002 777 9003", "another spell among them stays where it was put")
+    NS.Flyouts.Move(ranked, 4, 1)
+    check(ids(ranked) == "9001 9002 9003 777", "a rank moved by hand ahead of the lower ones: they stand in order in the places they hold")
+    NS.Flyouts.Move(ranked, 4, 2)
+    check(ids(ranked) == "9001 777 9002 9003", "the other spell moved in among them: it stays there, the ranks in order around it")
+    -- the game names no rank for one of them: the spells' own numbers decide
+    W.ranks[9002][2] = nil
+    NS.Flyouts.Move(ranked, 4, 1)
+    check(ids(ranked) == "9001 9002 777 9003", "with a rank the game does not name, they go by the spells' own numbers")
+    W.ranks[9002][2] = 2
+    local box = page.arrange.ranks
+    check(box ~= nil and box:GetChecked() and NS.Flyouts.Ranked(), "the settings page has a check box for it, on to begin with")
+    box.checked = false
+    box.scripts.OnClick(box)
+    NS.Flyouts.Move(ranked, 4, 1)
+    check(not NS.Flyouts.Ranked() and ids(ranked) == "9003 9001 9002 777" and NS.Profiles.Data().unranked == true,
+        "turned off there, the order is the player's own, and the profile remembers")
+    box.checked = true
+    box.scripts.OnClick(box)
+    check(NS.Flyouts.Ranked() and ids(ranked) == "9001 9002 9003 777" and NS.Profiles.Data().unranked == nil,
+        "turned on again, the ranks stand in order at once")
+    W.combat = true
+    box.checked = false
+    box.scripts.OnClick(box)
+    check(NS.Flyouts.Ranked() and box:GetChecked(), "in a fight the setting does not change, and the box shows it")
+    W.combat = false
+    while #ranked.entries > 1 and NS.Flyouts.At("ActionButton8") do NS.Flyouts.Remove(ranked, 1) end
+    W.placed[8] = nil
+    W.ranks = nil
+    if not hadPlaced then W.placed = nil end
+    fire("ACTIONBAR_SLOT_CHANGED", 8)
+    flushAll()
+    check(NS.Flyouts.At("ActionButton8") == nil and order() == "101 501 502", "the bars are as before")
+end
+
 print("gamepad mode, binding or moving onto a taken button: swap the old one out, or add to its flyout")
 do
     local Pad = NS.PadBind

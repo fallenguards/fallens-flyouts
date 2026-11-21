@@ -168,6 +168,8 @@ end
 function Frame:SetShown(v) if v then self:Show() else self:Hide() end end
 function Frame:IsShown() return self.shown end
 function Frame:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
+function Frame:SetChecked(on) self.checked = on and true or false end
+function Frame:GetChecked() return self.checked == true end
 function Frame:GetName() return self.name end
 -- a button's number on its bar; on the bars of gamepad mode it is the button's slot
 function Frame:GetID() return self.id or 0 end
@@ -451,7 +453,15 @@ function GetMacroInfo(x) return "Macro" .. tostring(x), 1234 end
 C_Spell = {
     PickupSpell = function(id) W.cursor = { "spell", 7, "spell", id, id } end,
     GetSpellTexture = function(id) return id end,
-    GetSpellName = function(id) return "Spell " .. id end,
+    -- W.ranks: spells that are ranks of one spell, id to its name and rank
+    GetSpellName = function(id)
+        local ranked = W.ranks and W.ranks[id]
+        return ranked and ranked[1] or ("Spell " .. id)
+    end,
+    GetSpellSubtext = function(id)
+        local ranked = W.ranks and W.ranks[id]
+        return ranked and ranked[2] and ("Rank " .. ranked[2]) or ""
+    end,
     -- a spell's own cooldown, else the global one, else none
     GetSpellCooldown = function(id)
         return W.cooling[id] or W.gcd or { startTime = 0, duration = 0, isActive = false, modRate = 1 }
