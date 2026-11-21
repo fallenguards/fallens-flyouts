@@ -962,7 +962,7 @@ local function Rebind()
     Bars.KeyMap(true)
     for f = 1, used do
         local unit = units[f]
-        local mine, mods, plain, listed = {}, {}, {}, 0
+        local mods, plain, listed = {}, {}, 0
         local function List(key, i)
             listed = listed + 1
             root:SetAttribute("pkey" .. f .. "_" .. listed, key)
@@ -976,24 +976,31 @@ local function Rebind()
             end
         end
         unit.keys = OpenKeys(unit)
-        for _, key in ipairs(unit.keys) do mine[key] = true end
+        -- An opener key with a modifier: while the modifier is held, a plain pick key arrives
+        -- under it, so the picks are bound under it too. That goes for the opener's own key:
+        -- pressed again with the flyout open it picks its spot, as a plain key does (a shoulder
+        -- and D-pad down opens, the same again picks the spot D-pad down stands for).
+        for _, key in ipairs(unit.keys) do
+            local mod = key:match("^(.*%-).")
+            if mod then mods[mod] = true end
+        end
+        for mod in pairs(mods) do
+            for i, pick in ipairs(unit.picks) do
+                for _, base in ipairs({ pick.key, pick.pad }) do
+                    local under = mod .. base
+                    if not base:find("-", 1, true) and not plain[under] then
+                        List(under, i)
+                        plain[under] = true
+                    end
+                end
+            end
+        end
         for i, key in ipairs(unit.keys) do
             -- a key that is a pick while open cannot be held: its release may go to the pick
             local how = plain[key] and "tap" or "LeftButton"
             root:SetAttribute("okey" .. f .. "_" .. i, key)
             root:SetAttribute("obtn" .. f .. "_" .. i, how)
             SetOverrideBindingClick(root, true, key, OPENER .. f, how)
-            local mod = how ~= "tap" and key:match("^(.*%-).")
-            if mod then mods[mod] = true end
-        end
-        -- held with a modifier, a plain pick key arrives under it: bound so too
-        for mod in pairs(mods) do
-            for i, pick in ipairs(unit.picks) do
-                for _, base in ipairs({ pick.key, pick.pad }) do
-                    local under = mod .. base
-                    if not base:find("-", 1, true) and not mine[under] and not plain[under] then List(under, i) end
-                end
-            end
         end
         root:SetAttribute("pkeys" .. f, listed)
         root:SetAttribute("okeys" .. f, #unit.keys)

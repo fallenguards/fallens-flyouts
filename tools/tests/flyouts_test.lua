@@ -1155,6 +1155,30 @@ do
     check(NS.Flyouts.At("ActionButton8") == nil and order() == "101 501 502", "the bars are as before")
 end
 
+print("the key that opened a flyout, pressed again, picks its spot: under a held modifier too")
+do
+    -- his controller (2026-11-21): a shoulder held and D-pad down opens a flyout; the same again
+    -- only shut it, where D-pad down stands for the spot by the button
+    local _, unit = NS.Flyouts.At("ActionButton1")
+    W.base["SHIFT-PADDDOWN"] = "ACTIONBUTTON1"
+    rebound()
+    local first = "CLICK FallensFlyoutsEntry" .. unit.index .. "_1:Key"
+    check(opener("SHIFT-PADDDOWN") == one, "a D-pad button under a held shoulder is the flyout's key")
+    local castsBefore = #W.casts
+    tap("SHIFT-PADDDOWN")
+    check(unit.menu:IsShown() and GetBindingAction("SHIFT-PADDDOWN", true) == first and GetBindingAction("PADDDOWN", true) == first,
+        "open, that same press is the pick of the spot the D-pad's down stands for, with the shoulder held or let go")
+    tap("SHIFT-PADDDOWN")
+    check(W.casts[#W.casts] == "spell:101" and #W.casts == castsBefore + 1 and not unit.menu:IsShown(),
+        "pressed again it casts that spot and shuts the flyout: it is not just shut")
+    tap("SHIFT-PADDDOWN")
+    tap("SHIFT-PADDUP")
+    check(W.casts[#W.casts] == "spell:502" and not unit.menu:IsShown(), "the other D-pad buttons under the shoulder pick their spots as before")
+    W.base["SHIFT-PADDDOWN"] = nil
+    rebound()
+    check(opener("SHIFT-PADDDOWN") == nil and opener("1") == one, "the key taken away, all is as before")
+end
+
 print("the mouse on an icon: nothing on the press, the pick on the release")
 do
     local _, unit = NS.Flyouts.At("ActionButton1")

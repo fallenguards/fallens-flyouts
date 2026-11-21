@@ -17,6 +17,7 @@
 - A key given to a flyout's bar button in the moment after the addon had bound its own keys was not taken up until keys changed again.
 - Shift-dragging an icon out of a flyout cast it first. A mouse click on an icon now casts when the button is let go, as on the game's own flyouts; the keys still cast on the press.
 - A spell's tooltip in a flyout now shows its rank.
+- On a controller, the button that opened a flyout while a shoulder was held only shut it when pressed again. It now picks the spot it stands for, as a plain key does.
 
 ## [1.0.0] - 2026-11-21
 
