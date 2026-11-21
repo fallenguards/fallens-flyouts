@@ -29,6 +29,8 @@ local OTHER_KEYS = {
     "NUMPADMINUS", "NUMPADPLUS", "NUMPADDECIMAL", "MOUSEWHEELUP", "MOUSEWHEELDOWN",
 }
 local BAR_BUTTON = 45
+-- how many buttons along its bar a button looks for one to read the bar's run from
+local NEIGHBORS = 11
 -- the game's gamepad bind dialog shows copies of the console bar: no bar of anyone's
 local DIALOG_COPIES = "^GamepadActionBarEditFrame"
 -- and gamepad mode has bars of its own
@@ -169,22 +171,31 @@ function B.Scale(host)
     return host:GetEffectiveScale() / UIParent:GetEffectiveScale() * B.Size(host)
 end
 
--- bar runs up and down: by the next button, else shape
+-- Bar runs up and down: read off the nearest other button of its bar, a
+-- shown one first. A hidden one will do: an empty button is hidden at
+-- times, and it is still in its place. Else the bar's shape.
 function B.Tall(host)
     local stem, index = (host:GetName() or ""):match("^(.-)(%d+)$")
     local x, y = host:GetCenter()
     x, y = Plain(x), Plain(y)
     if stem and x and y then
-        for _, step in ipairs({ 1, -1 }) do
-            local near = _G[stem .. (tonumber(index) + step)]
-            if type(near) == "table" and near ~= host and near.GetCenter and near:IsVisible() then
-                local nx, ny = near:GetCenter()
-                nx, ny = Plain(nx), Plain(ny)
-                if nx and ny and (nx ~= x or ny ~= y) then
-                    return math.abs(ny - y) > math.abs(nx - x), "next button"
+        index = tonumber(index)
+        local spare
+        for away = 1, NEIGHBORS do
+            for _, step in ipairs({ away, -away }) do
+                local near = _G[stem .. (index + step)]
+                if type(near) == "table" and near ~= host and near.GetCenter then
+                    local nx, ny = near:GetCenter()
+                    nx, ny = Plain(nx), Plain(ny)
+                    if nx and ny and (nx ~= x or ny ~= y) then
+                        local tall = math.abs(ny - y) > math.abs(nx - x)
+                        if near:IsVisible() then return tall, "next button" end
+                        if spare == nil then spare = tall end
+                    end
                 end
             end
         end
+        if spare ~= nil then return spare, "a hidden button" end
     end
     local parent = host:GetParent()
     if parent and parent ~= UIParent then

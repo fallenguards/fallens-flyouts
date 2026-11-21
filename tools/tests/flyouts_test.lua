@@ -767,6 +767,41 @@ do
     page:Hide()
 end
 
+print("an upright bar whose other buttons are empty and hidden")
+do
+    -- His right-hand bar (2026-11-21): the flyout on its last button opened upward along the bar
+    -- once the button beside it was hidden. Each button there sits in a holder that is no bar's shape.
+    local hadPlaced = W.placed
+    W.placed = W.placed or {}
+    local edge = {}
+    for i = 1, 3 do
+        local holder = CreateFrame("Frame", nil, UIParent)
+        edge[i] = actionButton("EdgeBarButton" .. i, 30 + i, holder)
+        edge[i].cx, edge[i].cy = 1880, 300 + i * 40
+    end
+    W.placed[33] = 821
+    fire("ACTIONBAR_SLOT_CHANGED", 33)
+    flushAll()
+    edge[1]:Hide()
+    edge[2]:Hide()
+    stack("EdgeBarButton3", 822)
+    local _, edgeUnit = NS.Flyouts.At("EdgeBarButton3")
+    check(edgeUnit ~= nil and edgeUnit.way == "LEFT" and edgeUnit.runs:find("up and down", 1, true) ~= nil,
+        "with the buttons beside it hidden, the bar is still read as upright: the flyout opens to the side")
+    edge[2]:Show()
+    NS.Flyouts.Moved()
+    NS.Flyouts.Follow()
+    check(edgeUnit.way == "LEFT", "and it opens the same way when one of them is shown")
+    local edgeFlyout = NS.Flyouts.At("EdgeBarButton3")
+    if edgeFlyout then NS.Flyouts.Remove(edgeFlyout, 2) end
+    W.placed[33] = nil
+    if not hadPlaced then W.placed = nil end
+    for i = 1, 3 do edge[i]:GetParent():Hide() end
+    fire("ACTIONBAR_SLOT_CHANGED", 33)
+    flushAll()
+    check(NS.Flyouts.At("EdgeBarButton3") == nil and order() == "101 501 502", "the bars are as before")
+end
+
 print("ranks of one spell in a flyout stand in rank order, whichever the button holds")
 do
     local hadPlaced = W.placed
