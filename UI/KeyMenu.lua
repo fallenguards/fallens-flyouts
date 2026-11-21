@@ -33,7 +33,8 @@ function K.Hover(command)
     local n = Binds.Number(command)
     if n == lit then return end
     lit = n
-    F.Point(n)
+    local unit = F.Point(n)
+    if n then ns.Log(("key menu: row of flyout %d hovered, a bar button lit: %s"):format(n, tostring(unit ~= nil))) end
 end
 
 local function Watch()
