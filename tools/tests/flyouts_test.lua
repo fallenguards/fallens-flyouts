@@ -12,6 +12,11 @@ for _, id in ipairs({ 501, 502, 503 }) do
     fire("ACTIONBAR_SHOWGRID")
     local tab = tabOf("ActionButton1")
     check(tab and tab:IsShown(), "tab shown on ActionButton1 while carrying " .. id)
+    -- a bar close above this one must not cover the plus: it is drawn over every bar button
+    local LAYERS = { BACKGROUND = 1, LOW = 2, MEDIUM = 3, HIGH = 4, DIALOG = 5, FULLSCREEN = 6, FULLSCREEN_DIALOG = 7, TOOLTIP = 8 }
+    check(LAYERS[tab:GetFrameStrata()] > LAYERS[W.frames.ActionButton2:GetFrameStrata()]
+        and LAYERS[tab:GetFrameStrata()] > LAYERS.DIALOG and LAYERS[tab:GetFrameStrata()] < LAYERS.TOOLTIP,
+        "the plus is on a layer over the bar buttons and a shown flyout, under tooltips")
     tab.scripts.OnReceiveDrag(tab)
     check(W.cursor == nil, "cursor emptied after the drop")
 end

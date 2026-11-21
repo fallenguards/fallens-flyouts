@@ -36,7 +36,7 @@ end
 local Frame = {}
 Frame.__index = Frame
 local function noop() end
-for _, m in ipairs({ "SetFrameStrata", "ClearAllPoints", "RegisterForClicks", "EnableMouse",
+for _, m in ipairs({ "ClearAllPoints", "RegisterForClicks", "EnableMouse",
     "SetHighlightTexture", "SetAllPoints", "SetColorTexture",
     "SetJustifyH", "HighlightText", "SetHorizTile", "SetVertTile", "SetFrameLevel",
     "SetDrawBling", "SetDrawEdge", "SetSwipeColor", "SetHideCountdownNumbers", "SetUsingParentLevel",
@@ -77,7 +77,9 @@ function Frame:GetLeft() return self.rect and self.rect[1] end
 function Frame:GetRight() return self.rect and self.rect[2] end
 function Frame:GetTop() return self.rect and self.rect[3] end
 function Frame:GetBottom() return self.rect and self.rect[4] end
-function Frame:GetFrameStrata() return "MEDIUM" end
+-- the layer a frame is drawn on: its own when given one, else that of its parent
+function Frame:SetFrameStrata(strata) self.strata = strata end
+function Frame:GetFrameStrata() return self.strata or (self.parent and self.parent:GetFrameStrata()) or "MEDIUM" end
 function Frame:GetFrameLevel() return 1 end
 function Frame:SetScale(v) self.scale = v end
 function Frame:GetScale() return self.scale or 1 end

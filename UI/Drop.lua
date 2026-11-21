@@ -16,6 +16,9 @@ local TEXT = {
     kind = "Only spells, items and macros go in a flyout.",
 }
 D.GROW_FROM = GROW_FROM
+-- above every bar, a neighbouring bar too, and above a shown flyout; below tooltips
+local LAYER = "FULLSCREEN_DIALOG"
+D.LAYER = LAYER
 
 local tabs = {}
 local pop, lastKind
@@ -167,7 +170,7 @@ local function Tab(button, name)
     if tab then return tab end
     tab = CreateFrame("Frame", nil, UIParent)
     tab:Hide()
-    tab:SetFrameStrata("DIALOG")
+    tab:SetFrameStrata(LAYER)
     tab:EnableMouse(true)
     tab.host, tab.button = name, button
     tab.badge = tab:CreateTexture(nil, "ARTWORK")
