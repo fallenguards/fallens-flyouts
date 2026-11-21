@@ -96,22 +96,25 @@ W.combat = false
 check(W.released == 4, "each showing hands the game's icon list back")
 
 print("pad symbols on the icons")
-check(entry(one, 1).pad.text == "" and entry(one, 2).pad.text == "", "no controller: none")
+local function label(i) return entry(one, i).key.text end
+check(label(1) == "1" and label(2) == "2" and label(4) == "4", "no controller: each icon shows its key")
 W.pad = 1
 fire("GAME_PAD_CONNECTED")
-check(entry(one, 1).pad.text == KEY_ABBR_PADDUP_LTR and entry(one, 2).pad.text:find("|A", 1, true) ~= nil,
-    "a controller in use: the game's own button symbols, in that controller's style")
+check(label(4) == "|A:Gamepad_Ltr_Up:11:11|a" and label(1):find("Gamepad_Gen_PADDDOWN", 1, true) ~= nil,
+    "a controller in use: the top icon shows D-pad up and the one by the button D-pad down, as symbols")
+check(label(3):find("PADDRIGHT", 1, true) ~= nil and label(2):find("PADDLEFT", 1, true) ~= nil,
+    "the icons between take right and left")
 for i = 1, 6 do
-    local text = entry(one, i).pad.text
-    check(text == "" or text:find("|A", 1, true) ~= nil, "pad label " .. i .. " is a symbol or nothing, never words")
+    local text = label(i) or ""
+    check(text == "" or #text == 1 or text:find("|A", 1, true) ~= nil, "label " .. i .. " is a symbol or a key, never words")
 end
 fire("GAME_PAD_ACTIVE_CHANGED", false)
-check(entry(one, 1).pad.text == "", "back on keyboard and mouse: gone")
+check(label(1) == "1", "back on keyboard and mouse: the keys again")
 fire("GAME_PAD_ACTIVE_CHANGED", true)
-check(entry(one, 1).pad.text ~= "", "on the pad again: back")
+check(label(1):find("|A", 1, true) ~= nil, "on the pad again: the symbols again")
 W.pad = nil
 fire("GAME_PAD_DISCONNECTED")
-check(entry(one, 1).pad.text == "", "controller unplugged: gone")
+check(label(1) == "1", "controller unplugged: the keys again")
 
 print("the icons show cooldown and power as bar buttons do")
 local function sweep(i) return entry(one, i).cooldown.sweep end
@@ -201,6 +204,75 @@ check(W.cursorRead == page and rows.smartNavigationIgnored == true,
 page:Hide()
 check(rows.smartNavigationIgnored == nil, "leaving the page gives the game's rows back")
 
+print("flyout size")
+local base = menu.scale
+check(entry(one, 1).w == 30 and entry(one, 1).h == 30, "by default the icons are the game's own flyout size, 30 wide")
+check(page.slider.value == 100 and page.sizeText.text == "100%", "the size slider starts at 100%")
+page.slider:SetValue(150)
+check(math.abs(menu.scale - base * 1.5) < 0.001 and NS.Profiles.Data().size == 1.5 and page.sizeText.text == "150%",
+    "at 150% a flyout is half again as big, and the profile keeps it")
+page.larger.scripts.OnClick(page.larger)
+check(page.slider.value == 155, "Larger steps it up")
+W.combat = true
+page.slider:SetValue(100)
+check(math.abs(menu.scale - base * 1.55) < 0.001 and page.slider.value == 155, "no size change in a fight")
+W.combat = false
+page.slider:SetValue(100)
+check(math.abs(menu.scale - base) < 0.001 and NS.Profiles.Data().size == nil, "back at 100% it is the game's size again")
+
+print("an icon's own key inside its flyout")
+local mine = NS.Profiles.Data().flyouts[1]
+mouse(host)
+NS.Flyouts.SetKey(mine, 2, "Q")
+check(menu:IsShown() and label(2) == "Q" and GetBindingAction("Q", true):find("Entry" .. one .. "_2", 1, true) ~= nil,
+    "a key of its own picks an icon while the flyout is open")
+check(GetBindingAction("2", true) == "ACTIONBUTTON2", "and the number it had is the bar's")
+tap("Q")
+check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "pressing it casts and shuts")
+check(GetBindingAction("Q", true) == "ACTIONBUTTON2" and W.base.Q == "ACTIONBUTTON2",
+    "shut, the key does what it always did: the game's own bindings are never touched")
+NS.Flyouts.SetKey(mine, 3, "Q")
+check(mine.entries[2].key == nil and mine.entries[3].key == "Q", "given to another icon of the same flyout, it leaves the first")
+NS.Flyouts.SetKey(mine, 3, "1")
+mouse(host)
+check(label(3) == "1" and label(1) ~= "1" and label(1) ~= label(2) and label(2) ~= label(4),
+    "an icon given another one's number: the rest move over, no key twice in a flyout")
+mouse(host)
+NS.Flyouts.SetKey(mine, 3, nil)
+check(mine.entries[3].key == nil, "and its own key can be given back")
+
+print("setting keys by hovering, in the game's Quick Keybind Mode and from the settings")
+local top = entry(one, 4)
+mouse(host)
+-- the icon window's search box had the focus last
+W.focus = nil
+top.scripts.OnEnter(top)
+check(W.focus == nil, "out of that mode a hover only shows the tooltip")
+W.quick = true
+top.scripts.OnEnter(top)
+check(W.focus ~= nil, "in Quick Keybind Mode a hover on an icon waits for a key")
+W.focus.scripts.OnKeyDown(W.focus, "LSHIFT")
+check(mine.entries[4].key == nil, "a modifier alone sets nothing")
+W.shiftKey = true
+W.focus.scripts.OnKeyDown(W.focus, "R")
+W.shiftKey = nil
+check(mine.entries[4].key == "SHIFT-R" and label(4) == "s-R", "the key pressed, with its modifier, becomes that icon's")
+check(W.base["SHIFT-R"] == nil and GetBindingAction("SHIFT-R", false) == "", "and the game's own bindings stay as they were")
+top.scripts.OnEnter(top)
+W.focus.scripts.OnGamePadButtonDown(W.focus, "PADRSHOULDER")
+check(mine.entries[4].pad == "PADRSHOULDER", "a pad button pressed there becomes its pad button")
+top.scripts.OnEnter(top)
+W.focus.scripts.OnEscapePressed(W.focus)
+check(mine.entries[4].key == nil and mine.entries[4].pad == nil, "Escape over the icon gives it its own back")
+top.scripts.OnLeave(top)
+check(W.focus == nil, "leaving the icon stops the wait")
+W.quick = false
+page.keys.scripts.OnClick(page.keys)
+check(W.popup ~= nil and W.popup.which == "FALLENSFLYOUTS_KEYS" and NS.Keys.On(), "Set Keys in the settings starts the same mode")
+StaticPopup_Hide("FALLENSFLYOUTS_KEYS")
+check(not NS.Keys.On(), "and Done ends it")
+if menu:IsShown() then mouse(host) end
+
 W.cursor = { "spell", 7, "spell", 501, 501 }
 fire("ACTIONBAR_SHOWGRID")
 tabOf("ActionButton1").scripts.OnReceiveDrag(tabOf("ActionButton1"))
@@ -210,8 +282,10 @@ fire("ACTIONBAR_HIDEGRID")
 W.combat = true
 tap("1"); tap("ESCAPE")
 check(not menu:IsShown(), "in a fight: opens, Escape shuts")
-tap("1"); tap("PADDRIGHT")
-check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "in a fight: pad right picks entry 2")
+tap("1"); tap("PADDDOWN")
+check(W.casts[#W.casts] == "spell:101" and not menu:IsShown(), "in a fight: D-pad down picks the icon by the button")
+tap("1"); tap("PADDUP")
+check(W.casts[#W.casts] == "spell:503" and not menu:IsShown(), "and D-pad up the top one")
 W.cursor = { "spell", 7, "spell", 504, 504 }
 tabOf("ActionButton1").scripts.OnReceiveDrag(tabOf("ActionButton1"))
 check(count(one) == 4 and W.cursor ~= nil, "a drop in a fight is refused")
@@ -361,7 +435,7 @@ check(mine ~= nil and beside ~= nil and mine ~= beside and count(mine) == 3 and 
 tap("1"); tap("3")
 check(W.casts[#W.casts] == "spell:502" and not menuOf(mine):IsShown(), "the button's key opens, a number casts and shuts")
 W.combat = true
-tap("2"); tap("PADDRIGHT")
+tap("2"); tap("PADDUP")
 check(W.casts[#W.casts] == "spell:601" and not menuOf(beside):IsShown(), "in a fight, by pad, the same")
 W.combat = false
 boot()

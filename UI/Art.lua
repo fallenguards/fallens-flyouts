@@ -5,11 +5,14 @@ local _, ns = ...
 local A = {}
 ns.Art = A
 
--- the game's flyout enlarged: its 30 icons become 45
-local ZOOM = 1.5
-A.BUTTON, A.ICON, A.OVERLAP = 45, 45, 4
-A.FIRST, A.NEXT, A.PAD, A.STRIP = 9 * ZOOM, 4 * ZOOM, 8 * ZOOM, 47 * ZOOM
-A.MASK, A.FRAME_W, A.FRAME_H, A.GLOW = A.ICON * 1.5, 46, 45, 4
+-- The game's own flyout, number for number: 30 icons on a 45 button,
+-- 9 before the first, 4 between, 8 past the last, a strip 47 wide.
+A.BUTTON, A.ICON, A.OVERLAP = 45, 30, 4
+A.FIRST, A.NEXT, A.PAD, A.STRIP = 9, 4, 8, 47
+-- its small button: mask, frame art, highlight, glow, key text, sweep
+A.MASK, A.FRAME, A.OVER_W, A.OVER_H, A.GLOW = 45, 35, 31.6, 30.9, 4
+A.KEY_X, A.KEY_Y = -3, -4
+A.SWEEP = { 1.7, -1.7, -1, 1 }
 -- one slot's length: the drop target shows it
 A.POP = A.FIRST + A.ICON + A.PAD
 local TINT = 0.7
@@ -60,13 +63,12 @@ function A.Known(atlas)
     return C_Texture ~= nil and C_Texture.GetAtlasInfo ~= nil and C_Texture.GetAtlasInfo(atlas) ~= nil
 end
 
--- art in quarter turns; no size means its own, enlarged
+-- art in quarter turns; no size means its own
 function A.Set(texture, atlas, degrees, w, h)
     texture:SetAtlas(atlas, w == nil)
     if w == nil then
         local info = C_Texture.GetAtlasInfo(atlas)
         if info and info.width and info.height then w, h = info.width, info.height else w, h = texture:GetSize() end
-        w, h = w * ZOOM, h * ZOOM
     end
     -- set outright: a texture keeps its last cut, turns would add up
     texture:SetTexCoord(unpack(A.CUT[degrees]))

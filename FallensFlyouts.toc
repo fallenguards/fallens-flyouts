@@ -16,4 +16,5 @@ UI\Art.lua
 Core\Flyouts.lua
 UI\Drop.lua
 UI\Icon.lua
+UI\Keys.lua
 Options\Profiles.lua

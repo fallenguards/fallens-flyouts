@@ -43,7 +43,7 @@ for _, m in ipairs({ "SetFrameStrata", "SetPoint", "ClearAllPoints", "RegisterFo
     "AddMaskTexture", "SetNormalAtlas", "SetPushedAtlas", "SetHighlightAtlas", "SetLooping",
     "SetFromAlpha", "SetToAlpha", "SetDuration", "Play", "Stop", "RemoveMaskTexture", "SetDrawLayer",
     "SetToplevel", "SetMovable", "SetClampedToScreen", "RegisterForDrag", "SetMaxLetters", "SetFocus",
-    "Enable", "Disable" }) do
+    "Enable", "Disable", "SetValueStep", "SetObeyStepOnDrag", "SetAutoFocus", "SetFontObject", "SetAlpha", "EnableGamePadButton" }) do
     Frame[m] = noop
 end
 local function region() return setmetatable({ scripts = {}, attrs = {}, shown = true }, Frame) end
@@ -73,6 +73,20 @@ function Frame:SetTexture(v) self.texture = v end
 function Frame:GetTexture() return self.texture end
 function Frame:SetText(v) self.text = v end
 function Frame:SetVertexColor(r, g, b) self.color = { r, g, b } end
+-- a slider tells its script each value it is given
+function Frame:SetMinMaxValues(low, high) self.low, self.high = low, high end
+function Frame:SetValue(v)
+    self.value = v
+    if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, v, false) end
+end
+function Frame:GetValue() return self.value end
+-- a typing box: one holds the focus at a time, and a hidden one cannot
+function Frame:SetFocus() W.focus = self end
+function Frame:ClearFocus()
+    if W.focus ~= self then return end
+    W.focus = nil
+    if self.scripts.OnEditFocusLost then self.scripts.OnEditFocusLost(self) end
+end
 -- a cooldown sweep: what it was last told, nil when cleared
 -- as his client (2026-11-21): a hidden number from addon code is refused with an error
 function Frame:SetCooldown(start, duration, rate)
@@ -286,7 +300,11 @@ C_GamePad = {
     GetActiveDeviceID = function() return W.pad end,
     GetDeviceMappedState = function() return { labelStyle = "Letters" } end,
 }
-function GetBindingText(key) return "|A:Gamepad_Gen_" .. key .. ":14:14|a" end
+-- a pad button comes back as its symbol, any other key shortened
+function GetBindingText(key)
+    if key:find("PAD", 1, true) then return "|A:Gamepad_Gen_" .. key .. ":14:14|a" end
+    return (key:gsub("SHIFT%-", "s-"):gsub("CTRL%-", "c-"):gsub("ALT%-", "a-"))
+end
 KEY_ABBR_PADDUP_LTR = "|A:Gamepad_Ltr_Up:14:14|a"
 -- a key with no symbol of its own: the game hands back words
 KEY_ABBR_PAD3_LTR = "X button"
@@ -391,7 +409,22 @@ end
 function SetOverrideBindingClick(owner, priority, key, name, button) owner:SetBindingClick(priority, key, name, button) end
 function ClearOverrideBindings(owner) W.overrides[owner] = {} end
 StaticPopupDialogs = {}
-function StaticPopup_Show(which, text) W.popup = { which = which, text = text } end
+function StaticPopup_Show(which, text)
+    W.popup = { which = which, text = text }
+    local dialog = StaticPopupDialogs[which]
+    if dialog and dialog.OnShow then dialog.OnShow(region(), nil) end
+end
+function StaticPopup_Hide(which)
+    local dialog = StaticPopupDialogs[which]
+    if W.popup and W.popup.which == which then W.popup = nil end
+    if dialog and dialog.OnHide then dialog.OnHide(region()) end
+end
+DONE = "Done"
+-- the game's Quick Keybind Mode, and the modifiers held
+function KeybindFrames_InQuickKeybindMode() return W.quick == true end
+function IsShiftKeyDown() return W.shiftKey == true end
+function IsControlKeyDown() return W.ctrlKey == true end
+function IsAltKeyDown() return W.altKey == true end
 function ReloadUI() wantReload = true end
 
 local function actionButton(name, slot, parent)

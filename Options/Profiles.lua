@@ -31,7 +31,14 @@ local TEXT = {
     askCopyFrom = "Replace the flyouts of %s with those of %s?",
     noOthers = "There is no other profile to copy from.",
     fight = "The options open out of a fight.",
+    sizeHead = "Flyout size",
+    sizeNote = "100% is the size of the game's own flyouts.",
+    percent = "%d%%",
+    keysHead = "Keys inside a flyout",
+    keysNote = "Icons take 1 to 6 by their place. Set Keys gives an icon a key of its own.",
 }
+-- the size slider: its ends and step in percent, its floor width and height
+local SIZE_LOW, SIZE_HIGH, SIZE_STEP, SLIDER_FLOOR, SLIDER_H = 50, 200, 5, 200, 17
 
 local panel, category
 
@@ -194,7 +201,33 @@ function UI.Refresh()
     end
     panel.rename:SetEnabled(P.Kind(active) == nil)
     panel.delete:SetEnabled(active ~= P.Own())
+    -- the size belongs to the profile in use
+    local percent = math.floor(ns.Flyouts.Size() * 100 + 0.5)
+    panel.syncing = true
+    panel.slider:SetValue(percent)
+    panel.syncing = nil
+    panel.sizeText:SetText(TEXT.percent:format(percent))
 end
+
+-- a size from the slider or its two buttons, in percent
+function UI.SetSize(percent)
+    if panel.syncing then return end
+    percent = math.max(SIZE_LOW, math.min(SIZE_HIGH, math.floor(percent / SIZE_STEP + 0.5) * SIZE_STEP))
+    local ok, why = ns.Flyouts.SetSize(percent / 100)
+    if not ok then Warn(why) end
+    UI.Refresh()
+end
+
+local function Step(by) UI.SetSize(math.floor(ns.Flyouts.Size() * 100 + 0.5) + by) end
+
+-- under the profiles: the size and the keys
+local MORE = {
+    { key = "smaller", label = "Smaller", tip = "Makes flyouts smaller.", run = function() Step(-SIZE_STEP) end },
+    { key = "larger", label = "Larger", tip = "Makes flyouts larger.", run = function() Step(SIZE_STEP) end },
+}
+local KEYS = { key = "keys", label = "Set Keys",
+    tip = "Then hover an icon in an open flyout and press a key. The game's Quick Keybind Mode does the same.",
+    run = function() ns.Keys.Start() end }
 
 function UI.Build()
     if panel.built then return end
@@ -219,23 +252,56 @@ function UI.Build()
     users:SetJustifyH("LEFT")
     panel.users = users
 
-    local last
-    for _, spec in ipairs(BUTTONS) do
+    local function Make(spec)
         local button = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
         button:SetText(spec.label)
         button:SetSize(math.max(BUTTON_FLOOR, (button:GetTextWidth() or 0) + CHROME / 2), LINE)
-        if last then
-            button:SetPoint("LEFT", last, "RIGHT", GAP / 2, 0)
-        else
-            button:SetPoint("TOPLEFT", users, "BOTTOMLEFT", 0, -GAP * 2)
-        end
         button.label, button.tip = spec.label, spec.tip
         button:SetScript("OnClick", spec.run)
         button:SetScript("OnEnter", ShowTip)
         button:SetScript("OnLeave", HideTip)
         panel[spec.key] = button
+        return button
+    end
+    local last
+    for _, spec in ipairs(BUTTONS) do
+        local button = Make(spec)
+        if last then
+            button:SetPoint("LEFT", last, "RIGHT", GAP / 2, 0)
+        else
+            button:SetPoint("TOPLEFT", users, "BOTTOMLEFT", 0, -GAP * 2)
+        end
         last = button
     end
+
+    local sizeHead = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    sizeHead:SetPoint("TOPLEFT", panel.new, "BOTTOMLEFT", 0, -GAP * 3)
+    sizeHead:SetText(TEXT.sizeHead)
+    local sizeNote = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    sizeNote:SetPoint("TOPLEFT", sizeHead, "BOTTOMLEFT", 0, -GAP)
+    sizeNote:SetText(TEXT.sizeNote)
+    -- the game's own slider; the two buttons are for a controller's cursor
+    local slider = CreateFrame("Slider", nil, panel, "UISliderTemplate")
+    slider:SetPoint("TOPLEFT", sizeNote, "BOTTOMLEFT", 0, -GAP * 2)
+    slider:SetSize(SLIDER_FLOOR, SLIDER_H)
+    slider:SetMinMaxValues(SIZE_LOW, SIZE_HIGH)
+    slider:SetValueStep(SIZE_STEP)
+    slider:SetObeyStepOnDrag(true)
+    slider:SetScript("OnValueChanged", function(_, value) UI.SetSize(value) end)
+    panel.slider = slider
+    panel.sizeText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    panel.sizeText:SetPoint("LEFT", slider, "RIGHT", GAP, 0)
+    local smaller, larger = Make(MORE[1]), Make(MORE[2])
+    smaller:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -GAP * 2)
+    larger:SetPoint("LEFT", smaller, "RIGHT", GAP / 2, 0)
+
+    local keysHead = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    keysHead:SetPoint("TOPLEFT", smaller, "BOTTOMLEFT", 0, -GAP * 3)
+    keysHead:SetText(TEXT.keysHead)
+    local keysNote = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)
+    keysNote:SetText(TEXT.keysNote)
+    Make(KEYS):SetPoint("TOPLEFT", keysNote, "BOTTOMLEFT", 0, -GAP * 2)
     panel.built = true
     P.OnChange(UI.Refresh)
 end

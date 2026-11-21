@@ -53,7 +53,8 @@ local function Reach(tab, grown)
         tab:SetPoint("CENTER", tab.button, side.to, side.x * BADGE_OUT, side.y * BADGE_OUT)
         return
     end
-    local long, wide = BADGE_REACH + Art.POP * GROW_TO, Art.STRIP * GROW_TO
+    local size = F.Size()
+    local long, wide = BADGE_REACH + Art.POP * GROW_TO * size, Art.STRIP * GROW_TO * size
     tab:SetSize(upright and wide or long, upright and long or wide)
     tab:SetPoint(side.point, tab.button, side.to, -side.x * BADGE_REACH, -side.y * BADGE_REACH)
 end
@@ -68,7 +69,7 @@ local function Grow(to)
             self:SetScript("OnUpdate", nil)
         end
         self.at = at
-        self:SetScale(at)
+        self:SetScale(at * F.Size())
     end)
 end
 
@@ -88,11 +89,11 @@ local function Pop()
     Art.Dress(pop, pop.icon)
     pop.frame = pop:CreateTexture(nil, "OVERLAY")
     pop.frame:SetAtlas(Art.NAMES.frame)
-    pop.frame:SetSize(Art.FRAME_W, Art.FRAME_H)
+    pop.frame:SetSize(Art.FRAME, Art.FRAME)
     pop.frame:SetPoint("TOPLEFT", pop.slot)
     pop.ring = pop:CreateTexture(nil, "OVERLAY", nil, 1)
     pop.ring:SetAtlas(Art.NAMES.frameOver)
-    pop.ring:SetSize(Art.FRAME_W, Art.FRAME_H)
+    pop.ring:SetSize(Art.OVER_W, Art.OVER_H)
     pop.ring:SetPoint("TOPLEFT", pop.slot)
     pop.plus = pop:CreateTexture(nil, "OVERLAY", nil, 2)
     pop.plus:SetPoint("CENTER", pop.slot, "TOPRIGHT", -2, -2)
@@ -138,7 +139,7 @@ local function TabEnter(tab)
     pop.plus:SetShown(not full)
     tab.badge:Hide()
     pop.at = GROW_FROM
-    pop:SetScale(GROW_FROM)
+    pop:SetScale(GROW_FROM * F.Size())
     pop:Show()
     pop.pulse:Play()
     Grow(GROW_TO)

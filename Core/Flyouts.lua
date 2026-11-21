@@ -12,12 +12,21 @@ local P, Bars, Art = ns.Profiles, ns.Bars, ns.Art
 local MAX = 6
 local KEYS = { "1", "2", "3", "4", "5", "6" }
 local PADS = { "PADDUP", "PADDRIGHT", "PADDDOWN", "PADDLEFT", "PAD4", "PAD3" }
+-- Pad buttons go by where an icon sits: the two ends take the D-pad along
+-- the flyout's line (top is up, bottom is down), the ones between the rest.
+local PAD_UPRIGHT = { first = "PADDUP", last = "PADDDOWN", between = { "PADDRIGHT", "PADDLEFT", "PAD4", "PAD3" } }
+local PAD_LEVEL = { first = "PADDLEFT", last = "PADDRIGHT", between = { "PADDUP", "PADDDOWN", "PAD4", "PAD3" } }
+-- the pad symbol's size on a flyout icon
+local GLYPH = 11
 -- a controller's label style, as the game's key strings end
 local PAD_STYLES = { Letters = "_LTR", Shapes = "_SHP", Reverse = "_REV" }
 local CLOSE_KEYS = { "ESCAPE", "PAD2" }
 local ROOT, OPENER = "FallensFlyoutsRoot", "FallensFlyoutsOpener"
 local MENU, ENTRY = "FallensFlyoutsMenu", "FallensFlyoutsEntry"
-local ARROW_W, ARROW_H, ARROW_OUT, GRIP_W, GRIP_H, GRIP_OUT = 18, 7, 4, 30, 14, 3
+-- the game's arrow: 18 by 7, 4 out when shut, 2 when open
+local ARROW_W, ARROW_H, ARROW_OUT, ARROW_OPEN, GRIP_W, GRIP_H, GRIP_OUT = 18, 7, 4, 2, 30, 14, 3
+-- flyout size against the game's own, as a setting
+local SIZE_MIN, SIZE_MAX = 0.5, 2
 local TEXT = {
     fight = "Flyouts change only out of a fight.",
     full = "That flyout is full.",
@@ -48,7 +57,7 @@ local SHOW = [[
     owner:GetFrameRef("menu" .. mine):Show()
 ]]
 -- openers, each key with the click name that says whether it may be held;
--- then the open one's shut keys, then its picks, plain and under a held modifier
+-- then the open one's shut keys, then its picks (listed by Rebind)
 local BIND = [[
     owner:ClearBindings()
     for f = 1, owner:GetAttribute("units") or 0 do
@@ -64,14 +73,9 @@ local BIND = [[
         for i = 1, owner:GetAttribute("ckeys") or 0 do
             owner:SetBindingClick(true, owner:GetAttribute("ckey" .. i), name, "tap")
         end
-        for i = 1, owner:GetAttribute("count" .. open) or 0 do
-            local entry = owner:GetAttribute("entry" .. open .. "_" .. i)
-            owner:SetBindingClick(true, owner:GetAttribute("key" .. i), entry)
-            owner:SetBindingClick(true, owner:GetAttribute("pad" .. i), entry)
-        end
-        for i = 1, owner:GetAttribute("mkeys" .. open) or 0 do
+        for i = 1, owner:GetAttribute("pkeys" .. open) or 0 do
             local at = open .. "_" .. i
-            owner:SetBindingClick(true, owner:GetAttribute("mkey" .. at), owner:GetAttribute("mentry" .. at))
+            owner:SetBindingClick(true, owner:GetAttribute("pkey" .. at), owner:GetAttribute("pentry" .. at))
         end
     end
 ]]
@@ -195,11 +199,20 @@ local function Arrow(unit, art)
     if unit.menu:IsShown() then turn = (turn + 180) % 360 end
     unit.turn = turn
     Art.Set(unit.arrow, Art.NAMES[unit.art], turn, ARROW_W, ARROW_H)
+    -- the game draws it 2 closer while open; left as it is in a fight
+    local side, host = Art.SIDES[unit.way or "UP"], unit.host
+    if host and not InCombatLockdown() then
+        local out = unit.menu:IsShown() and ARROW_OPEN or ARROW_OUT
+        unit.arrow:ClearAllPoints()
+        unit.arrow:SetPoint(side.to, host, side.to, side.x * out, side.y * out)
+    end
 end
 
 local function EntryTip(self)
     local entry = self.entry
     if not entry then return end
+    -- while keys are being set, a hover says how instead
+    if ns.Keys and ns.Keys.Enter(self) then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if entry.kind == "spell" then
         GameTooltip:SetSpellByID(entry.id)
@@ -220,7 +233,10 @@ local function EntryTip(self)
     GameTooltip:Show()
 end
 
-local function HideTip() GameTooltip:Hide() end
+local function HideTip()
+    GameTooltip:Hide()
+    if ns.Keys then ns.Keys.Leave() end
+end
 
 -- the game's own setting, asked as its flyout asks it: locked bars want the pick up key held
 function F.BarsLocked()
@@ -279,10 +295,6 @@ local function Build()
     if root then return end
     root = CreateFrame("Frame", ROOT, UIParent, "SecureHandlerBaseTemplate")
     root:Hide()
-    for i = 1, MAX do
-        root:SetAttribute("key" .. i, KEYS[i])
-        root:SetAttribute("pad" .. i, PADS[i])
-    end
     for i, key in ipairs(CLOSE_KEYS) do root:SetAttribute("ckey" .. i, key) end
     root:SetAttribute("ckeys", #CLOSE_KEYS)
     root:SetAttribute("units", 0)
@@ -290,7 +302,7 @@ local function Build()
 end
 
 -- the bar button's own numbers: the sweep's inset and shade, the dimming
-local COOL_IN, COOL_SHADE = 3, 0.64
+local COOL_SHADE = 0.64
 local READY, NO_POWER, UNUSABLE = { 1, 1, 1 }, { 0.5, 0.5, 1 }, { 0.4, 0.4, 0.4 }
 -- set when the client hid a value in a fight: then it is handed on unread
 F.hid = { cooldown = false, usable = false }
@@ -394,19 +406,23 @@ local function EntryButton(unit, i)
     entry:SetNormalAtlas(Art.NAMES.frame)
     entry:SetPushedAtlas(Art.NAMES.frameDown)
     entry:SetHighlightAtlas(Art.NAMES.frameOver)
-    for _, art in ipairs({ entry:GetNormalTexture(), entry:GetPushedTexture(), entry:GetHighlightTexture() }) do
+    -- sized as the game's small flyout button sizes them
+    for _, art in ipairs({ entry:GetNormalTexture(), entry:GetPushedTexture() }) do
         art:ClearAllPoints()
         art:SetPoint("TOPLEFT")
-        art:SetSize(Art.FRAME_W, Art.FRAME_H)
+        art:SetSize(Art.FRAME, Art.FRAME)
     end
+    local over = entry:GetHighlightTexture()
+    over:ClearAllPoints()
+    over:SetPoint("TOPLEFT")
+    over:SetSize(Art.OVER_W, Art.OVER_H)
+    -- one label, where the game puts a small button's key: the key, or the pad's symbol
     entry.key = entry:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmallGray")
-    entry.key:SetPoint("TOPRIGHT", -4, -5)
-    entry.pad = entry:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
-    entry.pad:SetPoint("BOTTOM", 0, 2)
-    -- the game's bar button sweep, at the icon's own level
+    entry.key:SetPoint("TOPRIGHT", Art.KEY_X, Art.KEY_Y)
+    -- the game's small button sweep, at the icon's own level
     local cool = CreateFrame("Cooldown", nil, entry, "CooldownFrameTemplate")
-    cool:SetPoint("TOPLEFT", entry.icon, "TOPLEFT", COOL_IN, -COOL_IN)
-    cool:SetPoint("BOTTOMRIGHT", entry.icon, "BOTTOMRIGHT", -COOL_IN, COOL_IN)
+    cool:SetPoint("TOPLEFT", entry.icon, "TOPLEFT", Art.SWEEP[1], Art.SWEEP[2])
+    cool:SetPoint("BOTTOMRIGHT", entry.icon, "BOTTOMRIGHT", Art.SWEEP[3], Art.SWEEP[4])
     cool:SetDrawBling(false)
     cool:SetDrawEdge(false)
     cool:SetSwipeColor(0, 0, 0, COOL_SHADE)
@@ -491,20 +507,91 @@ local function Pad()
     return C_GamePad.GetActiveDeviceID()
 end
 
--- a pad button as the game draws it for that controller; never words
+-- a pad button as the game draws it for that controller, small; never words
 local function Glyph(key, style)
     local text = style and _G["KEY_ABBR_" .. key .. style] or GetBindingText(key, 1)
-    if type(text) == "string" and (text:find("|A", 1, true) or text:find("|T", 1, true)) then return text end
-    return ""
+    if type(text) ~= "string" or not (text:find("|A", 1, true) or text:find("|T", 1, true)) then return "" end
+    return (text:gsub("(|A:[^:|]+):%d+:%d+", "%1:" .. GLYPH .. ":" .. GLYPH))
 end
 
--- pad symbols on the icons only while a controller is in use
+-- a key as the bars write it: a number as it is, the rest shortened by the game
+local function KeyText(key)
+    if not key then return "" end
+    if #key == 1 then return key end
+    local text = GetBindingText(key, 1)
+    if type(text) == "string" and text ~= "" then return text end
+    return key
+end
+
+-- The pad buttons by place: entry 1 is by the bar button, so it is the
+-- bottom of a flyout that grows up and the top of one that grows down.
+local function PadsFor(way, count)
+    local set = Art.SIDES[way].x == 0 and PAD_UPRIGHT or PAD_LEVEL
+    local fromStart = way == "DOWN" or way == "RIGHT"
+    local out = {}
+    for i = 1, count do
+        local at = fromStart and i or count + 1 - i
+        if at == 1 then
+            out[i] = set.first
+        elseif at == count then
+            out[i] = set.last
+        else
+            out[i] = set.between[at - 1]
+        end
+    end
+    return out
+end
+
+-- the one wanted if it is free, else the first free of the rest
+local function Free(wanted, rest, taken)
+    if wanted and not taken[wanted] then
+        taken[wanted] = true
+        return wanted
+    end
+    for _, key in ipairs(rest) do
+        if not taken[key] then
+            taken[key] = true
+            return key
+        end
+    end
+end
+
+-- Each icon's key and pad button: its own where one was set, else by its
+-- place. No key twice in one flyout; other flyouts and the bars do not count.
+local function Picks(unit)
+    local entries = unit.flyout.entries
+    local pads = PadsFor(unit.way or "UP", #entries)
+    local picks, taken = {}, {}
+    for i, entry in ipairs(entries) do
+        local key = type(entry.key) == "string" and entry.key or nil
+        local pad = type(entry.pad) == "string" and entry.pad or nil
+        if key and taken[key] then key = nil end
+        if pad and taken[pad] then pad = nil end
+        if key then taken[key] = true end
+        if pad then taken[pad] = true end
+        picks[i] = { key = key, pad = pad }
+    end
+    for i, pick in ipairs(picks) do
+        pick.key = pick.key or Free(KEYS[i], KEYS, taken)
+        pick.pad = pick.pad or Free(pads[i], PADS, taken)
+    end
+    return picks
+end
+
+-- one label per icon: the pad's symbol while a controller is in use, else the key
 local function Labels(unit)
+    if not unit.picks then return end
     local id = Pad()
     local state = id and C_GamePad.GetDeviceMappedState and C_GamePad.GetDeviceMappedState(id)
     local style = state and PAD_STYLES[state.labelStyle]
     for i, frame in ipairs(unit.entries) do
-        frame.pad:SetText(id and Glyph(PADS[i], style) or "")
+        local pick = unit.picks[i]
+        local text = ""
+        if pick then
+            text = id and pick.pad and Glyph(pick.pad, style) or ""
+            if text == "" then text = KeyText(pick.key) end
+        end
+        frame.key:SetText(text)
     end
 end
 
@@ -550,6 +637,13 @@ function F.SetIcon(flyout, icon)
 end
 
 -- a right-click on a flyout's bar button opens the icon window
+-- while keys are being set, a hover on the bar button opens its flyout
+local function HostEntered(self)
+    if not (ns.Keys and ns.Keys.On()) then return end
+    local _, unit = F.At(self:GetName())
+    if unit and open ~= unit then F.Show(unit.index) end
+end
+
 local function HostClicked(self, button, down)
     if button ~= "RightButton" or down then return end
     local flyout = F.At(self:GetName())
@@ -585,7 +679,8 @@ local function Lay(unit)
     unit.glow:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", Art.GLOW, -Art.GLOW)
     Arrow(unit, "arrow")
     opener:Show()
-    menu:SetScale(scale)
+    -- the bar's scale times the size picked in the settings (1 is the game's own)
+    menu:SetScale(scale * F.Size())
     menu:ClearAllPoints()
     menu:SetPoint(side.point, host, side.to, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
     menu:SetSize(upright and Art.STRIP or long, upright and long or Art.STRIP)
@@ -604,11 +699,9 @@ local function Lay(unit)
         if entry then
             frame:SetAttribute(entry.kind, entry.kind == "item" and ("item:" .. entry.id) or entry.id)
             frame.icon:SetTexture(F.Icon(entry))
-            frame.key:SetText(KEYS[i])
         end
         frame:SetShown(entry ~= nil)
     end
-    Labels(unit)
     Face(unit)
     State(unit)
     root:SetAttribute("count" .. unit.index, count)
@@ -616,47 +709,49 @@ local function Lay(unit)
     if ready then Laid()[flyout.host] = { way = way, scale = scale } end
 end
 
--- whether a key is one of the first count picks, as it stands
-local function Picks(key, count)
-    for i = 1, count do
-        if key == KEYS[i] or key == PADS[i] then return true end
-    end
-    return false
-end
-
--- each button's keys click its opener, read fresh
+-- Each button's keys click its opener, read fresh. Each flyout's picks are
+-- listed for the snippet, also under the modifiers of a key that can be held.
 local function Rebind()
     ClearOverrideBindings(root)
     Bars.KeyMap(true)
     for f = 1, used do
         local unit = units[f]
-        local count = #unit.flyout.entries
-        local mine, mods, under = {}, {}, 0
+        local mine, mods, plain, listed = {}, {}, {}, 0
+        local function List(key, i)
+            listed = listed + 1
+            root:SetAttribute("pkey" .. f .. "_" .. listed, key)
+            root:SetAttribute("pentry" .. f .. "_" .. listed, ENTRY .. f .. "_" .. i)
+        end
+        unit.picks = Picks(unit)
+        for i, pick in ipairs(unit.picks) do
+            for _, key in ipairs({ pick.key, pick.pad }) do
+                List(key, i)
+                plain[key] = true
+            end
+        end
         unit.keys = Bars.Keys(unit.host)
         for _, key in ipairs(unit.keys) do mine[key] = true end
         for i, key in ipairs(unit.keys) do
             -- a key that is a pick while open cannot be held: its release may go to the pick
-            local how = Picks(key, count) and "tap" or "LeftButton"
+            local how = plain[key] and "tap" or "LeftButton"
             root:SetAttribute("okey" .. f .. "_" .. i, key)
             root:SetAttribute("obtn" .. f .. "_" .. i, how)
             SetOverrideBindingClick(root, true, key, OPENER .. f, how)
             local mod = how ~= "tap" and key:match("^(.*%-).")
             if mod then mods[mod] = true end
         end
-        -- held with a modifier, the number keys arrive under it: bound so too
+        -- held with a modifier, a plain pick key arrives under it: bound so too
         for mod in pairs(mods) do
-            for i = 1, count do
-                for _, base in ipairs({ KEYS[i], PADS[i] }) do
-                    if not mine[mod .. base] then
-                        under = under + 1
-                        root:SetAttribute("mkey" .. f .. "_" .. under, mod .. base)
-                        root:SetAttribute("mentry" .. f .. "_" .. under, ENTRY .. f .. "_" .. i)
-                    end
+            for i, pick in ipairs(unit.picks) do
+                for _, base in ipairs({ pick.key, pick.pad }) do
+                    local under = mod .. base
+                    if not base:find("-", 1, true) and not mine[under] and not plain[under] then List(under, i) end
                 end
             end
         end
-        root:SetAttribute("mkeys" .. f, under)
+        root:SetAttribute("pkeys" .. f, listed)
         root:SetAttribute("okeys" .. f, #unit.keys)
+        Labels(unit)
     end
     quiet = math.max(quiet, GetTime() + 0.5)
 end
@@ -717,7 +812,10 @@ function F.Apply()
             -- its click opens the flyout: wrapped once, told which one each time
             if wrapped[name] == nil then
                 wrapped[name] = pcall(root.WrapScript, root, host, "OnClick", HOST_WRAP)
-                if wrapped[name] then host:HookScript("PostClick", HostClicked) end
+                if wrapped[name] then
+                    host:HookScript("PostClick", HostClicked)
+                    host:HookScript("OnEnter", HostEntered)
+                end
             end
             root:SetAttribute("host-" .. name, used)
         end
@@ -741,7 +839,7 @@ function F.Apply()
         Face(unit)
         unit.face:SetParent(unit.opener)
         root:SetAttribute("okeys" .. f, 0)
-        root:SetAttribute("mkeys" .. f, 0)
+        root:SetAttribute("pkeys" .. f, 0)
         root:SetAttribute("count" .. f, 0)
     end
     root:SetAttribute("units", used)
@@ -841,6 +939,53 @@ function F.Lost(flyout) return Run(flyout).lost == true end
 function F.UnitOf(flyout) return Run(flyout).unit end
 function F.Pause(on) paused = on end
 function F.Wrapped(name) return wrapped[name] == true end
+
+-- flyout size against the game's own (1), kept with the profile
+F.SIZE_MIN, F.SIZE_MAX = SIZE_MIN, SIZE_MAX
+function F.Size()
+    local data = P.Data()
+    local size = data and tonumber(data.size) or 1
+    return math.max(SIZE_MIN, math.min(SIZE_MAX, size))
+end
+
+function F.SetSize(size)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    size = math.max(SIZE_MIN, math.min(SIZE_MAX, tonumber(size) or 1))
+    if size == 1 then
+        data.size = nil
+    else
+        data.size = size
+    end
+    F.Apply()
+    return true
+end
+
+-- An icon's own key (or pad button) inside its flyout; nil gives it back
+-- its place's. Only its own flyout must not use the key twice.
+function F.SetKey(flyout, i, key, pad)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local entry = flyout and flyout.entries[i]
+    if not entry then return false end
+    local field = pad and "pad" or "key"
+    for _, other in ipairs(flyout.entries) do
+        if other ~= entry and other[field] == key then other[field] = nil end
+    end
+    entry[field] = key
+    local unit = Run(flyout).unit
+    local shown = unit ~= nil and open == unit
+    if root then Rebind() end
+    -- the open one's picks are bound by the snippet: run it again
+    if shown then F.Show(unit.index) end
+    return true
+end
+
+-- the key and pad button each icon of a flyout on the bars is picked with
+function F.Picks(flyout)
+    local unit = Run(flyout).unit
+    return unit and unit.picks
+end
 function F.Moved() moved = true end
 
 -- the flyout shown on a button
