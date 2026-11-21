@@ -8,6 +8,10 @@ Make your own flyouts on your action bars, for World of Warcraft: Forever. Put s
 
 That is all. It works in combat, with the default action bars and with action bar addons, and on a controller: the D-pad picks in place of 1, 2 and 3. In gamepad mode, where nothing is dragged, bind the ability onto the button as usual and choose Add to Flyout on the game's hint bar.
 
-Shift-drag an icon to move it inside its flyout, or drag it out to take it off. Right-click an icon takes it off too. Right-click the button to give the flyout its own icon. `/ff` opens the settings: profiles, flyout size, keys, and an Arrange section for moving icons without a drag. The game's Keybindings options have a Fallen's Flyouts section: a key for each flyout and for each icon of an open one.
+Shift-drag an icon to move it inside its flyout, or drag it out to take it off. Right-click an icon takes it off too. Right-click the button to give the flyout its own icon. With the mouse on an open flyout a grip shows at its far end: drag it to turn the flyout, so that it opens from any side of its button, as a column or as a row.
+
+Automatic flyouts fill themselves from your bags: Food, Drink, Potions, Elixirs, Flasks, Scrolls and Bandages, each dragged onto a bar from the Automatic Flyouts page of the settings.
+
+`/ff` opens the settings: profiles, flyout size, keys, and an Arrange section for moving icons without a drag. The game's Keybindings options have a Fallen's Flyouts section: a heading for each flyout and a row for each of its spots, where a key of its own can be set.
 
 Report a problem or ask for something under **Issues**.

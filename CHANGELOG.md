@@ -4,12 +4,12 @@
 
 ### Added
 - Automatic flyouts, on a page of their own in the settings (`/ff`): Food, Drink, Potions, Elixirs, Flasks, Scrolls and Bandages. Drag one onto an action bar and it fills itself with what is in your bags, the best first, and keeps up as your bags change: the last of something used up, it is gone; more of it or something new in your bags, it is back. Each sits on your bar as a macro with an icon of its own. Nothing on a bar changes in a fight, so a flyout catches up when the fight ends. `/ff food`, `/ff drink` and so on put one on your cursor from chat.
-- Turn a flyout: out of combat, with the mouse on an open flyout, a grip appears at its far end. Drag the grip to where the flyout should end and it snaps there as you go: straight out from any side of its button, or lying along a side as a row or a column. Let go and it stays; drag it back and it opens the bar's own way again. With no mouse, the Turn button under Arrange a flyout in the settings steps through the same shapes.
+- A flyout can be turned: out of combat, with the mouse on an open flyout, a grip appears at its far end. Drag the grip to where the flyout should end and it snaps there as you go: straight out from any side of its button, or lying along a side as a row or a column. Let go and it stays; drag it back and it opens the bar's own way again. With no mouse, the Turn button under Arrange a flyout in the settings steps through the same shapes.
 - Ranks of one spell in the same flyout are kept in rank order, Rank 1 first, whichever of them the button holds. Other icons stay where you put them. A check box under Arrange a flyout in the settings (`/ff`) turns this off.
 
 ### Changed
 - Flyouts you make by hand now leave out the items you have none of, and take them back, each in its old place, when you have some again. Untick Hide items I have none of under Arrange a flyout in the settings to keep them in place, grayed, as before.
-- The Fallen's Flyouts section of the game's Keybindings options is laid out by flyout: each flyout on your bars has a heading, with a row for each of its spots. A key set on a row picks that spot while its flyout is open. Under them are rows for the spots of every flyout alike. A flyout on a bar of gamepad mode says so in its heading, and a flyout whose ability is on no bar has no heading.
+- The Fallen's Flyouts section of the game's Keybindings options is laid out by flyout: each flyout on your bars, up to eight of them, has a heading, with a row for each of its spots. A key set on a row picks that spot while its flyout is open. Under them are rows for the spots of every flyout alike. A flyout on a bar of gamepad mode says so in its heading, and a flyout whose ability is on no bar keeps a heading only while a key is set under it.
 - The rows there that set an extra key to open a flyout are gone: a flyout opens with its bar button's own key.
 
 ### Fixed
