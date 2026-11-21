@@ -3,7 +3,7 @@ local _, ns = ...
 -- luacheck: read globals SetOverrideBindingClick ClearOverrideBindings GameTooltip C_GamePad GetBindingText
 -- luacheck: read globals issecretvalue C_CVar C_Container GetMacroSpell IsUsableItem geterrorhandler
 -- luacheck: read globals Settings IsModifiedClick GetModifiedClick PickupSpell PickupItem PickupMacro
--- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding
+-- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding ACTIONBAR_HOTKEY_FONT_COLOR
 
 -- Flyouts on bar buttons. One secure root owns every key.
 local F = {}
@@ -427,6 +427,8 @@ local function EntryButton(unit, i)
     -- one label, where the game puts a small button's key: the key, or the pad's symbol
     entry.key = entry:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmallGray")
     entry.key:SetPoint("TOPRIGHT", Art.KEY_X, Art.KEY_Y)
+    -- the font's own gray is darker than the one the game's bars show a key in
+    if ACTIONBAR_HOTKEY_FONT_COLOR then entry.key:SetVertexColor(ACTIONBAR_HOTKEY_FONT_COLOR:GetRGB()) end
     -- the game's small button sweep, at the icon's own level
     local cool = CreateFrame("Cooldown", nil, entry, "CooldownFrameTemplate")
     cool:SetPoint("TOPLEFT", entry.icon, "TOPLEFT", Art.SWEEP[1], Art.SWEEP[2])

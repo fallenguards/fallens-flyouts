@@ -296,6 +296,8 @@ local ART_SIZE = {
     ["UI-HUD-ActionBar-IconFrame-Mouseover"] = { 46, 45 }, ["UI-HUD-ActionBar-IconFrame-Background"] = { 46, 45 },
 }
 RING_W, RING_H = 46, 45
+-- the gray the game's bar buttons show a key in; the key font's own is 0.6
+ACTIONBAR_HOTKEY_FONT_COLOR = { GetRGB = function() return 0.8, 0.8, 0.8 end }
 C_Texture = { GetAtlasInfo = function(atlas)
     if W.noArt == atlas then return nil end
     local size = ART_SIZE[atlas]
