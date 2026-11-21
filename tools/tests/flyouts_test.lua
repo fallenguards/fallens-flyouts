@@ -130,6 +130,34 @@ do
     check(NS.Drop.pop == nil or NS.Drop.pop.frame.atlas == Art.NAMES.frame, "the drop slot wears the same frame")
 end
 
+print("the pad buttons by place: the D-pad together, the face buttons past it")
+do
+    local function pads(way, n) return table.concat(NS.Flyouts.PadsFor(way, n), " ") end
+    check(pads("UP", 2) == "PADDDOWN PADDUP", "two icons opening upward: down by the button, up above it")
+    check(pads("UP", 3) == "PADDDOWN PADDRIGHT PADDUP" and pads("UP", 4) == "PADDDOWN PADDLEFT PADDRIGHT PADDUP",
+        "three and four: left and right between down and up")
+    check(pads("UP", 5) == "PADDDOWN PADDLEFT PADDRIGHT PADDUP PAD4",
+        "five: the D-pad keeps the four places by the button, the fifth icon takes a face button")
+    check(pads("UP", 6) == "PADDDOWN PADDLEFT PADDRIGHT PADDUP PAD4 PAD3", "six: the two past the D-pad take the face buttons")
+    check(pads("DOWN", 5) == "PADDUP PADDRIGHT PADDLEFT PADDDOWN PAD4", "opening downward: up by the button, down the fourth")
+    check(pads("RIGHT", 5) == "PADDLEFT PADDUP PADDDOWN PADDRIGHT PAD4" and pads("LEFT", 6) == "PADDRIGHT PADDDOWN PADDUP PADDLEFT PAD4 PAD3",
+        "opening sideways: left and right at the ends of the four")
+    local together = true
+    for _, way in ipairs({ "UP", "DOWN", "LEFT", "RIGHT" }) do
+        for n = 1, 6 do
+            local list, seenFace = NS.Flyouts.PadsFor(way, n), false
+            for _, button in ipairs(list) do
+                local face = button == "PAD4" or button == "PAD3"
+                -- a D-pad direction after a face button would have the face button between D-pad icons
+                if seenFace and not face then together = false end
+                seenFace = seenFace or face
+            end
+            together = together and #list == n
+        end
+    end
+    check(together, "whatever the way and the count, no face button sits between two D-pad icons")
+end
+
 print("pad symbols on the icons: only while the pad is the input in use")
 local function label(i) return entry(one, i).key.text end
 local function symbol(i) return (label(i) or ""):find("|A", 1, true) ~= nil end

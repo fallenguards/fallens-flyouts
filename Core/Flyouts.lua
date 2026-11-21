@@ -15,8 +15,12 @@ local KEYS = { "1", "2", "3", "4", "5", "6" }
 local PADS = { "PADDUP", "PADDRIGHT", "PADDDOWN", "PADDLEFT", "PAD4", "PAD3" }
 -- Pad buttons go by where an icon sits: the two ends take the D-pad along
 -- the flyout's line (top is up, bottom is down), the ones between the rest.
-local PAD_UPRIGHT = { first = "PADDUP", last = "PADDDOWN", between = { "PADDRIGHT", "PADDLEFT", "PAD4", "PAD3" } }
-local PAD_LEVEL = { first = "PADDLEFT", last = "PADDRIGHT", between = { "PADDUP", "PADDDOWN", "PAD4", "PAD3" } }
+-- the D-pad by where an icon lies, then the face buttons for places past it
+local PAD_PAST = { "PAD4", "PAD3" }
+local PAD_UPRIGHT = { first = "PADDUP", last = "PADDDOWN", between = { "PADDRIGHT", "PADDLEFT" }, past = PAD_PAST }
+local PAD_LEVEL = { first = "PADDLEFT", last = "PADDRIGHT", between = { "PADDUP", "PADDDOWN" }, past = PAD_PAST }
+-- the D-pad has four directions
+local DPAD = 4
 -- the pad symbol's size on a flyout icon
 local GLYPH = 11
 -- a controller's label style, as the game's key strings end
@@ -580,17 +584,22 @@ local function KeyText(key)
     return key
 end
 
--- The pad buttons by place: entry 1 is by the bar button, so it is the
--- bottom of a flyout that grows up and the top of one that grows down.
+-- The pad buttons by place, counted from the bar button. The D-pad takes
+-- the four places nearest the button, each direction where its icon lies, so
+-- the four stay together. Places past those take the face buttons.
 local function PadsFor(way, count)
     local set = Art.SIDES[way].x == 0 and PAD_UPRIGHT or PAD_LEVEL
     local fromStart = way == "DOWN" or way == "RIGHT"
+    local group = math.min(count, DPAD)
     local out = {}
     for i = 1, count do
-        local at = fromStart and i or count + 1 - i
-        if at == 1 then
+        -- where the icon lies among the four, from the top or the left
+        local at = fromStart and i or group + 1 - i
+        if i > group then
+            out[i] = set.past[i - group]
+        elseif at == 1 then
             out[i] = set.first
-        elseif at == count then
+        elseif at == group then
             out[i] = set.last
         else
             out[i] = set.between[at - 1]
@@ -598,6 +607,7 @@ local function PadsFor(way, count)
     end
     return out
 end
+F.PadsFor = PadsFor
 
 -- the one wanted if it is free, else the first free of the rest
 local function Free(wanted, rest, taken)
