@@ -192,10 +192,13 @@ end
 
 -- whether taking entry i off leaves only the button's own ability, or nothing
 function F.Ends(flyout, i)
-    local entries = flyout.entries
-    if not entries[i] or #entries > 2 then return false end
-    if #entries == 1 then return true end
-    return Same(entries[3 - i], flyout.main)
+    local entry = flyout.entries[i]
+    local full = flyout.all or flyout.entries
+    if not entry or #full > 2 then return false end
+    if #full == 1 then return true end
+    local other = full[1]
+    if other == entry then other = full[2] end
+    return Same(other, flyout.main)
 end
 
 function F.Icon(entry)
@@ -968,9 +971,9 @@ end
 
 -- The ranks of one spell stand in rank order, in the places they hold
 -- between them, whichever of them the button has. The rest stay put.
-local function Order(flyout)
+local function Order(entries)
     local groups = {}
-    for place, entry in ipairs(flyout.entries) do
+    for place, entry in ipairs(entries) do
         local name, rank = RankOf(entry)
         if name then
             local group = groups[name]
@@ -998,7 +1001,7 @@ local function Order(flyout)
             local shifted = false
             for k, place in ipairs(group.places) do
                 local entry = group.members[k].entry
-                if flyout.entries[place] ~= entry then flyout.entries[place], shifted = entry, true end
+                if entries[place] ~= entry then entries[place], shifted = entry, true end
             end
             if shifted then
                 changed = true
@@ -1008,6 +1011,49 @@ local function Order(flyout)
         end
     end
     return changed
+end
+
+-- The whole of a flyout. One set to show only what the player has keeps
+-- the whole in `all` while it is in use, and shows the rest as its entries.
+local function Full(flyout) return flyout.all or flyout.entries end
+F.Full = Full
+
+-- an item the player has none of; a spell or a macro is never lacking
+local function Lacks(entry)
+    if entry.kind ~= "item" or not C_Item.GetItemCount then return false end
+    local count = C_Item.GetItemCount(entry.id)
+    if Hidden(count) or type(count) ~= "number" then return false end
+    return count == 0
+end
+
+-- what a flyout shows of its whole when it leaves out what the player lacks
+function F.Held(flyout)
+    local out = {}
+    for _, entry in ipairs(Full(flyout)) do
+        if not Lacks(entry) then out[#out + 1] = entry end
+    end
+    return out
+end
+
+-- the shown ones were put in a new order: the whole takes it, the hidden ones staying where they are
+local function Mirror(flyout)
+    local all = flyout.all
+    if not all then return end
+    local shown, k = {}, 0
+    for _, entry in ipairs(flyout.entries) do shown[entry] = true end
+    for place, entry in ipairs(all) do
+        if shown[entry] then
+            k = k + 1
+            all[place] = flyout.entries[k]
+        end
+    end
+end
+
+-- saved data holds the whole of every flyout, as its entries
+local function Whole(flyouts)
+    for _, flyout in ipairs(flyouts or {}) do
+        if type(flyout) == "table" and type(flyout.all) == "table" then flyout.entries, flyout.all = flyout.all, nil end
+    end
 end
 
 -- lays every flyout on its button; waits out a fight
@@ -1028,8 +1074,19 @@ function F.Apply()
     local ranked = F.Ranked()
     for _, flyout in ipairs(list or {}) do
         -- one that fills itself: what is in the bags now
-        if flyout.auto and ns.Auto then flyout.entries = (ns.Auto.Entries(flyout.auto)) end
-        if ranked then Order(flyout) end
+        if flyout.auto and ns.Auto then
+            flyout.entries = (ns.Auto.Entries(flyout.auto))
+        else
+            local full = Full(flyout)
+            if ranked then Order(full) end
+            if flyout.have then
+                -- only what the player has now; the whole is kept beside it
+                flyout.all = full
+                flyout.entries = F.Held(flyout)
+            elseif flyout.all then
+                flyout.entries, flyout.all = full, nil
+            end
+        end
         local state = Run(flyout)
         local name = flyout.host
         local host = not state.lost and Bars.Named(name)
@@ -1144,8 +1201,10 @@ end
 
 -- the profile in use; a damaged flyout is dropped, not patched
 function F.Load()
+    Whole(list)
     local data = P.Data()
     list = data and data.flyouts
+    Whole(list)
     if type(list) ~= "table" then
         list = nil
         return
@@ -1231,7 +1290,7 @@ function F.SetKey(flyout, i, key, pad)
     local entry = flyout and flyout.entries[i]
     if not entry then return false end
     local field = pad and "pad" or "key"
-    for _, other in ipairs(flyout.entries) do
+    for _, other in ipairs(Full(flyout)) do
         if other ~= entry and other[field] == key then other[field] = nil end
     end
     entry[field] = key
@@ -1244,6 +1303,17 @@ function F.SetKey(flyout, i, key, pad)
 end
 
 -- the key and pad button each icon of a flyout on the bars is picked with
+-- A flyout made by hand can leave out the items the player has none of,
+-- and take them back when there are some again. One that fills itself does so anyway.
+function F.SetHave(flyout, on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    if not (list and flyout) then return false end
+    if flyout.auto then return false, TEXT.auto end
+    flyout.have = on and true or nil
+    F.Apply()
+    return true
+end
+
 -- whether the ranks of one spell are kept in rank order: the profile's, on unless turned off
 function F.Ranked()
     local data = P.Data()
@@ -1280,7 +1350,7 @@ function F.Of(main)
 end
 
 local function Has(flyout, entry)
-    for _, other in ipairs(flyout.entries) do
+    for _, other in ipairs(Full(flyout)) do
         if Same(other, entry) then return true end
     end
     return false
@@ -1300,7 +1370,7 @@ function F.Stack(button, entry)
     end
     if flyout then
         if flyout.auto then return nil, TEXT.auto end
-        if #flyout.entries >= MAX then return nil, TEXT.full end
+        if #Full(flyout) >= MAX then return nil, TEXT.full end
         if Has(flyout, entry) then return nil, TEXT.twice end
         flyout.host = name
         Run(flyout).lost = nil
@@ -1309,7 +1379,8 @@ function F.Stack(button, entry)
         flyout = { host = name, main = main, entries = { { kind = main.kind, id = main.id } } }
         list[#list + 1] = flyout
     end
-    flyout.entries[#flyout.entries + 1] = { kind = entry.kind, id = entry.id }
+    local full = Full(flyout)
+    full[#full + 1] = { kind = entry.kind, id = entry.id }
     F.Apply()
     return flyout
 end
@@ -1326,8 +1397,9 @@ function F.StackLed(main, entry, button)
     if flyout and flyout.auto then return nil, TEXT.auto end
     if flyout then
         if not Has(flyout, entry) then
-            if #flyout.entries >= MAX then return nil, TEXT.full end
-            flyout.entries[#flyout.entries + 1] = { kind = entry.kind, id = entry.id }
+            local full = Full(flyout)
+            if #full >= MAX then return nil, TEXT.full end
+            full[#full + 1] = { kind = entry.kind, id = entry.id }
         end
     else
         flyout = { host = name or "", main = { kind = main.kind, id = main.id },
@@ -1358,7 +1430,10 @@ function F.Remove(flyout, i)
     if flyout.auto then return false, TEXT.auto end
     local shown = open ~= nil and open.flyout == flyout
     local gone = F.Ends(flyout, i)
-    table.remove(flyout.entries, i)
+    local entry = table.remove(flyout.entries, i)
+    for place = #(flyout.all or {}), 1, -1 do
+        if flyout.all[place] == entry then table.remove(flyout.all, place) end
+    end
     if gone then Forget(flyout) end
     F.Apply()
     -- still open, for the next one to take out
@@ -1377,6 +1452,7 @@ function F.Move(flyout, from, to)
     if from == to then return true end
     local shown = open ~= nil and open.flyout == flyout
     table.insert(entries, to, table.remove(entries, from))
+    Mirror(flyout)
     F.Apply()
     -- still open: it was being arranged
     local unit = shown and Run(flyout).unit
@@ -1413,6 +1489,7 @@ events:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
+events:RegisterEvent("PLAYER_LOGOUT")
 events:RegisterEvent("UPDATE_BINDINGS")
 -- not every client has the pad's events
 for _, event in ipairs({ "GAME_PAD_ACTIVE_CHANGED", "GAME_PAD_CONNECTED", "GAME_PAD_DISCONNECTED" }) do
@@ -1437,6 +1514,9 @@ events:SetScript("OnEvent", function(_, event, on)
         F.Follow()
     elseif event == "PLAYER_ENTERING_WORLD" then
         F.Follow()
+    elseif event == "PLAYER_LOGOUT" then
+        -- what is saved is the whole of each flyout
+        Whole(list)
     elseif event == "UPDATE_BINDINGS" then
         if ready and used > 0 and GetTime() >= quiet then rekey = true end
         -- the game's bars relabel on this too

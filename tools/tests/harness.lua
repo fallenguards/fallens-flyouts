@@ -519,6 +519,14 @@ C_Item = {
     GetItemIconByID = function(id) return id end,
     GetItemNameByID = function(id) return "Item " .. id end,
     GetItemCooldown = function() return 0, 0, 1 end,
+    -- with bags set, an item not in them is one the player has none of
+    GetItemCount = function(id)
+        if not W.bags then return 1 end
+        for _, held in ipairs(W.bags) do
+            if held == id then return 1 end
+        end
+        return 0
+    end,
     -- class 0 is a consumable; its kind is the item's `sub` (5 food and drink, 1 potion, 2 elixir)
     GetItemInfoInstant = function(id)
         local item = W.items and W.items[id]

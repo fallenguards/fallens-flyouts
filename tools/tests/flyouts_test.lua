@@ -992,6 +992,93 @@ do
         "the bars are as before")
 end
 
+print("a flyout made by hand that only shows what the player has")
+do
+    local hadPlaced = W.placed
+    W.placed = W.placed or {}
+    local function ids(flyout)
+        local out = {}
+        for i, entry in ipairs(flyout and flyout.entries or {}) do out[i] = tostring(entry.id) end
+        return table.concat(out, " ")
+    end
+    local function bags(list)
+        W.bags = list
+        fire("BAG_UPDATE_DELAYED")
+        flushAll()
+    end
+    local function stackItem(host, id)
+        W.cursor = { "item", id }
+        fire("ACTIONBAR_SHOWGRID")
+        local tab = tabOf(host)
+        tab.scripts.OnReceiveDrag(tab)
+        flushAll()
+    end
+    W.bags = { 601, 602, 603 }
+    W.placed[8] = 9101
+    fire("ACTIONBAR_SLOT_CHANGED", 8)
+    flushAll()
+    for _, id in ipairs({ 601, 602, 603 }) do stackItem("ActionButton8", id) end
+    local own = NS.Flyouts.At("ActionButton8")
+    check(own ~= nil and ids(own) == "9101 601 602 603", "a flyout of a spell and three items, made by hand")
+    bags({ 601, 603 })
+    check(ids(own) == "9101 601 602 603", "as made, an item the player has none of stays in it")
+    check(NS.Flyouts.SetHave(own, true) == true and ids(own) == "9101 601 603" and #NS.Flyouts.Full(own) == 4,
+        "set to show only what the player has, it leaves that one out and keeps it in mind")
+    bags({ 601, 602, 603 })
+    check(ids(own) == "9101 601 602 603", "the item in the bags again: it is back, in its old place")
+    bags({ 603 })
+    check(ids(own) == "9101 603", "two of them gone at once")
+    -- changed by hand while some are left out
+    NS.Flyouts.Move(own, 2, 1)
+    bags({ 601, 602, 603 })
+    check(ids(own) == "603 601 602 9101", "an icon moved while others were left out: those come back in the places they had")
+    bags({ 602, 603 })
+    stackItem("ActionButton8", 602)
+    check(#NS.Flyouts.Full(own) == 4, "an item that is in it already is not added a second time, shown or not")
+    NS.Flyouts.Remove(own, 1)
+    bags({ 601, 602, 603 })
+    check(ids(own) == "601 602 9101", "one taken off by hand is gone for good; the ones left out were not")
+    -- room is counted on the whole
+    for id = 604, 606 do
+        W.bags[#W.bags + 1] = id
+        stackItem("ActionButton8", id)
+    end
+    bags({ 601 })
+    local errorsBefore = #W.errors
+    W.bags[#W.bags + 1] = 607
+    stackItem("ActionButton8", 607)
+    check(#NS.Flyouts.Full(own) == 6 and ids(own) == "601 9101" and #W.errors == errorsBefore + 1,
+        "full is full, though only two of the six show")
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    -- none of its items, and the spell taken off: nothing to show, yet still reached from the settings
+    bags({})
+    check(ids(own) == "9101" and NS.Flyouts.At("ActionButton8") == own, "with none of the items it shows what is left: the spell")
+    NS.Arrange.Refresh()
+    local box = page.arrange.have
+    check(box ~= nil, "the settings page has a check box for the flyout shown under Arrange")
+    -- what is saved is the whole
+    fire("PLAYER_LOGOUT")
+    check(own.all == nil and #own.entries == 6 and own.have == true, "what is saved is the whole flyout, with its setting")
+    NS.Flyouts.Apply()
+    check(ids(own) == "9101" and #NS.Flyouts.Full(own) == 6, "and it is laid as before from that")
+    check(NS.Flyouts.SetHave(own, false) == true and #own.entries == 6 and own.all == nil,
+        "the setting off: everything shows, whether the player has it or not")
+    W.combat = true
+    check(NS.Flyouts.SetHave(own, true) == false and own.have == nil, "in a fight the setting does not change")
+    W.combat = false
+    -- taken apart from the front: its spell is no longer its first icon
+    for _ = 1, 8 do
+        local left = NS.Flyouts.At("ActionButton8")
+        if left then NS.Flyouts.Remove(left, 1) end
+    end
+    W.placed[8], W.bags = nil, nil
+    if not hadPlaced then W.placed = nil end
+    fire("ACTIONBAR_SLOT_CHANGED", 8)
+    flushAll()
+    check(NS.Flyouts.At("ActionButton8") == nil and order() == "101 501 502", "the bars are as before")
+end
+
 print("gamepad mode, binding or moving onto a taken button: swap the old one out, or add to its flyout")
 do
     local Pad = NS.PadBind

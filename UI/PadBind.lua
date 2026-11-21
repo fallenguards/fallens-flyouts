@@ -85,10 +85,10 @@ end
 local function Fits(button, old, new)
     local flyout = Led(button, old)
     if not flyout then return true end
-    for _, entry in ipairs(flyout.entries) do
+    for _, entry in ipairs(F.Full(flyout)) do
         if Same(entry, new) then return true end
     end
-    return #flyout.entries < F.MAX
+    return #F.Full(flyout) < F.MAX
 end
 
 -- The game's own hint bar, from its own maker and its own prompt template,

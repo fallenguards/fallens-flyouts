@@ -204,6 +204,9 @@ function A.Refresh()
         if flyout.auto and byId[flyout.auto] then
             local entries = A.Entries(flyout.auto)
             if not Alike(entries, flyout.entries or {}) then changed = true end
+        elseif flyout.have then
+            -- one made by hand that shows only what the player has
+            if not Alike(F.Held(flyout), flyout.entries or {}) then changed = true end
         end
     end
     -- word on items is listened for only while some is owed, and only for those

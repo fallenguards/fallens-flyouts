@@ -24,6 +24,8 @@ local TEXT = {
     offTip = "Takes the picked icon off the flyout.",
     ranks = "Keep a spell's ranks in order",
     ranksTip = "Ranks of one spell in a flyout stay in rank order, Rank 1 first.",
+    have = "Only show what I have",
+    haveTip = "This flyout leaves out items you have none of, and takes them back when you have some again.",
 }
 A.TEXT = TEXT
 
@@ -32,9 +34,16 @@ local at, held = 1, nil
 
 -- the flyouts on the bars, in the order they are laid
 local function Flyouts()
-    local out = {}
+    local out, seen = {}, {}
     local units, used = F.Units()
-    for f = 1, used do out[#out + 1] = units[f].flyout end
+    for f = 1, used do
+        out[#out + 1] = units[f].flyout
+        seen[units[f].flyout] = true
+    end
+    -- one that shows only what the player has, with none of it just now, is still reached here
+    for _, flyout in ipairs(F.List() or {}) do
+        if flyout.have and not seen[flyout] and not F.Lost(flyout) then out[#out + 1] = flyout end
+    end
     return out
 end
 
@@ -55,6 +64,9 @@ function A.Refresh()
     w.next:SetEnabled(count > 1)
     w.off:SetEnabled(held ~= nil)
     w.ranks:SetChecked(F.Ranked())
+    -- this flyout's own: one that fills itself has no need of it
+    w.have:SetChecked(flyout ~= nil and flyout.have == true)
+    w.have:SetEnabled(flyout ~= nil and not flyout.auto)
     for i, button in ipairs(w.icons) do
         local entry = flyout and flyout.entries[i]
         button:SetShown(entry ~= nil)
@@ -157,6 +169,16 @@ function A.Ranks(on)
     A.Refresh()
 end
 
+-- the other check box: the flyout shown here leaves out items the player has none of
+function A.Have(on)
+    local flyout = Current()
+    if flyout then
+        local ok, why = F.SetHave(flyout, on)
+        if not ok and why then ns.Warn(why) end
+    end
+    A.Refresh()
+end
+
 function A.Build(page, above)
     if page.arrange then return end
     panel = page
@@ -185,19 +207,25 @@ function A.Build(page, above)
     end
     w.off = Button(TEXT.off, TEXT.offTip, A.TakeOff)
     w.off:SetPoint("TOPLEFT", w.icons[1], "BOTTOMLEFT", -GAP / 2, -GAP * 2)
-    -- the game's own check box, beside it
-    w.ranks = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-    w.ranks:SetPoint("LEFT", w.off, "RIGHT", GAP * 2, 0)
-    local label = w.ranks.Text or w.ranks.text
-    if not label then
-        label = w.ranks:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-        label:SetPoint("LEFT", w.ranks, "RIGHT", GAP / 2, 0)
+    -- the game's own check boxes, beside it: one for every flyout, one for the flyout shown here
+    local function Check(text, tip, run, after)
+        local box = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+        box:SetPoint("LEFT", after, "RIGHT", GAP * 2, 0)
+        local label = box.Text or box.text
+        if not label then
+            label = box:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+            label:SetPoint("LEFT", box, "RIGHT", GAP / 2, 0)
+        end
+        label:SetText(text)
+        box.tip = tip
+        box:SetScript("OnClick", function(self) run(self:GetChecked() and true or false) end)
+        box:SetScript("OnEnter", ShowTip)
+        box:SetScript("OnLeave", HideTip)
+        return box, label
     end
-    label:SetText(TEXT.ranks)
-    w.ranks.tip = TEXT.ranksTip
-    w.ranks:SetScript("OnClick", function(self) A.Ranks(self:GetChecked() and true or false) end)
-    w.ranks:SetScript("OnEnter", ShowTip)
-    w.ranks:SetScript("OnLeave", HideTip)
+    local ranksLabel
+    w.ranks, ranksLabel = Check(TEXT.ranks, TEXT.ranksTip, A.Ranks, w.off)
+    w.have = Check(TEXT.have, TEXT.haveTip, A.Have, ranksLabel)
     panel.arrange = w
     -- a flyout changed elsewhere shows here at once
     F.Watch(function(what)

@@ -135,7 +135,7 @@ end
 local function TabEnter(tab)
     local entry = D.Carried()
     local flyout = F.At(tab.host)
-    local full = flyout ~= nil and #flyout.entries >= F.MAX
+    local full = flyout ~= nil and #F.Full(flyout) >= F.MAX
     local icon
     if entry and not full then icon = F.Icon(entry) end
     Pop()
