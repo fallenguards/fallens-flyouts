@@ -399,30 +399,127 @@ check(lastChat("Spell 601 taken off. Nothing else was added, so the flyout is go
 mouse(W.frames.ActionButton2)
 check(W.casts[#W.casts] == "action:2", "and a click on that button casts its own ability again")
 
-print("a drag moves a spell off the flyout, as off a bar")
+print("a drag moves an icon inside its flyout, as icons move on a phone's home screen")
+local Move = NS.Move
 local function drag(frame) frame.scripts.OnDragStart(frame) end
+local function slot(i) return NS.Flyouts.Slot(i) end
+-- how far along its flyout a frame was last put
+local function along(frame) return math.abs(frame.point[4]) + math.abs(frame.point[5]) end
+local function order()
+    local out = {}
+    for i = 1, count(one) do out[i] = entry(one, i).attrs.spell end
+    return table.concat(out, " ")
+end
+-- frames pass with no mouse read: the place is aimed at by hand here
+local function settle() for _ = 1, 40 do Move.Step(0.02) end end
+local function show() if not menu:IsShown() then tap("E") end end
 local plus = function() return tabOf("ActionButton1") end
 W.locked = true
-tap("E")
+show()
+check(order() == "101 501 502", "three icons to move about")
 drag(entry(one, 3))
-check(count(one) == 3 and W.cursor == nil, "bars locked: a plain drag moves nothing")
+check(Move.Moving() == nil and count(one) == 3 and W.cursor == nil, "bars locked: a plain drag moves nothing")
 W.shift = true
 drag(entry(one, 3))
-check(count(one) == 2 and W.cursor ~= nil and W.cursor[4] == 502 and menu:IsShown(),
-    "with Shift held it comes off onto the cursor, and the flyout stays open")
+check(Move.Moving() ~= nil and entry(one, 3).alpha == 0 and count(one) == 3 and W.cursor == nil,
+    "with Shift held the icon lifts out of its place; nothing is on the cursor and nothing is taken off")
+Move.Aim(1)
+Move.Step(0.02)
+check(along(entry(one, 1)) > slot(1) and along(entry(one, 1)) < slot(2), "the others slide, a part of the way each frame")
+settle()
+check(along(entry(one, 1)) == slot(2) and along(entry(one, 2)) == slot(3),
+    "held over the first place, the other two end one place up each: the gap is where it would land")
+Move.Aim(2)
+settle()
+check(along(entry(one, 1)) == slot(1) and along(entry(one, 2)) == slot(3), "held over the middle, the gap is in the middle")
+Move.Aim(1)
+Move.Drop()
+check(order() == "502 101 501" and menu:IsShown(), "let go over the first place it is first, the rest in their order, the flyout still open")
+check(Move.Landing() ~= nil and entry(one, 1).alpha == 0, "the held icon is settling into the gap")
+settle()
+check(Move.Landing() == nil and entry(one, 1).alpha == 1 and along(entry(one, 1)) == slot(1)
+    and along(entry(one, 2)) == slot(2) and along(entry(one, 3)) == slot(3), "then every icon is seen, each in its place")
+tap("1")
+check(W.casts[#W.casts] == "spell:502" and not menu:IsShown(), "the keys go by place: 1 casts the icon moved to the first place")
+
+print("the mouse does the same: followed while held, landed when it lets go")
+show()
+local _, unitOne = NS.Flyouts.At("ActionButton1")
+local long = slot(3) + NS.Art.ICON + NS.Art.PAD
+local upright = unitOne.way == "UP" or unitOne.way == "DOWN"
+-- left, right, top, bottom
+menu.rect = upright and { 100, 100 + NS.Art.STRIP, 300 + long, 300 } or { 100, 100 + long, 300 + NS.Art.STRIP, 300 }
+local function middle(place)
+    local d, s = slot(place) + NS.Art.ICON / 2, menu:GetEffectiveScale()
+    local x, y = (menu.rect[1] + menu.rect[2]) / 2, (menu.rect[3] + menu.rect[4]) / 2
+    if unitOne.way == "UP" then y = menu.rect[4] + d end
+    if unitOne.way == "DOWN" then y = menu.rect[3] - d end
+    if unitOne.way == "RIGHT" then x = menu.rect[1] + d end
+    if unitOne.way == "LEFT" then x = menu.rect[2] - d end
+    return x * s, y * s
+end
+for place = 1, 3 do
+    check(Move.Where(unitOne, middle(place)) == place, "the middle of place " .. place .. " is place " .. place)
+end
+check(Move.Where(unitOne, 5000, 5000) == nil, "a point far off the flyout is no place")
+W.mouseDown = true
+drag(entry(one, 1))
+W.mouseX, W.mouseY = middle(3)
+Move.Tick(0.02)
+check(Move.Moving() ~= nil and Move.Moving().at == 3, "held over the last place, the gap goes there")
+W.mouseDown = false
+Move.Tick(0.02)
+settle()
+check(order() == "101 501 502" and Move.Moving() == nil and Move.Landing() == nil, "let go, it is last again")
+local stack = NS.Flyouts.At("ActionButton1")
+NS.Flyouts.SetKey(stack, 3, "T", false)
+show()
+drag(entry(one, 3))
+Move.Aim(2)
+Move.Drop()
+settle()
+check(order() == "101 502 501" and stack.entries[2].key == "T" and stack.entries[3].key == nil, "an icon's stack key moves with it")
+NS.Flyouts.SetKey(stack, 2, nil, false)
+show()
+drag(entry(one, 2))
+Move.Aim(3)
+Move.Drop()
+settle()
+check(order() == "101 501 502", "and back")
+
+print("dragged out of the flyout it comes off, as off a bar")
+show()
+drag(entry(one, 3))
+W.mouseDown = true
+W.mouseX, W.mouseY = 5000, 5000
+Move.Tick(0.02)
+W.mouseDown = false
+check(count(one) == 2 and W.cursor ~= nil and W.cursor[4] == 502 and menu:IsShown() and Move.Moving() == nil,
+    "off the flyout and onto the cursor, the flyout still open")
+check(entry(one, 1).alpha == 1 and entry(one, 2).alpha == 1 and along(entry(one, 2)) == slot(2), "the icons left close up, seen")
 check(lastChat("Spell 502 taken off the flyout") ~= nil, "chat says what was taken off")
 plus().scripts.OnReceiveDrag(plus())
 check(count(one) == 3 and entry(one, 3).attrs.spell == 502 and W.cursor == nil,
     "dropped on the plus it is back in the flyout")
 W.shift, W.locked = false, false
-tap("E")
+show()
 drag(entry(one, 3))
-check(count(one) == 2 and W.cursor ~= nil, "bars unlocked: a plain drag is enough")
-plus().scripts.OnReceiveDrag(plus())
-W.combat, W.shift = true, true
-tap("E")
+check(Move.Moving() ~= nil, "bars unlocked: a plain drag is enough")
+tap("ESCAPE")
+check(Move.Moving() == nil and entry(one, 3).alpha == 1, "the flyout shut under a move: the icon is back, nothing moved")
+W.shift = true
+show()
+drag(entry(one, 2))
+Move.Aim(3)
+Move.Step(0.02)
+fire("PLAYER_REGEN_DISABLED")
+check(Move.Moving() == nil and entry(one, 2).alpha == 1 and along(entry(one, 3)) == slot(3) and order() == "101 501 502",
+    "a fight beginning mid-move puts every icon back where it was")
+W.combat = true
+show()
 drag(entry(one, 3))
-check(count(one) == 3 and W.cursor == nil and W.errors[#W.errors]:find("fight"), "in a fight a drag moves nothing")
+check(Move.Moving() == nil and count(one) == 3 and W.cursor == nil and W.errors[#W.errors]:find("fight"),
+    "in a fight a drag moves nothing")
 tap("ESCAPE")
 W.combat, W.shift = false, false
 
@@ -499,23 +596,23 @@ check(SlashCmdList.FALLENSFLYOUTSDEV == nil and SlashCmdList.FALLENSFLYOUTS ~= n
 stack("ActionButton1", 501)
 stack("ActionButton1", 502)
 stack("ActionButton2", 601)
-local mine, beside = opener("1"), opener("2")
-check(mine ~= nil and beside ~= nil and mine ~= beside and count(mine) == 3 and count(beside) == 2,
+local lead, beside = opener("1"), opener("2")
+check(lead ~= nil and beside ~= nil and lead ~= beside and count(lead) == 3 and count(beside) == 2,
     "drops stack into flyouts, one per button")
 tap("1"); tap("3")
-check(W.casts[#W.casts] == "spell:502" and not menuOf(mine):IsShown(), "the button's key opens, a number casts and shuts")
+check(W.casts[#W.casts] == "spell:502" and not menuOf(lead):IsShown(), "the button's key opens, a number casts and shuts")
 W.combat = true
 tap("2"); tap("PADDUP")
 check(W.casts[#W.casts] == "spell:601" and not menuOf(beside):IsShown(), "in a fight, by pad, the same")
 W.combat = false
 boot()
 flushAll()
-mine, beside = opener("1"), opener("2")
-check(mine ~= nil and beside ~= nil and count(mine) == 3 and second("2") == 601,
+lead, beside = opener("1"), opener("2")
+check(lead ~= nil and beside ~= nil and count(lead) == 3 and second("2") == 601,
     "after a reload both are back from the saved profile")
 tap("E")
-rightClick(entry(mine, 3))
-rightClick(entry(mine, 2))
+rightClick(entry(lead, 3))
+rightClick(entry(lead, 2))
 check(not opens("1") and not opens("E") and opens("2") and #NS.Profiles.Data().flyouts == 1,
     "right-clicks take a flyout apart")
 print("a login in a fight, before the bars are placed")

@@ -33,10 +33,10 @@ local TEXT = {
     full = "That flyout is full.",
     twice = "That is in the flyout already.",
     noLead = "That button's action cannot lead a flyout.",
-    how = "Right-click or drag",
-    howHeld = "Right-click or %s-drag",
-    remove = "%s takes it off the flyout.",
-    removeLast = "%s takes it off, and the flyout with it: nothing else was added.",
+    how = "Drag",
+    howHeld = "%s-drag",
+    remove = "%s to move it. Right-click takes it off the flyout.",
+    removeLast = "%s to move it. Right-click takes it off, and the flyout with it: nothing else was added.",
     took = "%s taken off the flyout.",
     gone = "%s taken off. Nothing else was added, so the flyout is gone.",
     it = "It",
@@ -288,12 +288,16 @@ local function Pickup(entry)
     end
 end
 
--- dragged off as off a bar: out of the flyout and onto the cursor
-local function DragOff(self)
-    if F.BarsLocked() and not IsModifiedClick("PICKUPACTION") then return end
-    local entry = TakeOff(self.flyoutUnit, self.entryIndex)
+-- dragged out as off a bar: off the flyout and onto the cursor
+function F.CarryOff(unit, i)
+    local entry = TakeOff(unit, i)
     if entry then Pickup(entry) end
+    return entry
 end
+
+-- a drag on an icon moves it: UI/Move.lua, loaded after this file
+local function DragStart(self) ns.Move.Start(self) end
+local function DragStop() ns.Move.Released() end
 
 local function Build()
     if root then return end
@@ -401,7 +405,8 @@ local function EntryButton(unit, i)
     -- never a field called unit: the client takes that for a unit name
     entry.flyoutUnit, entry.entryIndex = unit, i
     entry:RegisterForDrag("LeftButton")
-    entry:HookScript("OnDragStart", DragOff)
+    entry:HookScript("OnDragStart", DragStart)
+    entry:HookScript("OnDragStop", DragStop)
     entry:HookScript("OnEnter", EntryTip)
     entry:HookScript("OnLeave", HideTip)
     -- the game's dark slot, seen at the icon's cut corners
@@ -697,6 +702,16 @@ local function HostClicked(self, button, down)
     if flyout and not root:GetAttribute("carrying") then ns.Icon.Open(flyout) end
 end
 
+-- where the icon in place i starts, along the flyout from the bar button
+function F.Slot(i) return Art.FIRST + (i - 1) * (Art.ICON + Art.NEXT) end
+
+-- an icon frame that far along its flyout; out of a fight only
+function F.Put(unit, frame, out)
+    local side = Art.SIDES[unit.way]
+    frame:ClearAllPoints()
+    frame:SetPoint(side.point, unit.menu, side.point, side.x * out, side.y * out)
+end
+
 -- a unit placed, sized and turned for its bar
 local function Lay(unit)
     local flyout, host = unit.flyout, unit.host
@@ -735,10 +750,8 @@ local function Lay(unit)
 
     for i, frame in ipairs(unit.entries) do
         local entry = flyout.entries[i]
-        local out = Art.FIRST + (i - 1) * (Art.ICON + Art.NEXT)
         frame.entry, frame.flyout = entry, flyout
-        frame:ClearAllPoints()
-        frame:SetPoint(side.point, menu, side.point, side.x * out, side.y * out)
+        F.Put(unit, frame, F.Slot(i))
         frame:SetAttribute("type", entry and entry.kind or nil)
         frame:SetAttribute("spell", nil)
         frame:SetAttribute("item", nil)
@@ -1107,6 +1120,21 @@ function F.Remove(flyout, i)
     if unit then F.Show(unit.index) end
     -- true, and whether the flyout went with it
     return true, gone
+end
+
+-- an entry to another place in its flyout; the rest close up around it
+function F.Move(flyout, from, to)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local entries = flyout and flyout.entries
+    if not (list and entries and entries[from] and entries[to]) then return false end
+    if from == to then return true end
+    local shown = open ~= nil and open.flyout == flyout
+    table.insert(entries, to, table.remove(entries, from))
+    F.Apply()
+    -- still open: it was being arranged
+    local unit = shown and Run(flyout).unit
+    if unit then F.Show(unit.index) end
+    return true
 end
 
 -- by code, out of a fight only: code clicks are refused

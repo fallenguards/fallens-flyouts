@@ -36,14 +36,14 @@ end
 local Frame = {}
 Frame.__index = Frame
 local function noop() end
-for _, m in ipairs({ "SetFrameStrata", "SetPoint", "ClearAllPoints", "RegisterForClicks", "EnableMouse",
+for _, m in ipairs({ "SetFrameStrata", "ClearAllPoints", "RegisterForClicks", "EnableMouse",
     "SetHighlightTexture", "SetAllPoints", "SetColorTexture",
     "SetJustifyH", "HighlightText", "SetHorizTile", "SetVertTile", "SetFrameLevel",
     "SetDrawBling", "SetDrawEdge", "SetSwipeColor", "SetHideCountdownNumbers", "SetUsingParentLevel",
     "AddMaskTexture", "SetLooping",
     "SetFromAlpha", "SetToAlpha", "SetDuration", "Play", "Stop", "RemoveMaskTexture", "SetDrawLayer",
     "SetToplevel", "SetMovable", "SetClampedToScreen", "RegisterForDrag", "SetMaxLetters", "SetFocus",
-    "Enable", "Disable", "SetValueStep", "SetObeyStepOnDrag", "SetAutoFocus", "SetFontObject", "SetAlpha", "EnableGamePadButton" }) do
+    "Enable", "Disable", "SetValueStep", "SetObeyStepOnDrag", "SetAutoFocus", "SetFontObject", "EnableGamePadButton" }) do
     Frame[m] = noop
 end
 local function region() return setmetatable({ scripts = {}, attrs = {}, shown = true }, Frame) end
@@ -65,6 +65,18 @@ function Frame:GetTexCoord()
     return 0, 0, 0, 1, 1, 0, 1, 1
 end
 function Frame:GetScaledRect() return nil end
+-- seen or not, and a rectangle a test gives it: left, right, top, bottom
+function Frame:SetAlpha(v) self.alpha = v end
+-- the last anchor given: point, frame, its point, x, y
+function Frame:SetPoint(...) self.point = { ... } end
+function Frame:GetPoint()
+    if self.point then return table.unpack(self.point) end
+end
+function Frame:GetAlpha() return self.alpha or 1 end
+function Frame:GetLeft() return self.rect and self.rect[1] end
+function Frame:GetRight() return self.rect and self.rect[2] end
+function Frame:GetTop() return self.rect and self.rect[3] end
+function Frame:GetBottom() return self.rect and self.rect[4] end
 function Frame:GetFrameStrata() return "MEDIUM" end
 function Frame:GetFrameLevel() return 1 end
 function Frame:SetScale(v) self.scale = v end
@@ -277,9 +289,11 @@ local function flush()
     W.queue = {}
     W.clock = W.clock + 10
     for _, fn in ipairs(q) do fn() end
-    -- a drawn frame between timers
-    for _, f in ipairs(W.all) do
-        if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, 0.05) end
+    -- drawn frames between timers: a third of a second of them
+    for _ = 1, 6 do
+        for _, f in ipairs(W.all) do
+            if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, 0.05) end
+        end
     end
 end
 GameTooltip = {
@@ -419,7 +433,8 @@ end
 C_CVar = { GetCVar = function() return "1" end }
 Enum = { SpellBookSpellBank = { Player = 0 }, SpellBookItemType = { Spell = 1 } }
 function IsKeyDown(key) return W.keyDown[key] or false end
-function IsMouseButtonDown() return false end
+function IsMouseButtonDown() return W.mouseDown == true end
+function GetCursorPosition() return W.mouseX or 0, W.mouseY or 0 end
 C_SpellBook = {
     GetNumSpellBookSkillLines = function() return 2 end,
     GetSpellBookSkillLineInfo = function(line) return { itemIndexOffset = (line - 1) * 4, numSpellBookItems = 4 } end,
