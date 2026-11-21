@@ -8,7 +8,7 @@ local _, ns = ...
 -- Flyouts on bar buttons. One secure root owns every key.
 local F = {}
 ns.Flyouts = F
-local P, Bars, Art = ns.Profiles, ns.Bars, ns.Art
+local P, Bars, Art, Binds = ns.Profiles, ns.Bars, ns.Art, ns.Binds
 
 local MAX = 6
 local KEYS = { "1", "2", "3", "4", "5", "6" }
@@ -150,6 +150,8 @@ local wrapped, hosted = {}, {}
 local padMode
 -- a game command bound to a key and a pad button both, and whether one was sought
 local witness, sought
+-- our rows' keys in the game's key menu, as last bound
+local menuKeys
 local Labels
 -- what is true of a flyout on this character's bars only
 local run = setmetatable({}, { __mode = "k" })
@@ -478,6 +480,10 @@ local function Unit(f)
     unit.glow = opener:CreateTexture(nil, "ARTWORK")
     unit.glow:SetAtlas(Art.NAMES.glow)
     unit.glow:Hide()
+    -- the game's own mouseover ring on the bar button, lit to point it out
+    unit.ring = opener:CreateTexture(nil, "OVERLAY")
+    unit.ring:SetAtlas(Art.NAMES.frameOver)
+    unit.ring:Hide()
     opener:HookScript("OnEnter", function()
         Arrow(unit, "arrowOver")
         unit.glow:Show()
@@ -622,6 +628,12 @@ local function Picks(unit)
         if pad then taken[pad] = true end
         picks[i] = { key = key, pad = pad }
     end
+    -- then the keys set for the places in the game's key menu
+    for i, pick in ipairs(picks) do
+        local key, pad = Binds.Pick(i)
+        if not pick.key and key and not taken[key] then pick.key, taken[key] = key, true end
+        if not pick.pad and pad and not taken[pad] then pick.pad, taken[pad] = pad, true end
+    end
     for i, pick in ipairs(picks) do
         pick.key = pick.key or Free(KEYS[i], KEYS, taken)
         pick.pad = pick.pad or Free(pads[i], PADS, taken)
@@ -739,6 +751,9 @@ local function Lay(unit)
     unit.glow:ClearAllPoints()
     unit.glow:SetPoint("TOPLEFT", host, "TOPLEFT", -Art.GLOW, Art.GLOW)
     unit.glow:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", Art.GLOW, -Art.GLOW)
+    unit.ring:ClearAllPoints()
+    unit.ring:SetPoint("TOPLEFT", host, "TOPLEFT")
+    unit.ring:SetSize(Art.RING_W, Art.RING_H)
     Arrow(unit, "arrow")
     opener:Show()
     -- the bar's scale times the size picked in the settings (1 is the game's own)
@@ -769,6 +784,18 @@ local function Lay(unit)
     if ready then Laid()[flyout.host] = { way = way, scale = scale } end
 end
 
+-- the keys that open a flyout: its bar button's, and its own row's in the key menu
+local function OpenKeys(unit)
+    local keys, seen = {}, {}
+    for _, key in ipairs(Bars.Keys(unit.host)) do
+        keys[#keys + 1], seen[key] = key, true
+    end
+    for _, key in ipairs(Binds.Open(unit.flyout.number)) do
+        if not seen[key] then keys[#keys + 1], seen[key] = key, true end
+    end
+    return keys
+end
+
 -- Each button's keys click its opener, read fresh. Each flyout's picks are
 -- listed for the snippet, also under the modifiers of a key that can be held.
 local function Rebind()
@@ -789,7 +816,7 @@ local function Rebind()
                 plain[key] = true
             end
         end
-        unit.keys = Bars.Keys(unit.host)
+        unit.keys = OpenKeys(unit)
         for _, key in ipairs(unit.keys) do mine[key] = true end
         for i, key in ipairs(unit.keys) do
             -- a key that is a pick while open cannot be held: its release may go to the pick
@@ -813,12 +840,14 @@ local function Rebind()
         root:SetAttribute("okeys" .. f, #unit.keys)
         Labels(unit)
     end
+    menuKeys = Binds.State()
     quiet = math.max(quiet, GetTime() + 0.5)
 end
 
 local function Signature()
     local parts = {}
     for f = 1, used do parts[f] = table.concat(units[f].keys, " ") end
+    parts[#parts + 1] = menuKeys or ""
     return table.concat(parts, "|")
 end
 
@@ -829,8 +858,10 @@ local function Rekey()
     Bars.KeyMap(true)
     local grown = false
     for f = 1, used do
-        if #Bars.Keys(units[f].host) ~= #units[f].keys then grown = true end
+        if #OpenKeys(units[f]) ~= #units[f].keys then grown = true end
     end
+    -- a key set or taken off in the game's key menu counts at once
+    if Binds.State() ~= menuKeys then grown = true end
     if not grown and GetTime() < patient then return end
     local was = Signature()
     Rebind()
@@ -843,6 +874,30 @@ local function Rekey()
     end
 end
 
+-- Each flyout has a number of its own, kept for good: its row in the
+-- game's key menu. The rows are named after the abilities they sit on.
+local function Number()
+    local taken = {}
+    for _, flyout in ipairs(list or {}) do
+        local n = flyout.number
+        if type(n) == "number" and n >= 1 and n <= Binds.SLOTS and not taken[n] then
+            taken[n] = flyout
+        else
+            flyout.number = nil
+        end
+    end
+    for _, flyout in ipairs(list or {}) do
+        local n = 1
+        while not flyout.number and n <= Binds.SLOTS do
+            if not taken[n] then flyout.number, taken[n] = n, flyout end
+            n = n + 1
+        end
+    end
+    for n = 1, Binds.SLOTS do
+        Binds.Name(n, taken[n] and Name(taken[n].main) or nil)
+    end
+end
+
 -- lays every flyout on its button; waits out a fight
 function F.Apply()
     if InCombatLockdown() then
@@ -851,6 +906,7 @@ function F.Apply()
     end
     pending = nil
     Build()
+    Number()
     for _, unit in ipairs(units) do unit.menu:Hide() end
     root:SetAttribute("open", nil)
     -- no key counts as held or pressed across a layout
@@ -1001,6 +1057,26 @@ function F.Pause(on) paused = on end
 -- whether the pad is the input in use right now, and the command that tells
 function F.PadInUse() return PadInUse(), witness end
 function F.Wrapped(name) return wrapped[name] == true end
+
+-- Lights the bar button of flyout number n, to show where it is; nil puts
+-- the light out. Returns the unit lit.
+local pointed
+function F.Point(n)
+    if pointed then
+        pointed.ring:Hide()
+        pointed.glow:SetShown(pointed.menu:IsShown() or pointed.opener:IsMouseOver())
+        pointed = nil
+    end
+    for f = 1, used do
+        local unit = units[f]
+        if n and unit.flyout and unit.flyout.number == n then
+            pointed = unit
+            unit.ring:Show()
+            unit.glow:Show()
+        end
+    end
+    return pointed
+end
 
 -- flyout size against the game's own (1), kept with the profile
 F.SIZE_MIN, F.SIZE_MAX = SIZE_MIN, SIZE_MAX

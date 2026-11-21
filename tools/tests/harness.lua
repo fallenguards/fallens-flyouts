@@ -291,6 +291,8 @@ local function flush()
     W.queue = {}
     W.clock = W.clock + 10
     for _, fn in ipairs(q) do fn() end
+    -- a run that asks for it has the once-a-second ticker pass with the time
+    if PUMP_TICKER and W.ticker then W.ticker() end
     -- drawn frames between timers: a third of a second of them
     for _ = 1, 6 do
         for _, f in ipairs(W.all) do
@@ -356,8 +358,21 @@ function GetBindingKey(command)
     for _, key in ipairs(rest) do first[#first + 1] = key end
     return table.unpack(first)
 end
+-- every command the game knows: ours come from Bindings.xml, bound or not
+local DEFINED = {}
+do
+    local file = io.open("Bindings.xml")
+    if file then
+        for name in file:read("a"):gmatch('<Binding name="([%w_]+)"') do DEFINED[#DEFINED + 1] = name end
+        file:close()
+    end
+end
 local function commands()
     local seen, out = {}, {}
+    for _, action in ipairs(DEFINED) do
+        seen[action] = true
+        out[#out + 1] = action
+    end
     for _, action in pairs(W.base) do
         if not seen[action] then
             seen[action] = true
@@ -368,7 +383,17 @@ local function commands()
     return out
 end
 function GetNumBindings() return #commands() end
-function GetBinding(n) return commands()[n] end
+-- a command and its heading, as the key menu lists it; ours are the rows of Bindings.xml
+function GetBinding(n)
+    local command = commands()[n]
+    return command, command and command:find("^FALLENSFLYOUTS_") and "BINDING_HEADER_FALLENSFLYOUTS" or nil
+end
+-- a key given to a command by code, as the key menu gives it
+function SetBinding(key, command)
+    W.base[key] = command
+    fire("UPDATE_BINDINGS")
+    return true
+end
 -- a pad button comes back as its symbol, any other key shortened
 function GetBindingText(key)
     if key:find("PAD", 1, true) then return "|A:Gamepad_Gen_" .. key .. ":14:14|a" end

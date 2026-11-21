@@ -17,6 +17,14 @@ for _, id in ipairs({ 501, 502, 503 }) do
     check(LAYERS[tab:GetFrameStrata()] > LAYERS[W.frames.ActionButton2:GetFrameStrata()]
         and LAYERS[tab:GetFrameStrata()] > LAYERS.DIALOG and LAYERS[tab:GetFrameStrata()] < LAYERS.TOOLTIP,
         "the plus is on a layer over the bar buttons and a shown flyout, under tooltips")
+    -- the arrow of a flyout ends 4 past the button's edge: the plus stands past its tip
+    local out = math.abs(tab.point[4]) + math.abs(tab.point[5])
+    if id == 501 then
+        check(out == NS.Drop.BADGE_OUT, "on a button with no flyout yet the plus sits at the button's edge")
+    else
+        check(out == NS.Drop.BADGE_PAST and out - 18 * 0.31 > 4 + 1,
+            "on a button with a flyout the plus stands clear of the flyout's arrow")
+    end
     tab.scripts.OnReceiveDrag(tab)
     check(W.cursor == nil, "cursor emptied after the drop")
 end
@@ -527,6 +535,86 @@ check(Move.Moving() == nil and count(one) == 3 and W.cursor == nil and W.errors[
     "in a fight a drag moves nothing")
 tap("ESCAPE")
 W.combat, W.shift = false, false
+
+print("the game's key menu: a row for each flyout, and for each place of an open one")
+local Binds = NS.Binds
+do
+    local file = assert(io.open("Bindings.xml"))
+    local xml = file:read("a")
+    file:close()
+    local opensListed, picksListed, fine = 0, 0, true
+    for name, category in xml:gmatch('<Binding name="([%w_]+)" category="([%w_]+)">') do
+        if name:find("^" .. Binds.OPEN .. "%d+$") then
+            opensListed = opensListed + 1
+            fine = fine and _G["BINDING_NAME_" .. name] ~= nil
+        elseif name:find("^" .. Binds.PICK .. "%d+$") then
+            picksListed = picksListed + 1
+            fine = fine and _G["BINDING_NAME_" .. name] ~= nil
+        elseif name:find("^PREFACE_") then
+            fine = fine and type(_G[name]) == "string"
+        else
+            fine = fine and name:find("^HEADER_") ~= nil
+        end
+        fine = fine and category == Binds.CATEGORY
+    end
+    check(opensListed == Binds.SLOTS and picksListed == Binds.PLACES and fine and _G[Binds.CATEGORY] == "Fallen's Flyouts",
+        "Bindings.xml lists every row the code reads, each with its text, under the addon's own heading")
+end
+local function rebound()
+    W.clock = W.clock + 10
+    fire("UPDATE_BINDINGS")
+    W.ticker()
+end
+local function rowName(n) return _G["BINDING_NAME_" .. Binds.OPEN .. n] end
+local keyed, keyedUnit = NS.Flyouts.At("ActionButton1")
+local second2 = "CLICK FallensFlyoutsEntry" .. one .. "_2:LeftButton"
+check(keyed.number == 1 and rowName(1) == "Flyout 1: Spell 101" and rowName(2) == "Flyout 2",
+    "a flyout has a row of its own, named after its ability; a row with no flyout has its number alone")
+W.base.F9 = Binds.OPEN .. "1"
+rebound()
+check(opener("F9") == one and opener("1") == one, "a key set on its row opens the flyout, as its bar button's key still does")
+tap("F9")
+check(menu:IsShown(), "pressed, the flyout is open")
+tap("F9")
+check(not menu:IsShown(), "pressed again, it is shut")
+W.base.T = Binds.PICK .. "2"
+W.base.PADLSHOULDER = Binds.PICK .. "2"
+rebound()
+tap("F9")
+check(GetBindingAction("T", true) == second2 and label(2) == "T",
+    "a key set for place 2 picks the second icon of an open flyout, and the icon shows it")
+check(GetBindingAction("PADLSHOULDER", true) == second2, "a pad button set for the place picks it too")
+check(GetBindingAction("2", true) == "ACTIONBUTTON2", "and 2 is the bar's own then")
+tap("T")
+check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "pressed, it casts that icon and shuts the flyout")
+check(GetBindingAction("T", true) == Binds.PICK .. "2", "shut, the key is the row's again: it does nothing")
+NS.Flyouts.SetKey(keyed, 2, "Y", false)
+tap("F9")
+check(GetBindingAction("Y", true) == second2 and GetBindingAction("T", true) ~= second2,
+    "an icon's own key stands before the key of its place")
+tap("F9")
+NS.Flyouts.SetKey(keyed, 2, nil, false)
+W.base.T, W.base.PADLSHOULDER, W.base.F9 = nil, nil, nil
+rebound()
+check(opener("F9") == nil and opener("1") == one and label(2) == "2", "taken off in the menu, every key is as before")
+-- a number is kept: a flyout keeps its row when an earlier one goes
+stack("ActionButton2", 601)
+stack("ActionButton3", 602)
+local rowTwo, rowThree = NS.Flyouts.At("ActionButton2"), NS.Flyouts.At("ActionButton3")
+check(rowTwo.number == 2 and rowThree.number == 3 and rowName(2):find("^Flyout 2: ") ~= nil and rowName(3):find("^Flyout 3: ") ~= nil,
+    "later flyouts take the next rows")
+NS.Flyouts.Remove(rowTwo, 2)
+check(NS.Flyouts.At("ActionButton2") == nil and rowThree.number == 3 and rowName(2) == "Flyout 2" and rowName(3) ~= "Flyout 3",
+    "one taken away, the flyout after it keeps its row and its keys")
+NS.Flyouts.Remove(rowThree, 2)
+check(NS.Flyouts.At("ActionButton3") == nil and rowName(3) == "Flyout 3", "and a row with no flyout left has its number alone again")
+NS.KeyMenu.Hover(Binds.OPEN .. "1")
+check(keyedUnit.ring.shown and keyedUnit.glow.shown, "a hover on a flyout's row in the key menu lights its bar button")
+NS.KeyMenu.Hover(Binds.PICK .. "1")
+check(not keyedUnit.ring.shown and not keyedUnit.glow.shown, "a hover on another row puts the light out")
+NS.KeyMenu.Hover(Binds.OPEN .. "1")
+NS.KeyMenu.Hover(nil)
+check(not keyedUnit.ring.shown, "and so does leaving the rows")
 
 print("the button gets another key")
 one = opener("1")

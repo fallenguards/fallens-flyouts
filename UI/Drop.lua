@@ -8,6 +8,8 @@ local F, Bars, Art = ns.Flyouts, ns.Bars, ns.Art
 
 -- the plus, and how its slot grows under the cursor
 local BADGE, BADGE_HIT, BADGE_OUT, BADGE_REACH = 18, 22, 4, 7
+-- on a button that has a flyout the plus stands clear of its arrow, past the tip
+local BADGE_PAST = 12
 local GROW_FROM, GROW_TO, GROW_SPEED = 0.55, 1.1, 16
 local TEXT = {
     add = "Add to flyout",
@@ -15,7 +17,7 @@ local TEXT = {
     full = "Flyout is full",
     kind = "Only spells, items and macros go in a flyout.",
 }
-D.GROW_FROM = GROW_FROM
+D.GROW_FROM, D.BADGE_OUT, D.BADGE_PAST = GROW_FROM, BADGE_OUT, BADGE_PAST
 -- above every bar, a neighbouring bar too, and above a shown flyout; below tooltips
 local LAYER = "FULLSCREEN_DIALOG"
 D.LAYER = LAYER
@@ -52,8 +54,9 @@ local function Reach(tab, grown)
     local upright = side.x == 0
     tab:ClearAllPoints()
     if not grown then
+        local out = F.At(tab.host) and BADGE_PAST or BADGE_OUT
         tab:SetSize(BADGE_HIT, BADGE_HIT)
-        tab:SetPoint("CENTER", tab.button, side.to, side.x * BADGE_OUT, side.y * BADGE_OUT)
+        tab:SetPoint("CENTER", tab.button, side.to, side.x * out, side.y * out)
         return
     end
     local size = F.Size()

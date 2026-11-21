@@ -13,6 +13,8 @@ A.FIRST, A.NEXT, A.PAD, A.STRIP = 9, 4, 8, 47
 -- The frame art is a ring with its shadow beside it: 35 draws a 31.6 ring.
 A.MASK, A.FRAME, A.OVER_W, A.OVER_H, A.GLOW = 45, 35, 31.6, 30.9, 4
 A.KEY_X, A.KEY_Y = -3, -4
+-- a bar button's own mouseover ring
+A.RING_W, A.RING_H = 46, 45
 A.SWEEP = { 1.7, -1.7, -1, 1 }
 -- one slot's length: the drop target shows it
 A.POP = A.FIRST + A.ICON + A.PAD

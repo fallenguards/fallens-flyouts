@@ -1,0 +1,25 @@
+<Bindings>
+	<!-- The addon's section of the game's key menu. A row only holds its keys: Core\Flyouts.lua binds
+	     them as it binds a bar button's own. Texts and the count of rows are in Core\Binds.lua. -->
+	<Binding name="PREFACE_FALLENSFLYOUTS_OPEN" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN7" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN8" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN9" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN10" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN11" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_OPEN12" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="HEADER_FALLENSFLYOUTS_GAP" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="PREFACE_FALLENSFLYOUTS_PICK" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+</Bindings>

@@ -13,9 +13,11 @@ Core\Profiles.lua
 Core\Core.lua
 Core\Bars.lua
 UI\Art.lua
+Core\Binds.lua
 Core\Flyouts.lua
 UI\Move.lua
 UI\Drop.lua
 UI\Icon.lua
 UI\Keys.lua
+UI\KeyMenu.lua
 Options\Profiles.lua
