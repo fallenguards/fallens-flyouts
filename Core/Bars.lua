@@ -222,6 +222,13 @@ function B.Action(button)
     if (kind == "spell" or kind == "item" or kind == "macro") and id then return { kind = kind, id = id } end
 end
 
+-- what a bar slot holds, if it can go in a flyout
+function B.ActionAt(slot)
+    if type(slot) ~= "number" or not HasAction(slot) then return nil end
+    local kind, id = Read(slot)
+    if (kind == "spell" or kind == "item" or kind == "macro") and id then return { kind = kind, id = id } end
+end
+
 function B.Holds(button, main)
     local slot = B.Slot(button)
     if not slot or not HasAction(slot) then return false end

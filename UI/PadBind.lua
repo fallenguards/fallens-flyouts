@@ -2,12 +2,13 @@ local _, ns = ...
 -- luacheck: read globals GamepadActionBarEditFrame hooksecurefunc InCombatLockdown GetCursorInfo ClearCursor
 -- luacheck: read globals CreateFrame UIParent unpack geterrorhandler PlaceAction InputPromptLegends
 -- luacheck: read globals C_Spell C_Item PickupMacro GetMacroInfo GAMEPAD_FACE_LEFT GAMEPAD_FACE_TOP GAMEPAD_FACE_RIGHT
--- luacheck: read globals GAMEPAD_PROMPT_DIVIDER_SLASH FRAME_ACTION_EDIT_ACTION_BAR
+-- luacheck: read globals GAMEPAD_PROMPT_DIVIDER_SLASH FRAME_ACTION_EDIT_ACTION_BAR FRAME_ACTION_CANCEL
+-- luacheck: read globals GAMEPAD_FACE_BOTTOM GetTime C_Timer
 
--- The game's gamepad mode, "Bind to Action Bar". Bound onto a button that
--- holds an ability, the new one takes its place, as ever. The hint bar under
--- the dialog then names both ways on: swap the old one out, or keep it there
--- and add the new one to its flyout.
+-- The game's gamepad mode, binding an ability or moving one about (Edit
+-- Action Bar). Put onto a button that holds an ability, the new one takes its
+-- place, as ever. The hint bar under the dialog then names both ways on: swap
+-- the old one out, or keep it there and add the new one to its flyout.
 --
 -- The game's dialog is only watched. None of its fields is written and none
 -- of its calls is made: its code never runs under ours. It takes every pad
@@ -16,25 +17,29 @@ local G = {}
 ns.PadBind = G
 local F, Bars = ns.Flyouts, ns.Bars
 
--- the face buttons, as the game names them
-local KEY_ADD, KEY_EDIT = GAMEPAD_FACE_LEFT or "PAD3", GAMEPAD_FACE_TOP or "PAD4"
-local KEY_BACK = GAMEPAD_FACE_RIGHT or "PAD2"
-local EDIT_BARS = "^GamepadActionBarEditFrame"
+-- The face buttons, as the game names them. The bottom one is ours: the
+-- game's dialog uses the other three, in a bind or while moving abilities.
+local KEY_ADD, KEY_LEFT = GAMEPAD_FACE_BOTTOM or "PAD1", GAMEPAD_FACE_LEFT or "PAD3"
+local KEY_EDIT, KEY_BACK = GAMEPAD_FACE_TOP or "PAD4", GAMEPAD_FACE_RIGHT or "PAD2"
+local EDIT_BARS, MAIN_BARS = "^GamepadActionBarEditFrame", "^GamepadMainActionBarFrame"
 local TEXT = {
     add = "Add to Flyout",
     swap = "Swap Out",
     close = "Done",
     edit = "Edit Action Bar",
+    cancel = "Cancel",
     done = "%s is in the flyout of %s now.",
     refused = "The game kept the new ability on the button, so no flyout was made.",
 }
 G.TEXT, G.KEY = TEXT, KEY_ADD
 
 local watched, offer
--- between the dialog's opening for a bind and its shutting
+-- between the dialog's opening for a bind and its shutting; else abilities are being moved
 local binding = false
--- a press that placed an ability is not also a press on a hint
-local placedNow = false
+-- when the dialog last placed an ability: that press is not also a press on a hint
+local placedAt
+-- how long after the dialog shuts a flyout looks for its button
+local FIND_AFTER = 0.3
 -- our hint bar, made by the game's own maker; false when that failed
 local legend, holder
 local prompts = {}
@@ -54,11 +59,15 @@ local function Entry(fn, params)
     return nil
 end
 
--- the bar button that shows a slot: a shown one first, never the dialog's own copies
+-- The bar button that shows a slot: a shown one first, never the dialog's own
+-- copies. The game's console bar is hidden while its dialog is up, and may be
+-- on another page: none found is no fault, the flyout finds its button later.
 local function Live(slot)
     local hidden
     for _, button in ipairs(Bars.All(true)) do
-        if Bars.Slot(button) == slot and not button:GetName():find(EDIT_BARS) then
+        local name = button:GetName()
+        local its = Bars.Slot(button) == slot or (name:find(MAIN_BARS) ~= nil and button:GetID() == slot)
+        if its and not name:find(EDIT_BARS) then
             if button:IsVisible() then return button end
             hidden = hidden or button
         end
@@ -66,16 +75,22 @@ local function Live(slot)
     return hidden
 end
 
--- whether the new one could join the old one's flyout
+-- the flyout the old one leads, on that button or wherever it is
+local function Led(button, old)
+    local flyout = button and F.At(button:GetName())
+    if flyout and Same(flyout.main, old) then return flyout end
+    return F.Of(old)
+end
+
+-- Whether the new one can be with the old one: it is in its flyout already
+-- (then the old one only goes back on its button), or there is room for it.
 local function Fits(button, old, new)
-    if Same(old, new) then return false end
-    local flyout = F.At(button:GetName()) or F.Of(old)
+    local flyout = Led(button, old)
     if not flyout then return true end
-    if #flyout.entries >= F.MAX then return false end
     for _, entry in ipairs(flyout.entries) do
-        if Same(entry, new) then return false end
+        if Same(entry, new) then return true end
     end
-    return true
+    return #flyout.entries < F.MAX
 end
 
 -- The game's own hint bar, from its own maker and its own prompt template,
@@ -97,9 +112,10 @@ local function Legend()
         frame:EnablePrompt()
         return frame
     end
-    -- in the order the game lists its buttons: left, top, right
+    -- in the order the game lists its buttons: bottom, left, top, right
     local built = pcall(function()
         prompts.add = Prompt(KEY_ADD, TEXT.add)
+        prompts.left = Prompt(KEY_LEFT, TEXT.swap)
         prompts.edit = Prompt(KEY_EDIT, FRAME_ACTION_EDIT_ACTION_BAR or TEXT.edit)
         prompts.back = Prompt(KEY_BACK, TEXT.swap)
     end)
@@ -108,12 +124,22 @@ local function Legend()
     return legend
 end
 
--- our hint bar over the game's, saying what each button does now
-local function Show(frame, done)
+-- Our hint bar over the game's, saying what each of its buttons does now.
+-- In a bind the right button backs out, leaving the swap; while abilities
+-- are moved the left one lets the old one go and the right one undoes.
+local function Show(frame, moving, done)
     local bar = Legend()
     if not bar then return end
     prompts.add:SetShown(not done)
-    prompts.back:SetPromptText(done and TEXT.close or TEXT.swap)
+    prompts.left:SetShown(moving)
+    prompts.left:SetPromptText(done and TEXT.close or TEXT.swap)
+    prompts.edit:SetShown(not moving)
+    prompts.back:SetShown(not (moving and done))
+    if moving then
+        prompts.back:SetPromptText(FRAME_ACTION_CANCEL or TEXT.cancel)
+    else
+        prompts.back:SetPromptText(done and TEXT.close or TEXT.swap)
+    end
     bar:ApplyDefaultPromptPositioning()
     local footer = frame.bindingModeFooter
     local theirs = footer and footer.inputLegend
@@ -146,54 +172,60 @@ function G.Stack()
     o.oldFn(unpack(o.oldParams))
     if GetCursorInfo() then PlaceAction(o.slot) end
     ClearCursor()
-    if not Bars.Holds(o.button, o.old) then
+    if not Same(Bars.ActionAt(o.slot), o.old) then
         ns.Log(("pad bind: slot %d did not take the old ability back"):format(o.slot))
         ns.Warn(TEXT.refused)
         Hide()
         return false
     end
-    local flyout, why = F.Stack(o.button, o.new)
+    local flyout, why = F.StackLed(o.old, o.new, o.button)
     if not flyout then
-        ns.Log(("pad bind: not stacked on %s: %s"):format(o.button:GetName(), tostring(why)))
+        ns.Log(("pad bind: not stacked on slot %d: %s"):format(o.slot, tostring(why)))
         if why then ns.Warn(why) end
         Hide()
         return false
     end
-    ns.Log(("pad bind: %s:%s stacked on %s"):format(o.new.kind, tostring(o.new.id), o.button:GetName()))
+    ns.Log(("pad bind: %s:%s stacked with %s:%s on %s"):format(o.new.kind, tostring(o.new.id), o.old.kind,
+        tostring(o.old.id), o.button and o.button:GetName() or "a button to be found"))
     ns.Say(TEXT.done:format(F.Name(o.new), F.Name(o.old)))
-    -- the dialog is still up: its right button shuts it
-    if watched then Show(watched, true) end
+    -- the dialog is still up: the bar now names the button that ends it
+    if watched then Show(watched, o.moving, true) end
     return true
 end
 
--- The dialog just took a press; `slot` is the button's. Only in a plain
--- bind: while abilities are moved about, the game's own hints use this key.
+-- no offer this time, and why: read back when it is said not to have shown
+local function Skip(why)
+    ns.Log("pad bind: no offer: " .. why)
+    return Clear()
+end
+
+-- The dialog just took a press and placed what it held; `slot` is the button's.
 local function Placed(frame, slot, possess)
-    placedNow = true
-    if not binding or possess or InCombatLockdown() then return Clear() end
+    placedAt = GetTime()
+    if possess then return Skip("a pet bar button") end
+    if InCombatLockdown() then return Skip("in a fight") end
+    if type(slot) ~= "number" then return Skip("no slot given") end
     local box = frame.BindingInfoFrame
-    if not frame:IsShown() or (box and not box:IsShown()) then return Clear() end
-    -- on a taken button the dialog now holds what it took off it, and the button the new one
+    if not frame:IsShown() or (box and not box:IsShown()) then return Skip("the button was empty: placed") end
+    -- on a taken button the dialog now holds what it took off it, and the slot the new one
     local fn, params = frame.pickupFunc, frame.pickupParams
-    local old = Entry(fn, params)
-    local button = type(slot) == "number" and Live(slot)
-    local new = button and Bars.Action(button)
-    if not (old and new) or Same(old, new) then return Clear() end
-    if not Fits(button, old, new) then
-        ns.Log(("pad bind: the flyout of %s cannot take %s:%s"):format(button:GetName(), new.kind, tostring(new.id)))
-        return Clear()
-    end
-    offer = { slot = slot, button = button, old = old, new = new, oldFn = fn, oldParams = { unpack(params) } }
-    ns.Log(("pad bind: offer on %s (slot %d): keep %s:%s, add %s:%s; hint bar %s"):format(button:GetName(), slot,
-        old.kind, tostring(old.id), new.kind, tostring(new.id), Legend() and "drawn" or "could not be made"))
-    Show(frame, false)
+    local old, new = Entry(fn, params), Bars.ActionAt(slot)
+    if not old then return Skip("what the button held is no spell, item or macro") end
+    if not new then return Skip("what was placed is no spell, item or macro") end
+    if Same(old, new) then return Skip("the same ability") end
+    local button = Live(slot)
+    if not Fits(button, old, new) then return Skip("the flyout is full") end
+    offer = { slot = slot, button = button, old = old, new = new, oldFn = fn, oldParams = { unpack(params) },
+        moving = not binding }
+    ns.Log(("pad bind: offer on slot %d (%s, %s): keep %s:%s, add %s:%s; hint bar %s"):format(slot,
+        button and button:GetName() or "no button of it up", binding and "a bind" or "moving", old.kind,
+        tostring(old.id), new.kind, tostring(new.id), Legend() and "drawn" or "could not be made"))
+    Show(frame, offer.moving, false)
 end
 
 -- a pad button the dialog was handed; one that placed an ability is not a hint's
 local function Pressed(_, key)
-    local placed = placedNow
-    placedNow = false
-    if not offer or placed then return end
+    if not offer or placedAt == GetTime() then return end
     ns.Log(("pad bind: %s pressed while the offer is up"):format(tostring(key)))
     if key == KEY_ADD then G.Stack() end
 end
@@ -202,7 +234,7 @@ end
 function G.Install(frame)
     if watched or not (frame and hooksecurefunc) then return false end
     for _, name in ipairs({ "EnterBindingMode", "PlaceOrClearHeldActionCapturedInputHandler", "ExitBindingMode",
-        "StartListeningForButtons" }) do
+        "StartListeningForButtons", "TransitionToSelectActionToPickup", "ExitEditMode" }) do
         if type(frame[name]) ~= "function" then return false end
     end
     watched = frame
@@ -214,10 +246,19 @@ function G.Install(frame)
         binding = true
     end))
     hooksecurefunc(frame, "PlaceOrClearHeldActionCapturedInputHandler", Guard(Placed))
+    -- the dialog gone, the console bar is back: a flyout looks for its button again
+    local function Gone()
+        Clear()
+        F.Moved()
+        C_Timer.After(FIND_AFTER, F.Follow)
+    end
     hooksecurefunc(frame, "ExitBindingMode", Guard(function()
         binding = false
-        Clear()
+        Gone()
     end))
+    -- moving abilities: the held one was set down, let go or put back, or the mode left
+    hooksecurefunc(frame, "TransitionToSelectActionToPickup", Guard(Clear))
+    hooksecurefunc(frame, "ExitEditMode", Guard(Gone))
     -- the game sets its button handler afresh each time it listens: ours rides behind each one
     local pressed = Guard(Pressed)
     hooksecurefunc(frame, "StartListeningForButtons", Guard(function(self)

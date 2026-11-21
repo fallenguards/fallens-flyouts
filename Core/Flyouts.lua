@@ -1196,6 +1196,35 @@ function F.Stack(button, entry)
     return flyout
 end
 
+-- Adds to the flyout an action leads, making one if needed. `button` is where
+-- the lead sits when that is known; without one the flyout finds its button.
+function F.StackLed(main, entry, button)
+    if InCombatLockdown() then return nil, TEXT.fight end
+    if not (list and main and entry) then return nil end
+    if Same(main, entry) then return nil, TEXT.twice end
+    local name = button and button:GetName()
+    local flyout = name and F.At(name)
+    if not (flyout and Same(flyout.main, main)) then flyout = F.Of(main) end
+    if flyout then
+        if not Has(flyout, entry) then
+            if #flyout.entries >= MAX then return nil, TEXT.full end
+            flyout.entries[#flyout.entries + 1] = { kind = entry.kind, id = entry.id }
+        end
+    else
+        flyout = { host = name or "", main = { kind = main.kind, id = main.id },
+            entries = { { kind = main.kind, id = main.id }, { kind = entry.kind, id = entry.id } } }
+        list[#list + 1] = flyout
+    end
+    if name then
+        flyout.host = name
+        Run(flyout).lost = nil
+    end
+    -- its button is looked for at the next pass
+    moved = true
+    F.Apply()
+    return flyout
+end
+
 local function Forget(flyout)
     for i = #list, 1, -1 do
         if list[i] == flyout then table.remove(list, i) end
