@@ -582,19 +582,16 @@ do
         "its bar shown again, it is on its button as before")
 end
 
-print("the game's key menu: a row for each flyout, and for each place of an open one")
+print("the game's key menu: a heading for each flyout, a row for each of its spots")
 local Binds = NS.Binds
 do
     local file = assert(io.open("Bindings.xml"))
     local xml = file:read("a")
     file:close()
-    local opensListed, padsListed, picksListed, fine = 0, 0, 0, true
+    local spotsListed, picksListed, fine = 0, 0, true
     for name, category in xml:gmatch('<Binding name="([%w_]+)" category="([%w_]+)">') do
-        if name:find("^" .. Binds.OPEN .. "%d+$") then
-            opensListed = opensListed + 1
-            fine = fine and _G["BINDING_NAME_" .. name] ~= nil
-        elseif name:find("^" .. Binds.PADOPEN .. "%d+$") then
-            padsListed = padsListed + 1
+        if Binds.Number(name) then
+            spotsListed = spotsListed + 1
             fine = fine and _G["BINDING_NAME_" .. name] ~= nil
         elseif name:find("^" .. Binds.PICK .. "%d+$") then
             picksListed = picksListed + 1
@@ -606,7 +603,7 @@ do
         end
         fine = fine and category == Binds.CATEGORY
     end
-    check(opensListed == Binds.SLOTS and padsListed == Binds.PAD_SLOTS and picksListed == Binds.PLACES and fine
+    check(spotsListed == Binds.SLOTS * Binds.PLACES and picksListed == Binds.PLACES and fine
         and _G[Binds.CATEGORY] == "Fallen's Flyouts",
         "Bindings.xml lists every row the code reads, each with its text, under the addon's own heading")
 end
@@ -615,57 +612,77 @@ local function rebound()
     fire("UPDATE_BINDINGS")
     W.ticker()
 end
-local function rowName(n) return _G["BINDING_NAME_" .. Binds.OPEN .. n] end
+local function head(n) return _G[Binds.Heading(n)] end
+local function spotName(n, i) return _G["BINDING_NAME_" .. Binds.Command(n, i)] end
 local keyed, keyedUnit = NS.Flyouts.At("ActionButton1")
 local second2 = "CLICK FallensFlyoutsEntry" .. one .. "_2:LeftButton"
-check(keyed.number == 1 and rowName(1) == "Flyout 1: Spell 101" and rowName(2) == "Flyout 2",
-    "a flyout has a row of its own, named after its ability; a row with no flyout has its number alone")
-W.base.F9 = Binds.OPEN .. "1"
+check(keyed.number == 1 and head(1) == "Spell 101" and spotName(1, 1) == "1: Spell 101" and spotName(1, 2) == "2: Spell 501"
+    and spotName(1, 4) == "4: (empty)" and head(2) == "Flyout 2: none yet" and spotName(2, 1) == "1: (empty)",
+    "a flyout has a heading named after its ability and a row for each icon; a spot or a heading with nothing says so")
+-- a key on a spot's row picks that spot while its flyout is open
+W.base.F9 = Binds.Command(1, 2)
 rebound()
-check(opener("F9") == one and opener("1") == one, "a key set on its row opens the flyout, as its bar button's key still does")
+check(opener("F9") == nil and opener("1") == one, "a key on a spot's row opens nothing: the flyout opens by its bar button's key")
+tap("E")
+check(menu:IsShown() and GetBindingAction("F9", true) == second2 and label(2) == "F9",
+    "with the flyout open, that key picks its spot, and the icon shows it")
 tap("F9")
-check(menu:IsShown(), "pressed, the flyout is open")
-tap("F9")
-check(not menu:IsShown(), "pressed again, it is shut")
+check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "pressed, it casts that icon and shuts the flyout")
+check(GetBindingAction("F9", true) == Binds.Command(1, 2), "shut, the key is the row's again: it does nothing")
+-- the rows for the spots of every flyout
 W.base.T = Binds.PICK .. "2"
 W.base.PADLSHOULDER = Binds.PICK .. "2"
 rebound()
-tap("F9")
+tap("E")
+check(GetBindingAction("F9", true) == second2 and GetBindingAction("T", true) ~= second2,
+    "a key set for spot 2 of every flyout stands behind this flyout's own row")
+tap("E")
+W.base.F9 = nil
+rebound()
+tap("E")
 check(GetBindingAction("T", true) == second2 and label(2) == "T",
-    "a key set for place 2 picks the second icon of an open flyout, and the icon shows it")
-check(GetBindingAction("PADLSHOULDER", true) == second2, "a pad button set for the place picks it too")
+    "with none on the flyout's own row, the key for that spot of every flyout picks it")
+check(GetBindingAction("PADLSHOULDER", true) == second2, "a pad button set there picks it too")
 check(GetBindingAction("2", true) == "ACTIONBUTTON2", "and 2 is the bar's own then")
 tap("T")
 check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "pressed, it casts that icon and shuts the flyout")
-check(GetBindingAction("T", true) == Binds.PICK .. "2", "shut, the key is the row's again: it does nothing")
+check(GetBindingAction("T", true) == Binds.PICK .. "2", "shut, that key too is its row's again")
 NS.Flyouts.SetKey(keyed, 2, "Y", false)
-tap("F9")
+tap("E")
 check(GetBindingAction("Y", true) == second2 and GetBindingAction("T", true) ~= second2,
-    "an icon's own key stands before the key of its place")
-tap("F9")
+    "an icon's own key stands before any row's")
+tap("E")
 NS.Flyouts.SetKey(keyed, 2, nil, false)
-W.base.T, W.base.PADLSHOULDER, W.base.F9 = nil, nil, nil
+W.base.T, W.base.PADLSHOULDER = nil, nil
 rebound()
-check(opener("F9") == nil and opener("1") == one and label(2) == "2", "taken off in the menu, every key is as before")
--- a row with a key on it keeps its flyout when an earlier one goes; one with no key closes up
+check(opener("1") == one and label(2) == "2", "taken off in the menu, every key is as before")
+-- a key change right after the addon's own binding is not lost
+NS.Flyouts.Apply()
+W.base.F12 = "ACTIONBUTTON1"
+fire("UPDATE_BINDINGS")
+W.clock = W.clock + 10
+W.ticker()
+check(opener("F12") == one, "a key given to the bar button in the moment after the addon bound its own is taken up all the same")
+W.base.F12 = nil
+rebound()
+-- a heading with a key under it keeps its flyout when an earlier one goes; one with none closes up
 stack("ActionButton2", 601)
 stack("ActionButton3", 602)
 local rowTwo, rowThree = NS.Flyouts.At("ActionButton2"), NS.Flyouts.At("ActionButton3")
-check(rowTwo.number == 2 and rowThree.number == 3 and rowName(2):find("^Flyout 2: ") ~= nil and rowName(3):find("^Flyout 3: ") ~= nil,
-    "later flyouts take the next rows")
-W.base.F10 = Binds.OPEN .. "3"
+check(rowTwo.number == 2 and rowThree.number == 3 and head(2) == "Spell 102" and head(3) == "Spell 103"
+    and spotName(3, 2) == "2: Spell 602", "later flyouts take the next headings")
+W.base.F10 = Binds.Command(3, 1)
 rebound()
 NS.Flyouts.Remove(rowTwo, 2)
-check(NS.Flyouts.At("ActionButton2") == nil and rowThree.number == 3 and rowName(2) == "Flyout 2" and rowName(3) ~= "Flyout 3"
-    and opener("F10") ~= nil, "one taken away, a flyout with a key on its row keeps the row and the key")
+check(NS.Flyouts.At("ActionButton2") == nil and rowThree.number == 3 and head(2) == "Flyout 2: none yet" and head(3) == "Spell 103",
+    "one taken away, a flyout with a key under its heading keeps the heading and the key")
 W.base.F10 = nil
 rebound()
-check(rowThree.number == 2 and rowName(2):find("^Flyout 2: ") ~= nil and rowName(3) == "Flyout 3",
-    "with no key on its row it closes up: the named rows are the flyouts on the bars, with no gaps")
+check(rowThree.number == 2 and head(2) == "Spell 103" and head(3) == "Flyout 3: none yet",
+    "with no key under it, it closes up: the named headings are the flyouts on the bars, with no gaps")
 
 -- his list (2026-11-21): six named rows, four flyouts on his bars. One sat on a bar of gamepad
 -- mode, one was a leftover whose ability was on no bar any more.
-local function padRowName(n) return _G["BINDING_NAME_" .. Binds.PADOPEN .. n] end
 local padBar = CreateFrame("Frame", "GamepadMainActionBarFrame", UIParent)
 actionButton("GamepadMainActionBarFrameTestActionButton1", 20, padBar).id = 20
 W.placed = W.placed or {}
@@ -673,55 +690,49 @@ W.placed[20] = 811
 fire("ACTIONBAR_SLOT_CHANGED", 20)
 flushAll()
 stack("GamepadMainActionBarFrameTestActionButton1", 812)
-local onPad = NS.Flyouts.At("GamepadMainActionBarFrameTestActionButton1")
-check(onPad ~= nil and onPad.pad == 1 and onPad.number == nil and padRowName(1) == "Flyout 1: Spell 811" and rowName(3) == "Flyout 3",
-    "a flyout on a bar of gamepad mode has its row under gamepad mode's heading, and none among the action bars'")
-check(_G["PREFACE_" .. Binds.OPEN]:find("action bars") ~= nil and _G["PREFACE_" .. Binds.PADOPEN]:find("gamepad mode") ~= nil,
-    "each of the two has a heading that says which bars it is for")
-W.base.F11 = Binds.PADOPEN .. "1"
-rebound()
-check(opener("F11") ~= nil and opener("F11") ~= one, "a key set on that row opens that flyout")
-W.base.F11 = nil
-rebound()
-NS.KeyMenu.Hover(Binds.PADOPEN .. "1")
-local _, padUnit = NS.Flyouts.At("GamepadMainActionBarFrameTestActionButton1")
-check(padUnit.ring.shown and not keyedUnit.ring.shown, "a hover on it lights its own button, not the first row's of the other heading")
+local onPad, padUnit = NS.Flyouts.At("GamepadMainActionBarFrameTestActionButton1")
+check(onPad ~= nil and onPad.number == 3 and head(3) == "Spell 811 (gamepad mode)",
+    "a flyout on a bar of gamepad mode has a heading too, and the heading says where it is")
+NS.KeyMenu.Hover(Binds.Command(3, 1))
+check(padUnit.ring.shown and not keyedUnit.ring.shown, "a hover on one of its rows lights its own button")
+NS.KeyMenu.Hover(Binds.Command(3, 2))
+check(padUnit.ring.shown, "and another row of the same flyout keeps it lit")
 NS.KeyMenu.Hover(nil)
 -- the leftover: its ability taken off the bars, the flyout is on no button
 W.placed[3] = 999
 fire("ACTIONBAR_SLOT_CHANGED", 3)
 flushAll()
-check(NS.Flyouts.At("ActionButton3") == nil and NS.Flyouts.Lost(rowThree) and rowThree.number == nil and rowName(2) == "Flyout 2",
-    "a flyout whose ability is on no bar is not named in the key menu")
+check(NS.Flyouts.At("ActionButton3") == nil and NS.Flyouts.Lost(rowThree) and rowThree.number == nil
+    and head(2) == "Spell 811 (gamepad mode)" and head(3) == "Flyout 3: none yet",
+    "a flyout whose ability is on no bar has no heading in the key menu; the rest close up")
 W.placed[3] = nil
 fire("ACTIONBAR_SLOT_CHANGED", 3)
 flushAll()
-check(NS.Flyouts.At("ActionButton3") == rowThree and rowThree.number == 2 and rowName(2):find("^Flyout 2: ") ~= nil,
-    "back on a bar, it has a row again")
-W.base.F10 = Binds.OPEN .. "2"
+check(NS.Flyouts.At("ActionButton3") == rowThree and rowThree.number == 3 and head(3) == "Spell 103", "back on a bar, it has a heading again")
+W.base.F10 = Binds.Command(3, 2)
 rebound()
 W.placed[3] = 999
 fire("ACTIONBAR_SLOT_CHANGED", 3)
 flushAll()
-check(rowThree.number == 2 and rowName(2):find("(off)", 1, true) ~= nil and rowName(2):find("|cff808080", 1, true) == 1,
-    "with a key on its row the row is kept for it, grayed and marked off")
+check(rowThree.number == 3 and head(3):find("Spell 103 (off your bars)", 1, true) ~= nil and head(3):find("|cff808080", 1, true) == 1
+    and spotName(3, 2) == "2: Spell 602", "with a key under its heading the heading is kept for it, grayed and marked off the bars")
 W.placed[3] = nil
 fire("ACTIONBAR_SLOT_CHANGED", 3)
 flushAll()
 W.base.F10 = nil
 rebound()
-check(rowThree.number == 2 and rowName(2):find("^Flyout 2: ") ~= nil, "and back on its bar the row reads as before")
+check(rowThree.number == 3 and head(3) == "Spell 103", "and back on its bar the heading reads as before")
 NS.Flyouts.Remove(onPad, 2)
 W.placed[20] = nil
 padBar:Hide()
-check(padRowName(1) == "Flyout 1", "the gamepad row with no flyout left has its number alone again")
 NS.Flyouts.Remove(rowThree, 2)
-check(NS.Flyouts.At("ActionButton3") == nil and rowName(2) == "Flyout 2", "and a row with no flyout left has its number alone again")
-NS.KeyMenu.Hover(Binds.OPEN .. "1")
+check(NS.Flyouts.At("ActionButton3") == nil and head(2) == "Flyout 2: none yet" and head(3) == "Flyout 3: none yet"
+    and spotName(2, 1) == "1: (empty)", "headings with no flyout left say so again, and their rows are empty")
+NS.KeyMenu.Hover(Binds.Command(1, 1))
 check(keyedUnit.ring.shown and keyedUnit.glow.shown, "a hover on a flyout's row in the key menu lights its bar button")
 NS.KeyMenu.Hover(Binds.PICK .. "1")
-check(not keyedUnit.ring.shown and not keyedUnit.glow.shown, "a hover on another row puts the light out")
-NS.KeyMenu.Hover(Binds.OPEN .. "1")
+check(not keyedUnit.ring.shown and not keyedUnit.glow.shown, "a hover on a row that is no one flyout's puts the light out")
+NS.KeyMenu.Hover(Binds.Command(1, 3))
 NS.KeyMenu.Hover(nil)
 check(not keyedUnit.ring.shown, "and so does leaving the rows")
 
@@ -947,7 +958,7 @@ do
     local removed, whyNot = NS.Flyouts.Remove(food, 1)
     check(removed == false and whyNot ~= nil and NS.Flyouts.Move(food, 2, 1) == false and ids(food) == "4544 4540",
         "its icons are not taken off or moved by hand")
-    check(rowName(food.number):find(": Food", 1, true) ~= nil, "its row in the key menu is named after the kind")
+    check(head(food.number) == "Food" and spotName(food.number, 1) == "1: Item 4544", "its heading in the key menu is named after the kind, its rows after what is in it")
     -- a name already taken by a macro of the player's own
     W.macros.Potions = { 1, "/cast Something" }
     local _, potionName = Auto.Pick("potions")
@@ -992,7 +1003,7 @@ do
         "the bars are as before")
 end
 
-print("a flyout made by hand that only shows what the player has")
+print("flyouts leave out the items the player has none of, till there are some again")
 do
     local hadPlaced = W.placed
     W.placed = W.placed or {}
@@ -1020,10 +1031,11 @@ do
     for _, id in ipairs({ 601, 602, 603 }) do stackItem("ActionButton8", id) end
     local own = NS.Flyouts.At("ActionButton8")
     check(own ~= nil and ids(own) == "9101 601 602 603", "a flyout of a spell and three items, made by hand")
+    check(NS.Flyouts.Hiding() and NS.Flyouts.SetHiding(false) == true, "the setting is on to begin with; it can be turned off")
     bags({ 601, 603 })
-    check(ids(own) == "9101 601 602 603", "as made, an item the player has none of stays in it")
-    check(NS.Flyouts.SetHave(own, true) == true and ids(own) == "9101 601 603" and #NS.Flyouts.Full(own) == 4,
-        "set to show only what the player has, it leaves that one out and keeps it in mind")
+    check(ids(own) == "9101 601 602 603", "with it off, an item the player has none of stays in the flyout")
+    check(NS.Flyouts.SetHiding(true) == true and ids(own) == "9101 601 603" and #NS.Flyouts.Full(own) == 4,
+        "with it on, the flyout leaves that one out and keeps it in mind")
     bags({ 601, 602, 603 })
     check(ids(own) == "9101 601 602 603", "the item in the bags again: it is back, in its old place")
     bags({ 603 })
@@ -1055,18 +1067,24 @@ do
     bags({})
     check(ids(own) == "9101" and NS.Flyouts.At("ActionButton8") == own, "with none of the items it shows what is left: the spell")
     NS.Arrange.Refresh()
-    local box = page.arrange.have
-    check(box ~= nil, "the settings page has a check box for the flyout shown under Arrange")
+    local box = page.arrange.hide
+    check(box ~= nil and box:GetChecked(), "the settings page has a check box for it under Arrange, ticked")
     -- what is saved is the whole
     fire("PLAYER_LOGOUT")
-    check(own.all == nil and #own.entries == 6 and own.have == true, "what is saved is the whole flyout, with its setting")
+    check(own.all == nil and #own.entries == 6, "what is saved is the whole flyout")
     NS.Flyouts.Apply()
     check(ids(own) == "9101" and #NS.Flyouts.Full(own) == 6, "and it is laid as before from that")
-    check(NS.Flyouts.SetHave(own, false) == true and #own.entries == 6 and own.all == nil,
-        "the setting off: everything shows, whether the player has it or not")
+    box.checked = false
+    box.scripts.OnClick(box)
+    check(not NS.Flyouts.Hiding() and #own.entries == 6 and own.all == nil and NS.Profiles.Data().showLacking == true,
+        "unticked: everything shows, whether the player has it or not, and the profile remembers")
     W.combat = true
-    check(NS.Flyouts.SetHave(own, true) == false and own.have == nil, "in a fight the setting does not change")
+    box.checked = true
+    box.scripts.OnClick(box)
+    check(not NS.Flyouts.Hiding() and not box:GetChecked(), "in a fight the setting does not change, and the box shows it")
     W.combat = false
+    NS.Flyouts.SetHiding(true)
+    check(NS.Profiles.Data().showLacking == nil, "ticked again, nothing is kept in the profile: it is how flyouts are")
     -- taken apart from the front: its spell is no longer its first icon
     for _ = 1, 8 do
         local left = NS.Flyouts.At("ActionButton8")

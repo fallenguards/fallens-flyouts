@@ -26,8 +26,9 @@ local TEXT = {
     turnTip = "Turns the flyout to open another way: to each side of its button, straight out or lying along it.",
     ranks = "Keep a spell's ranks in order",
     ranksTip = "Ranks of one spell in a flyout stay in rank order, Rank 1 first.",
-    have = "Only show what I have",
-    haveTip = "This flyout leaves out items you have none of, and takes them back when you have some again.",
+    hide = "Hide items I have none of",
+    hideTip = "Flyouts leave out items you have none of, and take them back when you have some again. "
+        .. "Off, they stay, grayed.",
 }
 A.TEXT = TEXT
 
@@ -36,16 +37,9 @@ local at, held = 1, nil
 
 -- the flyouts on the bars, in the order they are laid
 local function Flyouts()
-    local out, seen = {}, {}
+    local out = {}
     local units, used = F.Units()
-    for f = 1, used do
-        out[#out + 1] = units[f].flyout
-        seen[units[f].flyout] = true
-    end
-    -- one that shows only what the player has, with none of it just now, is still reached here
-    for _, flyout in ipairs(F.List() or {}) do
-        if flyout.have and not seen[flyout] and not F.Lost(flyout) then out[#out + 1] = flyout end
-    end
+    for f = 1, used do out[#out + 1] = units[f].flyout end
     return out
 end
 
@@ -67,9 +61,7 @@ function A.Refresh()
     w.turn:SetEnabled(flyout ~= nil and F.UnitOf(flyout) ~= nil)
     w.off:SetEnabled(held ~= nil)
     w.ranks:SetChecked(F.Ranked())
-    -- this flyout's own: one that fills itself has no need of it
-    w.have:SetChecked(flyout ~= nil and flyout.have == true)
-    w.have:SetEnabled(flyout ~= nil and not flyout.auto)
+    w.hide:SetChecked(F.Hiding())
     for i, button in ipairs(w.icons) do
         local entry = flyout and flyout.entries[i]
         button:SetShown(entry ~= nil)
@@ -182,13 +174,10 @@ function A.Turn()
     A.Refresh()
 end
 
--- the other check box: the flyout shown here leaves out items the player has none of
-function A.Have(on)
-    local flyout = Current()
-    if flyout then
-        local ok, why = F.SetHave(flyout, on)
-        if not ok and why then ns.Warn(why) end
-    end
+-- the other check box: items the player has none of are left out of flyouts, or stay grayed
+function A.Hide(on)
+    local ok, why = F.SetHiding(on)
+    if not ok and why then ns.Warn(why) end
     A.Refresh()
 end
 
@@ -223,7 +212,7 @@ function A.Build(page, above)
     end
     w.off = Button(TEXT.off, TEXT.offTip, A.TakeOff)
     w.off:SetPoint("TOPLEFT", w.icons[1], "BOTTOMLEFT", -GAP / 2, -GAP * 2)
-    -- the game's own check boxes, beside it: one for every flyout, one for the flyout shown here
+    -- the game's own check boxes, beside it: both for every flyout of the profile
     local function Check(text, tip, run, after)
         local box = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
         box:SetPoint("LEFT", after, "RIGHT", GAP * 2, 0)
@@ -241,7 +230,7 @@ function A.Build(page, above)
     end
     local ranksLabel
     w.ranks, ranksLabel = Check(TEXT.ranks, TEXT.ranksTip, A.Ranks, w.off)
-    w.have = Check(TEXT.have, TEXT.haveTip, A.Have, ranksLabel)
+    w.hide = Check(TEXT.hide, TEXT.hideTip, A.Hide, ranksLabel)
     panel.arrange = w
     -- a flyout changed elsewhere shows here at once
     F.Watch(function(what)

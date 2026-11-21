@@ -4,16 +4,17 @@
 
 ### Added
 - Automatic flyouts, on a page of their own in the settings (`/ff`): Food, Drink, Potions, Elixirs, Flasks, Scrolls and Bandages. Drag one onto an action bar and it fills itself with what is in your bags, the best first, and keeps up as your bags change: the last of something used up, it is gone; more of it or something new in your bags, it is back. Each sits on your bar as a macro with an icon of its own. Nothing on a bar changes in a fight, so a flyout catches up when the fight ends. `/ff food`, `/ff drink` and so on put one on your cursor from chat.
-- Ranks of one spell in the same flyout are kept in rank order, Rank 1 first, whichever of them the button holds. Other icons stay where you put them. A check box under Arrange a flyout in the settings (`/ff`) turns this off.
 - Turn a flyout: out of combat an open flyout has a grip at its far end. Drag the grip to where the flyout should end and it snaps there as you go: straight out from any side of its button, or lying along a side as a row or a column. Let go and it stays; drag it back and it opens the bar's own way again. With no mouse, the Turn button under Arrange a flyout in the settings steps through the same shapes.
-- Make an automatic flyout of your own: build a flyout by hand as ever, then tick Only show what I have for it under Arrange a flyout in the settings (`/ff`). It leaves out the items you have none of and takes them back when you have some again.
+- Ranks of one spell in the same flyout are kept in rank order, Rank 1 first, whichever of them the button holds. Other icons stay where you put them. A check box under Arrange a flyout in the settings (`/ff`) turns this off.
 
 ### Changed
-- In the game's Keybindings options, the flyouts on the bars of gamepad mode have a heading and rows of their own, apart from the flyouts on your action bars.
-- A flyout whose ability is on no bar any more is no longer listed there, and the listed flyouts close up with no gaps between them. A row with a key set on it always keeps its flyout.
+- Flyouts you make by hand now leave out the items you have none of, and take them back, each in its old place, when you have some again. Untick Hide items I have none of under Arrange a flyout in the settings to keep them in place, grayed, as before.
+- The Fallen's Flyouts section of the game's Keybindings options is laid out by flyout: each flyout on your bars has a heading, with a row for each of its spots. A key set on a row picks that spot while its flyout is open. Under them are rows for the spots of every flyout alike. A flyout on a bar of gamepad mode says so in its heading, and a flyout whose ability is on no bar has no heading.
+- The rows there that set an extra key to open a flyout are gone: a flyout opens with its bar button's own key.
 
 ### Fixed
 - A flyout on an upright bar opened along the bar, not to the side, while the buttons beside its own were empty and hidden.
+- A key given to a flyout's bar button in the moment after the addon had bound its own keys was not taken up until keys changed again.
 
 ## [1.0.0] - 2026-11-21
 

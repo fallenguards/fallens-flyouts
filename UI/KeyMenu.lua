@@ -30,12 +30,11 @@ end
 
 -- lights the button of the row's flyout; any other row, or none, puts it out
 function K.Hover(command)
-    local n, pad = Binds.Number(command)
-    local row = n and command or nil
-    if row == lit then return end
-    lit = row
-    local unit = F.Point(n, pad)
-    if n then ns.Log(("key menu: row %s hovered, a bar button lit: %s"):format(command, tostring(unit ~= nil))) end
+    local n = Binds.Number(command)
+    if n == lit then return end
+    lit = n
+    local unit = F.Point(n)
+    if n then ns.Log(("key menu: a row of flyout %d hovered, a button lit: %s"):format(n, tostring(unit ~= nil))) end
 end
 
 local function Watch()
