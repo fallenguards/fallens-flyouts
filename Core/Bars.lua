@@ -29,6 +29,8 @@ local OTHER_KEYS = {
     "NUMPADMINUS", "NUMPADPLUS", "NUMPADDECIMAL", "MOUSEWHEELUP", "MOUSEWHEELDOWN",
 }
 local BAR_BUTTON = 45
+-- the game's gamepad bind dialog shows copies of the console bar: no bar of anyone's
+local DIALOG_COPIES = "^GamepadActionBarEditFrame"
 
 local universe, keyMap, keyMapAt, inventory, inventoryAt
 
@@ -92,8 +94,9 @@ function B.Slot(button)
 end
 
 local function IsButton(frame)
-    return frame:IsObjectType("CheckButton") and frame:IsProtected() and frame:GetName() ~= nil
-        and frame:GetAttribute("type") == "action" and B.Slot(frame) ~= nil
+    local name = frame:GetName()
+    return frame:IsObjectType("CheckButton") and frame:IsProtected() and type(name) == "string"
+        and not name:find(DIALOG_COPIES) and frame:GetAttribute("type") == "action" and B.Slot(frame) ~= nil
 end
 
 -- every named action button there is

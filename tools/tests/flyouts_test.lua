@@ -732,6 +732,12 @@ do
     local dialog = CreateFrame("Frame", "TestPadBindDialog", UIParent)
     dialog.BindingInfoFrame = CreateFrame("Frame", nil, dialog)
     dialog:Hide()
+    -- As the game's: while it is up the bar itself is put away, and the dialog shows copies
+    -- of the bar's buttons, each of the same slot as the button it stands for.
+    local console = W.frames.MainActionBar
+    for i = 1, 9 do actionButton("GamepadActionBarEditFrameTestActionButton" .. i, i, dialog) end
+    dialog.scripts.OnShow = function() console:Hide() end
+    dialog.scripts.OnHide = function() console:Show() end
     function dialog:StartListeningForButtons()
         self.scripts.OnGamePadButtonDown = function(me)
             if me.heldSlot then me:PlaceOrClearHeldActionCapturedInputHandler(me.heldSlot, false, me.plain) end
@@ -739,10 +745,14 @@ do
     end
     function dialog:EnterBindingMode()
         self.plain = true
+        self.BindingInfoFrame:Show()
         self:Show()
         self:StartListeningForButtons()
     end
-    function dialog:ExitBindingMode() self:Hide() end
+    function dialog:ExitBindingMode()
+        self.BindingInfoFrame:Hide()
+        self:Hide()
+    end
     -- Edit Action Bar: an ability picked up off a button is held, to be put on another
     function dialog:EnterEditMode()
         self.plain = false
@@ -888,6 +898,68 @@ do
     flushAll()
     check(order() == "101 501 502" and NS.Flyouts.At("ActionButton2") == nil and NS.Flyouts.At("ActionButton3") == nil
         and opener("1") == one, "the bars are as before")
+
+    -- His recording (2026-11-21): the old ability sits on two buttons. Added at one of them, the
+    -- flyout has to be on that one: it is the button he presses next.
+    local function onCopies()
+        for _, flyout in ipairs(NS.Flyouts.List()) do
+            if flyout.host:find("^GamepadActionBarEditFrame") then return true end
+        end
+        return false
+    end
+    W.placed = { [6] = 801, [7] = 801 }
+    for _, slot in ipairs({ 6, 7 }) do fire("ACTIONBAR_SLOT_CHANGED", slot) end
+    flushAll()
+    bind(802, 6)
+    -- time passes while the dialog is up, as it does for a hand
+    flushAll()
+    press("PAD1")
+    flushAll()
+    check(not onCopies(), "while the dialog is up no flyout goes onto the dialog's copies of the bar")
+    dialog:ExitBindingMode()
+    flushAll()
+    local onFirst = NS.Flyouts.At("ActionButton6")
+    check(onFirst ~= nil and #onFirst.entries == 2, "an ability on two buttons, one added at the first: its flyout is on the first")
+    bind(803, 7)
+    flushAll()
+    press("PAD1")
+    flushAll()
+    check(not onCopies(), "nor the second time")
+    dialog:ExitBindingMode()
+    flushAll()
+    local onSecond, secondUnit = NS.Flyouts.At("ActionButton7")
+    check(onSecond ~= nil and onSecond == onFirst and #onSecond.entries == 3 and NS.Flyouts.At("ActionButton6") == nil,
+        "another added at the second button: the flyout is on that button, where it was added")
+    local castCount = #W.casts
+    mouse(W.frames.ActionButton7)
+    check(secondUnit ~= nil and secondUnit.menu:IsShown() and #W.casts == castCount,
+        "and a press on that button opens the flyout, casting nothing")
+    if secondUnit and secondUnit.menu:IsShown() then mouse(W.frames.ActionButton7) end
+    -- a bar of another make, in view all the while with the same ability on it, does not draw it away
+    local sideBar = CreateFrame("Frame", "AaSideBar", UIParent)
+    actionButton("AaSideButton1", 9, sideBar)
+    W.placed[9] = 801
+    fire("ACTIONBAR_SLOT_CHANGED", 9)
+    flushAll()
+    bind(803, 7)
+    flushAll()
+    press("PAD1")
+    flushAll()
+    dialog:ExitBindingMode()
+    flushAll()
+    check(NS.Flyouts.At("ActionButton7") == onFirst and NS.Flyouts.At("AaSideButton1") == nil,
+        "with the ability on another bar in view too, the flyout still stays where it was added")
+    sideBar:Hide()
+    local kept = NS.Flyouts.Of({ kind = "spell", id = 801 })
+    while kept and #kept.entries > 1 do
+        NS.Flyouts.Remove(kept, 2)
+        kept = NS.Flyouts.Of({ kind = "spell", id = 801 })
+    end
+    W.placed = nil
+    for _, slot in ipairs({ 6, 7, 9 }) do fire("ACTIONBAR_SLOT_CHANGED", slot) end
+    flushAll()
+    check(order() == "101 501 502" and NS.Flyouts.Of({ kind = "spell", id = 801 }) == nil and opener("1") == one,
+        "the bars are as before once more")
 end
 
 print("the button gets another key")

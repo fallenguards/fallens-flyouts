@@ -21,7 +21,7 @@ local F, Bars = ns.Flyouts, ns.Bars
 -- game's dialog uses the other three, in a bind or while moving abilities.
 local KEY_ADD, KEY_LEFT = GAMEPAD_FACE_BOTTOM or "PAD1", GAMEPAD_FACE_LEFT or "PAD3"
 local KEY_EDIT, KEY_BACK = GAMEPAD_FACE_TOP or "PAD4", GAMEPAD_FACE_RIGHT or "PAD2"
-local EDIT_BARS, MAIN_BARS = "^GamepadActionBarEditFrame", "^GamepadMainActionBarFrame"
+local MAIN_BARS = "^GamepadMainActionBarFrame"
 local TEXT = {
     add = "Add to Flyout",
     swap = "Swap Out",
@@ -59,15 +59,14 @@ local function Entry(fn, params)
     return nil
 end
 
--- The bar button that shows a slot: a shown one first, never the dialog's own
--- copies. The game's console bar is hidden while its dialog is up, and may be
--- on another page: none found is no fault, the flyout finds its button later.
+-- The bar button that shows a slot: a shown one first. The game's console bar
+-- is put away while its dialog is up, and may be on another page: none found
+-- is no fault, the flyout finds its button later.
 local function Live(slot)
     local hidden
     for _, button in ipairs(Bars.All(true)) do
-        local name = button:GetName()
-        local its = Bars.Slot(button) == slot or (name:find(MAIN_BARS) ~= nil and button:GetID() == slot)
-        if its and not name:find(EDIT_BARS) then
+        local its = Bars.Slot(button) == slot or (button:GetName():find(MAIN_BARS) ~= nil and button:GetID() == slot)
+        if its then
             if button:IsVisible() then return button end
             hidden = hidden or button
         end
@@ -238,6 +237,8 @@ function G.Install(frame)
         if type(frame[name]) ~= "function" then return false end
     end
     watched = frame
+    -- while the dialog is up the console bar is put away: a flyout stays on its button
+    F.StillWhile(function() return frame:IsShown() end)
     local function Guard(fn)
         return function(...) xpcall(fn, geterrorhandler(), ...) end
     end

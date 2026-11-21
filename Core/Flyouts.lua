@@ -148,6 +148,8 @@ local units, used = {}, 0
 local pending, moved, ready, paused, rekey
 local quiet, idle, patient = 0, 0, 0
 local watchers = {}
+-- each says when the bars are put away for a moment: no flyout looks for a button then
+local stills = {}
 -- bar buttons whose click we wrapped, and the ones with a flyout now
 local wrapped, hosted = {}, {}
 -- what the game last said of the pad being the input in use; nil: nothing yet
@@ -984,9 +986,15 @@ function F.Apply()
     return true
 end
 
+-- fn() true while the bars are put away for a moment; flyouts stay put till it is over
+function F.StillWhile(fn) stills[#stills + 1] = fn end
+
 -- keeps each flyout on the button that holds its action
 function F.Follow()
     if not list or InCombatLockdown() then return end
+    for _, still in ipairs(stills) do
+        if still() then return end
+    end
     local search, change, buttons = moved, false, nil
     moved = nil
     for _, flyout in ipairs(list) do
