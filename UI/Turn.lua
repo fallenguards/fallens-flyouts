@@ -1,19 +1,24 @@
 local _, ns = ...
--- luacheck: read globals CreateFrame UIParent GetCursorPosition InCombatLockdown IsMouseButtonDown GameTooltip
+-- luacheck: read globals CreateFrame UIParent GetCursorPosition InCombatLockdown IsMouseButtonDown GameTooltip GetTime
 
--- Turning a flyout. Out of a fight an open flyout shows a grip at its far
--- end. Pulled to where the flyout should end, the flyout is laid again under
--- the mouse and snaps to the nearest of its shapes: straight out from any
--- side of its button, or lying along a side, running either way.
+-- Turning a flyout. Out of a fight, with the mouse on an open flyout, a
+-- grip shows at its far end: the game's own turn icon. Pulled to where the
+-- flyout should end, the flyout is laid again under the mouse and snaps to
+-- the nearest of its shapes: straight out from any side of its button, or
+-- lying along a side, running either way. Opened by its key with the mouse
+-- elsewhere, a flyout shows no grip: it is not a second arrow to wonder at.
 local T = {}
 ns.Turn = T
 local F, Art, Bars = ns.Flyouts, ns.Art, ns.Bars
 
 -- the sides in the order the shapes are stepped through
 local SIDES = { "UP", "RIGHT", "DOWN", "LEFT" }
--- the grip: the game's flyout arrow, in a square that is easy to catch
+-- the grip: the game's turn icon, or its flyout arrow where that icon is not known
+local TURN_ICON = "common-icon-rotateright"
 local ARROW_W, ARROW_H, GRIP_OUT = 18, 7, 2
 local GRIP = Art.ICON * 2 / 3
+-- how often the mouse is looked for, and how long the grip stays once it has left
+local LOOK, LINGER = 0.1, 0.4
 -- a shape takes over once its end is this much nearer the mouse than the present one's
 local NEARER = 0.8
 local TEXT = {
@@ -22,9 +27,11 @@ local TEXT = {
 }
 T.TEXT = TEXT
 
-local grip, driver
+local grip, driver, watch
 -- the unit whose flyout is open, and the turn under way
 local shown, turning
+-- when the mouse was last on the open flyout, its button or the grip
+local seenAt
 
 -- a frame's center and half width on the screen, in the screen's own units
 local function OnScreen(frame)
@@ -93,7 +100,11 @@ local function Place()
     grip:SetScale(unit.menu:GetEffectiveScale() / UIParent:GetEffectiveScale())
     grip:ClearAllPoints()
     grip:SetPoint(side.point, unit.menu, side.to, side.x * GRIP_OUT, side.y * GRIP_OUT)
-    Art.Set(grip.arrow, Art.NAMES[grip.over and "arrowOver" or "arrow"], Art.TURN[unit.way].arrow, ARROW_W, ARROW_H)
+    if grip.icon then
+        grip.arrow:SetAlpha(grip.over and 1 or 0.8)
+    else
+        Art.Set(grip.arrow, Art.NAMES[grip.over and "arrowOver" or "arrow"], Art.TURN[unit.way].arrow, ARROW_W, ARROW_H)
+    end
 end
 
 local function Grip()
@@ -104,6 +115,11 @@ local function Grip()
     grip:SetSize(GRIP, GRIP)
     grip.arrow = grip:CreateTexture(nil, "OVERLAY")
     grip.arrow:SetPoint("CENTER")
+    grip.icon = Art.Known(TURN_ICON)
+    if grip.icon then
+        grip.arrow:SetAtlas(TURN_ICON)
+        grip.arrow:SetSize(GRIP, GRIP)
+    end
     grip:SetScript("OnEnter", function(self)
         self.over = true
         Place()
@@ -216,16 +232,48 @@ function T.Next(flyout)
     return false
 end
 
--- the grip comes and goes with the open flyout; it is never there in a fight
-local function Offer(unit)
-    shown = unit
-    if InCombatLockdown() or not unit then
-        if grip then grip:Hide() end
-        return
+-- whether the mouse is on the open flyout, its bar button or the grip itself
+local function Over()
+    if not shown then return false end
+    if shown.menu:IsMouseOver() or shown.host:IsMouseOver() then return true end
+    return grip ~= nil and grip:IsShown() and grip:IsMouseOver()
+end
+
+-- The grip is there while the mouse is on an open flyout out of a fight,
+-- and through a turn; it goes a moment after the mouse has left.
+function T.Poll()
+    local now = GetTime()
+    local want = false
+    if shown and shown.flyout and shown.menu:IsShown() and not InCombatLockdown() then
+        if turning or Over() then seenAt = now end
+        want = seenAt ~= nil and now - seenAt <= LINGER
     end
-    Grip()
-    Place()
-    grip:Show()
+    if want then
+        Grip()
+        Place()
+        grip:Show()
+    elseif grip then
+        grip:Hide()
+    end
+    return want
+end
+
+-- an open flyout is watched for the mouse; shut, nothing is
+local function Offer(unit)
+    shown, seenAt = unit, nil
+    if not watch then
+        watch = CreateFrame("Frame", nil, UIParent)
+        watch:Hide()
+        watch.wait = 0
+        watch:SetScript("OnUpdate", function(self, elapsed)
+            self.wait = self.wait + elapsed
+            if self.wait < LOOK then return end
+            self.wait = 0
+            T.Poll()
+        end)
+    end
+    watch:SetShown(unit ~= nil)
+    T.Poll()
 end
 
 F.Watch(function(what, unit)
@@ -238,7 +286,7 @@ F.Watch(function(what, unit)
         end
         if shown == unit then Offer(nil) end
     elseif what == "laid" and shown and not turning then
-        if shown.flyout and shown.menu:IsShown() then Place() else Offer(nil) end
+        if shown.flyout and shown.menu:IsShown() then T.Poll() else Offer(nil) end
     end
 end)
 
@@ -251,7 +299,7 @@ events:SetScript("OnEvent", function(_, event)
         turning = nil
         if driver then driver:Hide() end
         if grip then grip:Hide() end
-    elseif shown and shown.menu:IsShown() then
-        Offer(shown)
+    else
+        T.Poll()
     end
 end)

@@ -1126,9 +1126,21 @@ do
         "left alone it opens straight out the bar's way; there are twelve shapes it could take")
     check(Turn.Start(unit) == false, "a shut flyout is not turned")
     tap("E")
+    check(unit.menu:IsShown() and (Turn.Grip() == nil or not Turn.Grip():IsShown()),
+        "opened by its key with the mouse elsewhere, it shows nothing new: no grip")
+    unit.menu.over = true
+    Turn.Poll()
     local grip = Turn.Grip()
-    check(unit.menu:IsShown() and grip ~= nil and grip:IsShown() and grip.point[2] == unit.menu and grip.point[3] == "TOP",
-        "open, out of a fight, it shows a grip at its far end")
+    check(grip ~= nil and grip:IsShown() and grip.point[2] == unit.menu and grip.point[3] == "TOP",
+        "with the mouse on the open flyout, out of a fight, a grip shows at its far end")
+    unit.menu.over = nil
+    Turn.Poll()
+    check(grip:IsShown(), "the mouse just off it, the grip stays a moment, to be reached")
+    W.clock = W.clock + 1
+    Turn.Poll()
+    check(not grip:IsShown(), "the mouse gone, so is the grip")
+    unit.menu.over = true
+    Turn.Poll()
     check(Turn.Start(unit) == true and Turn.Turning(), "the grip grabbed, a turn is under way")
     pull("RIGHT", "RIGHT")
     check(unit.side == "RIGHT" and unit.way == "RIGHT" and unit.menu.point[1] == "LEFT" and unit.menu.point[3] == "RIGHT"
@@ -1185,6 +1197,7 @@ do
     local kinds = 0
     for _ in pairs(seen) do kinds = kinds + 1 end
     check(kinds == 12 and flyout.side == nil, "the Turn button under Arrange steps through all twelve and comes round to the bar's own")
+    unit.menu.over = nil
     for i = 1, 12 do W.frames["ActionButton" .. i].cx, W.frames["ActionButton" .. i].cy = was[i][1], was[i][2] end
     NS.Flyouts.SetShape(flyout, nil)
     NS.Flyouts.Moved()

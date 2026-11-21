@@ -140,7 +140,7 @@ function Frame:GenerateMenu()
     end })
 end
 function Frame:GetScript(k) return self.scripts[k] end
-function Frame:IsMouseOver() return false end
+function Frame:IsMouseOver() return self.over == true end
 for _, m in ipairs({ "CreateMaskTexture", "CreateAnimationGroup", "CreateAnimation" }) do
     Frame[m] = region
 end
