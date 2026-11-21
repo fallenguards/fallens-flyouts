@@ -66,11 +66,16 @@ local SHOW = [[
 -- then the open one's shut keys, then its picks (listed by Rebind)
 local BIND = [[
     owner:ClearBindings()
+    local layers = owner:GetFrameRef("layers")
+    local layer = layers and layers:GetAttribute("layer")
     for f = 1, owner:GetAttribute("units") or 0 do
         local name = owner:GetAttribute("opener" .. f)
         for i = 1, owner:GetAttribute("okeys" .. f) or 0 do
             local at = f .. "_" .. i
-            owner:SetBindingClick(true, owner:GetAttribute("okey" .. at), name, owner:GetAttribute("obtn" .. at))
+            local key = owner:GetAttribute("okey" .. at)
+            if not (layer and layers:GetAttribute("lkey" .. layer .. "_" .. key)) then
+                owner:SetBindingClick(true, key, name, owner:GetAttribute("obtn" .. at))
+            end
         end
     end
     local open = owner:GetAttribute("open")
@@ -81,7 +86,7 @@ local BIND = [[
         end
         for i = 1, owner:GetAttribute("pkeys" .. open) or 0 do
             local at = open .. "_" .. i
-            owner:SetBindingClick(true, owner:GetAttribute("pkey" .. at), owner:GetAttribute("pentry" .. at))
+            owner:SetBindingClick(true, owner:GetAttribute("pkey" .. at), owner:GetAttribute("pentry" .. at), "Key")
         end
     end
 ]]
@@ -128,11 +133,23 @@ local HOST_WRAP = [[
 ]] .. BIND .. [[
     return false
 ]]
--- acts on the press, shuts on that pick's release, unless the flyout's
--- key is still held; the right button casts nothing: it takes the icon off
+-- A pick key acts on its press and shuts on its release, unless the
+-- flyout's key is still held. The mouse acts on its release, as on the
+-- game's own flyouts: its press may be the start of a move, and a press
+-- that cast (a wrapped button takes a mouse press for a key's) would cast
+-- what is being dragged away. The two are told apart by the click's name:
+-- pick keys click as "Key". The right button casts nothing: it takes the
+-- icon off.
 local ENTRY_WRAP = [[
     if button == "RightButton" then return false end
-    if down then
+    if button == "LeftButton" then
+        if down then
+            self:SetAttribute("useOnKeyDown", false)
+            armed = self:GetName()
+            return false
+        end
+    elseif down then
+        self:SetAttribute("useOnKeyDown", true)
         armed = self:GetName()
         return
     end
@@ -233,7 +250,8 @@ local function EntryTip(self)
     if ns.Keys and ns.Keys.Enter(self) then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if entry.kind == "spell" then
-        GameTooltip:SetSpellByID(entry.id)
+        -- with its rank, as the spellbook and the bars show it
+        GameTooltip:SetSpellByID(entry.id, false, true)
     elseif entry.kind == "item" then
         GameTooltip:SetItemByID(entry.id)
     else
@@ -643,10 +661,33 @@ end
 
 -- Each icon's key and pad button: its own where one was set, else by its
 -- place. No key twice in one flyout; other flyouts and the bars do not count.
+-- Our key layers addon, if it is there: ordinary keys that act as
+-- modifiers while held. It says which keys those are and when one is down.
+local layers
+
+-- the keys it holds layers with: never an opener's, never a pick's
+local function HoldKeys()
+    local out = {}
+    if not (layers and type(layers.HoldKeys) == "function") then return out end
+    local ok, keys = pcall(layers.HoldKeys)
+    for _, key in ipairs(ok and type(keys) == "table" and keys or {}) do
+        if type(key) == "string" then out[key] = true end
+    end
+    return out
+end
+
+-- one of them is down: its layer has the bars' keys, and nothing is read off them
+local function LayerHeld()
+    if not (layers and type(layers.Held) == "function") then return false end
+    local ok, held = pcall(layers.Held)
+    return ok and held == true
+end
+
 local function Picks(unit)
     local entries = unit.flyout.entries
     local pads = PadsFor(unit.way or "UP", #entries)
-    local picks, taken = {}, {}
+    -- a key that holds a layer is as good as taken
+    local picks, taken = {}, HoldKeys()
     for i, entry in ipairs(entries) do
         local key = type(entry.key) == "string" and entry.key or nil
         local pad = type(entry.pad) == "string" and entry.pad or nil
@@ -907,8 +948,10 @@ end
 
 -- the keys that open a flyout: its bar button's own
 local function OpenKeys(unit)
-    local keys = {}
-    for _, key in ipairs(Bars.Keys(unit.host)) do keys[#keys + 1] = key end
+    local keys, hold = {}, HoldKeys()
+    for _, key in ipairs(Bars.Keys(unit.host)) do
+        if not hold[key] then keys[#keys + 1] = key end
+    end
     return keys
 end
 
@@ -1534,6 +1577,8 @@ end
 
 local function Sync()
     if not ready or paused then return end
+    -- a layer of keys is held: what the keys and bars say now is its doing, and passes
+    if LayerHeld() then return end
     if late and GetTime() >= quiet then late, rekey = nil, true end
     F.Follow()
     if rekey and not open and not InCombatLockdown() then Rekey() end
@@ -1542,6 +1587,54 @@ end
 -- something on the cursor: a click on a host goes to the bar, to place it
 function F.Carrying(on)
     if root and not InCombatLockdown() then root:SetAttribute("carrying", on or nil) end
+end
+
+-- flyouts stay on their buttons while a layer is held, whoever asks
+F.StillWhile(LayerHeld)
+
+-- FOR OUR KEY LAYERS ADDON. A key bound to what this returns acts as the
+-- button's own key: the opener of the flyout the button hosts, and the
+-- click to send it ("tap" for a key that is one of that flyout's picks:
+-- such a key cannot be held). Nothing for a button with no flyout.
+function FallensFlyouts_KeyTarget(buttonName, key)
+    local _, unit = F.At(buttonName)
+    if not unit then return nil end
+    local how = "LeftButton"
+    for _, pick in ipairs(unit.picks or {}) do
+        if pick.key == key or pick.pad == key then how = "tap" end
+    end
+    return OPENER .. unit.index, how
+end
+
+-- fn() after every lay: flyouts made, moved or gone, or the bars changed. Never in a fight.
+function FallensFlyouts_Watch(fn)
+    F.Watch(function(what)
+        if what == "laid" then fn() end
+    end)
+end
+
+-- its hold keys changed: ours are bound afresh, at once or when the fight is over
+function FallensFlyouts_LayersChanged()
+    if not root then return end
+    if InCombatLockdown() then
+        rekey = true
+        return
+    end
+    -- its root, where its snippets say which layer is on and which keys that layer has: an
+    -- opener key of ours that is such a key just now is left to it (the BIND snippet reads it)
+    local theirs = layers and type(layers.Root) == "function" and layers.Root() or nil
+    if type(theirs) == "table" and theirs.GetAttribute then
+        root:SetFrameRef("layers", theirs)
+    else
+        root:SetAttribute("frameref-layers", nil)
+    end
+    Rebind()
+end
+
+-- { Held = function, HoldKeys = function, Root = function }, or nil when it is gone
+function FallensFlyouts_Layers(provider)
+    layers = provider
+    FallensFlyouts_LayersChanged()
 end
 
 local events = CreateFrame("Frame")

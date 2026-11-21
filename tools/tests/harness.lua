@@ -189,11 +189,9 @@ function Frame:SetAttribute(k, v)
     self.attrs[k] = v
 end
 function Frame:GetAttribute(k) return self.attrs[k] end
-function Frame:SetFrameRef(label, frame)
-    self.refs = self.refs or {}
-    self.refs[label] = frame
-end
-function Frame:GetFrameRef(label) return self.refs and self.refs[label] end
+-- as the client: a frame kept for the snippets under an attribute of its own
+function Frame:SetFrameRef(label, frame) self.attrs["frameref-" .. label] = frame end
+function Frame:GetFrameRef(label) return self.attrs["frameref-" .. label] end
 function Frame:SetScript(k, fn) self.scripts[k] = fn end
 function Frame:HookScript(k, fn)
     local old = self.scripts[k]
@@ -314,7 +312,9 @@ GameTooltip = {
     SetOwner = function(self, owner) self.owner = owner end,
     IsOwned = function(self, owner) return self.owner == owner end,
     Hide = function(self) self.owner = nil end,
-    SetText = noop, AddLine = noop, Show = noop, SetSpellByID = noop, SetItemByID = noop,
+    SetText = noop, AddLine = noop, Show = noop, SetItemByID = noop,
+    -- the spell asked for, and whether its rank was asked for with it
+    SetSpellByID = function(_, id, _, subtext) W.tip = { id = id, rank = subtext == true } end,
 }
 -- The game's button frame art, by its own size: a ring of 46 by 45, alone
 -- on a bar, or in a 51 square with its shadow for a button off the bars.
@@ -732,7 +732,9 @@ local function click(frame, down, button)
     end
     local fn = assert(load("local self, button, down, owner = ...; " .. frame.wrap, frame.name, "t", W.env))
     local verdict = fn(frame, button, down, frame.header)
-    local cast = verdict ~= false and frame.attrs.type and down
+    -- as the client's secure button: it acts on the press, or on the release when told not to
+    local onPress = frame.attrs.useOnKeyDown ~= false
+    local cast = verdict ~= false and frame.attrs.type and down == onPress
     if cast then W.casts[#W.casts + 1] = frame.attrs.type .. ":" .. tostring(frame.attrs[frame.attrs.type]) end
     if frame.scripts.PostClick then frame.scripts.PostClick(frame, button, down) end
     if cast then fire("UNIT_SPELLCAST_SENT", "player", "", "", 1) end

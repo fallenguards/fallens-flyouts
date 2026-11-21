@@ -15,6 +15,8 @@
 ### Fixed
 - A flyout on an upright bar opened along the bar, not to the side, while the buttons beside its own were empty and hidden.
 - A key given to a flyout's bar button in the moment after the addon had bound its own keys was not taken up until keys changed again.
+- Shift-dragging an icon out of a flyout cast it first. A mouse click on an icon now casts when the button is let go, as on the game's own flyouts; the keys still cast on the press.
+- A spell's tooltip in a flyout now shows its rank.
 
 ## [1.0.0] - 2026-11-21
 

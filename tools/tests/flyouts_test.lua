@@ -615,7 +615,7 @@ end
 local function head(n) return _G[Binds.Heading(n)] end
 local function spotName(n, i) return _G["BINDING_NAME_" .. Binds.Command(n, i)] end
 local keyed, keyedUnit = NS.Flyouts.At("ActionButton1")
-local second2 = "CLICK FallensFlyoutsEntry" .. one .. "_2:LeftButton"
+local second2 = "CLICK FallensFlyoutsEntry" .. one .. "_2:Key"
 check(keyed.number == 1 and head(1) == "Spell 101" and spotName(1, 1) == "1: Spell 101" and spotName(1, 2) == "2: Spell 501"
     and spotName(1, 4) == "4: (empty)" and head(2) == "Flyout 2: none yet" and spotName(2, 1) == "1: (empty)",
     "a flyout has a heading named after its ability and a row for each icon; a spot or a heading with nothing says so")
@@ -735,6 +735,64 @@ check(not keyedUnit.ring.shown and not keyedUnit.glow.shown, "a hover on a row t
 NS.KeyMenu.Hover(Binds.Command(1, 3))
 NS.KeyMenu.Hover(nil)
 check(not keyedUnit.ring.shown, "and so does leaving the rows")
+
+print("our key layers addon: its hold keys are left alone, and nothing is read off the bars while one is down")
+do
+    local held = false
+    FallensFlyouts_Layers({ Held = function() return held end, HoldKeys = function() return { "1" } end })
+    check(opener("1") == nil and opener("E") == one, "a key that holds a layer is no opener key, though it is the bar button's own")
+    tap("E")
+    check(menu:IsShown() and label(1) == "2" and label(2) == "3" and GetBindingAction("1", true) == "ACTIONBUTTON1",
+        "nor a pick key: the spots take the next free keys, and the hold key is left to its addon")
+    tap("E")
+    local name, how = FallensFlyouts_KeyTarget("ActionButton1", "F7")
+    check(name == "FallensFlyoutsOpener" .. one and how == "LeftButton" and FallensFlyouts_KeyTarget("ActionButton4", "F7") == nil,
+        "asked what a key is to be bound to, to act as a button's key: the flyout's opener; nothing for a button with none")
+    local _, tapped = FallensFlyouts_KeyTarget("ActionButton1", "3")
+    check(tapped == "tap", "a key that is one of that flyout's picks is to tap the opener, not hold it")
+    -- while a hold is down, the keys its layer sends to a button are not taken for the button's own
+    held = true
+    W.base.F7 = "ACTIONBUTTON1"
+    rebound()
+    check(opener("F7") == nil, "while a hold is down nothing is read off the bars: a layer's key is not taken for our own")
+    W.placed = W.placed or {}
+    W.placed[1] = 990
+    fire("ACTIONBAR_SLOT_CHANGED", 1)
+    flushAll()
+    W.ticker()
+    check(NS.Flyouts.At("ActionButton1") == keyed, "nor is a flyout moved off a button that shows another action for that time")
+    W.placed[1] = nil
+    fire("ACTIONBAR_SLOT_CHANGED", 1)
+    flushAll()
+    W.base.F7 = nil
+    held = false
+    rebound()
+    check(NS.Flyouts.At("ActionButton1") == keyed and opener("F7") == nil and opener("E") == one, "the hold let go, all is read again and is as it was")
+    local laid = 0
+    FallensFlyouts_Watch(function() laid = laid + 1 end)
+    NS.Flyouts.Apply()
+    check(laid == 1, "it hears of every lay, to work its own plan out again")
+    -- its root says which layer is on and which keys that layer has: an opener key of ours
+    -- that is such a key just now is left to it, whenever our keys are bound in a fight or out
+    local theirs = CreateFrame("Frame", "TestLayersRoot", UIParent, "SecureHandlerBaseTemplate")
+    FallensFlyouts_Layers({ Held = function() return held end, HoldKeys = function() return {} end,
+        Root = function() return theirs end })
+    check(opener("E") == one and opener("1") == one, "with no layer on, every opener key is ours")
+    theirs.attrs.layer = 1
+    theirs.attrs.lkey1_E = true
+    tap("1")
+    tap("1")
+    check(opener("E") == nil and opener("1") == one, "a layer on: the opener key that is one of its keys is left to it, at the next binding")
+    theirs.attrs.layer = nil
+    tap("1")
+    tap("1")
+    check(opener("E") == one, "the layer off, the key is ours again")
+    FallensFlyouts_Layers(nil)
+    check(opener("1") == one, "with no such addon about, the key opens its flyout as before")
+    tap("E")
+    check(label(1) == "1" and label(2) == "2", "and the spots have their own keys again")
+    tap("E")
+end
 
 print("arranging a flyout without a drag, from the settings page")
 do
@@ -1097,6 +1155,33 @@ do
     check(NS.Flyouts.At("ActionButton8") == nil and order() == "101 501 502", "the bars are as before")
 end
 
+print("the mouse on an icon: nothing on the press, the pick on the release")
+do
+    local _, unit = NS.Flyouts.At("ActionButton1")
+    local icon = entry(unit.index, 2)
+    tap("E")
+    local castsBefore = #W.casts
+    click(icon, true)
+    check(unit.menu:IsShown() and #W.casts == castsBefore, "a mouse press on an icon casts nothing: it may be the start of a move")
+    -- his report (2026-11-21): Shift held and the icon dragged out cast it first
+    W.shift = true
+    icon.scripts.OnDragStart(icon)
+    check(NS.Move.Moving() and #W.casts == castsBefore, "dragged from there, it is lifted and still nothing was cast")
+    NS.Move.Cancel()
+    W.shift = nil
+    click(icon, true)
+    click(icon, false)
+    check(W.casts[#W.casts] == "spell:501" and #W.casts == castsBefore + 1 and not unit.menu:IsShown(),
+        "pressed and let go on the icon, it casts once, on the release, and the flyout shuts")
+    tap("E")
+    tap("2")
+    check(W.casts[#W.casts] == "spell:501" and #W.casts == castsBefore + 2, "a pick key still casts on its press")
+    -- the tooltip of a spell names its rank, as the spellbook's does
+    icon.scripts.OnEnter(icon)
+    check(W.tip ~= nil and W.tip.id == 501 and W.tip.rank == true, "an icon's tooltip asks for the spell with its rank")
+    if unit.menu:IsShown() then tap("E") end
+end
+
 print("turning a flyout: pulled by its end to open another way, or to lie along its button")
 do
     local Turn = NS.Turn
@@ -1141,6 +1226,12 @@ do
     check(not grip:IsShown(), "the mouse gone, so is the grip")
     unit.menu.over = true
     Turn.Poll()
+    W.cursor = { "spell", 7, "spell", 777, 777 }
+    Turn.Poll()
+    check(not grip:IsShown(), "with something on the cursor, carried to the flyout, there is no grip in the way")
+    W.cursor = nil
+    Turn.Poll()
+    check(grip:IsShown(), "the cursor empty again, it is back")
     check(Turn.Start(unit) == true and Turn.Turning(), "the grip grabbed, a turn is under way")
     pull("RIGHT", "RIGHT")
     check(unit.side == "RIGHT" and unit.way == "RIGHT" and unit.menu.point[1] == "LEFT" and unit.menu.point[3] == "RIGHT"

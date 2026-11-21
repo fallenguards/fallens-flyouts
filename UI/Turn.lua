@@ -1,20 +1,23 @@
 local _, ns = ...
 -- luacheck: read globals CreateFrame UIParent GetCursorPosition InCombatLockdown IsMouseButtonDown GameTooltip GetTime
+-- luacheck: read globals GetCursorInfo
 
 -- Turning a flyout. Out of a fight, with the mouse on an open flyout, a
--- grip shows at its far end: the game's own turn icon. Pulled to where the
+-- grip shows at its far end: the game's own move icon. Pulled to where the
 -- flyout should end, the flyout is laid again under the mouse and snaps to
 -- the nearest of its shapes: straight out from any side of its button, or
 -- lying along a side, running either way. Opened by its key with the mouse
 -- elsewhere, a flyout shows no grip: it is not a second arrow to wonder at.
+-- Nor is there one while something is carried on the cursor.
 local T = {}
 ns.Turn = T
 local F, Art, Bars = ns.Flyouts, ns.Art, ns.Bars
 
 -- the sides in the order the shapes are stepped through
 local SIDES = { "UP", "RIGHT", "DOWN", "LEFT" }
--- the grip: the game's turn icon, or its flyout arrow where that icon is not known
-local TURN_ICON = "common-icon-rotateright"
+-- the grip: the game's own icon for a thing that is dragged about (its four arrows), else its
+-- turn icon, else its flyout arrow, whichever this client knows first
+local GRIP_ICONS = { "common-icon-move", "common-icon-rotateright" }
 local ARROW_W, ARROW_H, GRIP_OUT = 18, 7, 2
 local GRIP = Art.ICON * 2 / 3
 -- how often the mouse is looked for, and how long the grip stays once it has left
@@ -115,9 +118,11 @@ local function Grip()
     grip:SetSize(GRIP, GRIP)
     grip.arrow = grip:CreateTexture(nil, "OVERLAY")
     grip.arrow:SetPoint("CENTER")
-    grip.icon = Art.Known(TURN_ICON)
+    for _, atlas in ipairs(GRIP_ICONS) do
+        if not grip.icon and Art.Known(atlas) then grip.icon = atlas end
+    end
     if grip.icon then
-        grip.arrow:SetAtlas(TURN_ICON)
+        grip.arrow:SetAtlas(grip.icon)
         grip.arrow:SetSize(GRIP, GRIP)
     end
     grip:SetScript("OnEnter", function(self)
@@ -247,6 +252,10 @@ function T.Poll()
     if shown and shown.flyout and shown.menu:IsShown() and not InCombatLockdown() then
         if turning or Over() then seenAt = now end
         want = seenAt ~= nil and now - seenAt <= LINGER
+        -- not while something is carried to the flyout or an icon of it is being moved: it is in the way
+        if not turning and (GetCursorInfo() ~= nil or (ns.Move and ns.Move.Moving and ns.Move.Moving())) then
+            want, seenAt = false, nil
+        end
     end
     if want then
         Grip()
