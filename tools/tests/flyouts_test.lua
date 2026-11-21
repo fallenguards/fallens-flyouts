@@ -662,6 +662,48 @@ NS.KeyMenu.Hover(Binds.OPEN .. "1")
 NS.KeyMenu.Hover(nil)
 check(not keyedUnit.ring.shown, "and so does leaving the rows")
 
+print("arranging a flyout without a drag, from the settings page")
+do
+    local Arrange, w = NS.Arrange, page.arrange
+    local function press(button) button.scripts.OnClick(button) end
+    check(w ~= nil and #w.icons == 6 and w.off ~= nil, "the page has the arrange row: six icon places, Previous, Next and Take Off")
+    -- the page up, as when it is being used: it follows what changes on the bars
+    page:Show()
+    flushAll()
+    check(w.which.text == "1 of 1: Spell 101" and w.icons[3].shown and not w.icons[4].shown and not w.off:IsEnabled(),
+        "it shows the flyout on the bars, an icon for each of its three")
+    press(w.icons[3])
+    check(Arrange.Held() == 3 and w.icons[3].scale == 1.25 and w.icons[3].ring.shown and w.off:IsEnabled()
+        and w.status.text:find("Spell 502", 1, true) ~= nil, "a press picks an icon up: it grows, and the page says what comes next")
+    press(w.icons[1])
+    check(order() == "502 101 501" and Arrange.Held() == nil and w.icons[1].scale == 1, "a press on another place moves it there")
+    press(w.icons[1])
+    press(w.icons[1])
+    check(order() == "502 101 501" and Arrange.Held() == nil, "a second press on the picked icon puts it down where it was")
+    press(w.icons[1])
+    press(w.icons[3])
+    check(order() == "101 501 502", "and it goes back the same way")
+    W.combat = true
+    press(w.icons[1])
+    press(w.icons[2])
+    check(order() == "101 501 502" and W.errors[#W.errors]:find("fight"), "in a fight nothing moves")
+    W.combat = false
+    press(w.icons[3])
+    press(w.off)
+    check(count(one) == 2 and lastChat("Spell 502 taken off the flyout") ~= nil and Arrange.Held() == nil,
+        "Take Off takes the picked icon off its flyout")
+    stack("ActionButton1", 502)
+    stack("ActionButton2", 601)
+    check(order() == "101 501 502" and w.which.text == "1 of 2: Spell 101" and w.next:IsEnabled(), "with two flyouts on the bars, Next is there")
+    press(w.next)
+    check(w.which.text:find("^2 of 2: ") ~= nil and w.icons[2].shown and not w.icons[3].shown, "Next shows the other flyout")
+    press(w.next)
+    check(w.which.text == "1 of 2: Spell 101", "and round to the first again")
+    NS.Flyouts.Remove(NS.Flyouts.At("ActionButton2"), 2)
+    check(w.which.text == "1 of 1: Spell 101", "a flyout taken away elsewhere is gone from the page too")
+    page:Hide()
+end
+
 print("the button gets another key")
 one = opener("1")
 W.base.G = "ACTIONBUTTON1"

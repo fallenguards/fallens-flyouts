@@ -21,3 +21,4 @@ UI\Icon.lua
 UI\Keys.lua
 UI\KeyMenu.lua
 Options\Profiles.lua
+Options\Arrange.lua

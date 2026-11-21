@@ -294,6 +294,8 @@ local function Pickup(entry)
     end
 end
 
+F.Name, F.TakeOff = Name, TakeOff
+
 -- dragged out as off a bar: off the flyout and onto the cursor
 function F.CarryOff(unit, i)
     local entry = TakeOff(unit, i)

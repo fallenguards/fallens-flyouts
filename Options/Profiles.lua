@@ -207,6 +207,7 @@ function UI.Refresh()
     panel.slider:SetValue(percent)
     panel.syncing = nil
     panel.sizeText:SetText(TEXT.percent:format(percent))
+    ns.Arrange.Refresh()
 end
 
 -- a size from the slider or its two buttons, in percent
@@ -302,6 +303,8 @@ function UI.Build()
     keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)
     keysNote:SetText(TEXT.keysNote)
     Make(KEYS):SetPoint("TOPLEFT", keysNote, "BOTTOMLEFT", 0, -GAP * 2)
+    -- under it: arranging a flyout without a drag (Options/Arrange.lua)
+    ns.Arrange.Build(panel, panel.keys)
     panel.built = true
     P.OnChange(UI.Refresh)
 end
