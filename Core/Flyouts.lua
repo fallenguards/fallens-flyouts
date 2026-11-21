@@ -3,6 +3,7 @@ local _, ns = ...
 -- luacheck: read globals SetOverrideBindingClick ClearOverrideBindings GameTooltip C_GamePad GetBindingText
 -- luacheck: read globals issecretvalue C_CVar C_Container GetMacroSpell IsUsableItem geterrorhandler
 -- luacheck: read globals Settings IsModifiedClick GetModifiedClick PickupSpell PickupItem PickupMacro
+-- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding
 
 -- Flyouts on bar buttons. One secure root owns every key.
 local F = {}
@@ -145,8 +146,11 @@ local quiet, idle, patient = 0, 0, 0
 local watchers = {}
 -- bar buttons whose click we wrapped, and the ones with a flyout now
 local wrapped, hosted = {}, {}
--- false once the game says the pad is not the input in use
+-- what the game last said of the pad being the input in use; nil: nothing yet
 local padMode
+-- a game command bound to a key and a pad button both, and whether one was sought
+local witness, sought
+local Labels
 -- what is true of a flyout on this character's bars only
 local run = setmetatable({}, { __mode = "k" })
 
@@ -400,6 +404,10 @@ local function EntryButton(unit, i)
     entry:HookScript("OnDragStart", DragOff)
     entry:HookScript("OnEnter", EntryTip)
     entry:HookScript("OnLeave", HideTip)
+    -- the game's dark slot, seen at the icon's cut corners
+    entry.back = entry:CreateTexture(nil, "BACKGROUND", nil, -1)
+    entry.back:SetAtlas(Art.NAMES.back)
+    entry.back:SetAllPoints()
     entry.icon = entry:CreateTexture(nil, "BACKGROUND")
     entry.icon:SetAllPoints()
     Art.Dress(entry, entry.icon)
@@ -482,6 +490,8 @@ local function Unit(f)
         xpcall(function()
             Arrow(unit)
             unit.glow:Show()
+            -- keys or pad symbols, as the game's bars show right now
+            Labels(unit)
             State(unit)
             Tell("open", unit)
         end, geterrorhandler())
@@ -501,10 +511,44 @@ local function Unit(f)
     return unit
 end
 
--- the controller in use, if the pad is the input in use
-local function Pad()
-    if padMode == false or not (C_GamePad and C_GamePad.GetActiveDeviceID) then return nil end
-    return C_GamePad.GetActiveDeviceID()
+-- whether the keys given hold both a pad button and another key
+local function Mixed(...)
+    local pad, other = false, false
+    for n = 1, select("#", ...) do
+        local key = select(n, ...)
+        if type(key) == "string" and key ~= "" then
+            if IsBindingForGamePad(key) then pad = true else other = true end
+        end
+    end
+    return pad and other
+end
+
+-- A command with a key and a pad button both. Of the two the game lists
+-- first the one for the input in use: that is the one its own bars show.
+local function Witness()
+    if witness and Mixed(GetBindingKey(witness)) then return witness end
+    witness = nil
+    if sought then return nil end
+    sought = true
+    for n = 1, GetNumBindings() do
+        local command = GetBinding(n)
+        if command and Mixed(GetBindingKey(command)) then
+            witness = command
+            break
+        end
+    end
+    return witness
+end
+
+-- Whether the pad is the input in use, judged as the game's own bars judge
+-- it. A controller that is plugged in but idle is not in use.
+local function PadInUse()
+    if not (C_GamePad and IsBindingForGamePad and GetBindingKey and GetNumBindings and GetBinding) then return false end
+    if C_GamePad.IsEnabled and not C_GamePad.IsEnabled() then return false end
+    local command = Witness()
+    if command then return IsBindingForGamePad((GetBindingKey(command))) == true end
+    -- no command tells: what the game last said, and keys until it says
+    return padMode == true
 end
 
 -- a pad button as the game draws it for that controller, small; never words
@@ -578,17 +622,18 @@ local function Picks(unit)
     return picks
 end
 
--- one label per icon: the pad's symbol while a controller is in use, else the key
-local function Labels(unit)
+-- one label per icon: the pad's symbol while the pad is the input in use, else the key
+function Labels(unit)
     if not unit.picks then return end
-    local id = Pad()
+    local pad = PadInUse()
+    local id = pad and C_GamePad.GetActiveDeviceID and C_GamePad.GetActiveDeviceID()
     local state = id and C_GamePad.GetDeviceMappedState and C_GamePad.GetDeviceMappedState(id)
     local style = state and PAD_STYLES[state.labelStyle]
     for i, frame in ipairs(unit.entries) do
         local pick = unit.picks[i]
         local text = ""
         if pick then
-            text = id and pick.pad and Glyph(pick.pad, style) or ""
+            text = pad and pick.pad and Glyph(pick.pad, style) or ""
             if text == "" then text = KeyText(pick.key) end
         end
         frame.key:SetText(text)
@@ -938,8 +983,8 @@ function F.Open() return open end
 function F.Lost(flyout) return Run(flyout).lost == true end
 function F.UnitOf(flyout) return Run(flyout).unit end
 function F.Pause(on) paused = on end
--- whether a controller is the input in use right now
-function F.PadInUse() return Pad() ~= nil end
+-- whether the pad is the input in use right now, and the command that tells
+function F.PadInUse() return PadInUse(), witness end
 function F.Wrapped(name) return wrapped[name] == true end
 
 -- flyout size against the game's own (1), kept with the profile
@@ -1117,13 +1162,18 @@ events:SetScript("OnEvent", function(_, event, on)
         F.Follow()
     elseif event == "UPDATE_BINDINGS" then
         if ready and used > 0 and GetTime() >= quiet then rekey = true end
+        -- the game's bars relabel on this too
+        sought = nil
+        if open then Labels(open) end
     elseif STATE_EVENTS[event] then
         -- only the open one can be seen
         if open then State(open) end
     else
         -- the pad became the input in use, or stopped being it
-        if event == "GAME_PAD_ACTIVE_CHANGED" then padMode = on and true or false end
+        if event == "GAME_PAD_ACTIVE_CHANGED" then padMode = on == true end
         for f = 1, used do Labels(units[f]) end
+        ns.Log(("pad: %s %s; the input in use: %s, told by %s"):format(event, tostring(on), tostring(PadInUse()),
+            tostring(witness or "the game's last word")))
     end
 end)
 

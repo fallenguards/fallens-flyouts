@@ -40,7 +40,7 @@ for _, m in ipairs({ "SetFrameStrata", "SetPoint", "ClearAllPoints", "RegisterFo
     "SetHighlightTexture", "SetAllPoints", "SetColorTexture",
     "SetJustifyH", "HighlightText", "SetHorizTile", "SetVertTile", "SetFrameLevel",
     "SetDrawBling", "SetDrawEdge", "SetSwipeColor", "SetHideCountdownNumbers", "SetUsingParentLevel",
-    "AddMaskTexture", "SetNormalAtlas", "SetPushedAtlas", "SetHighlightAtlas", "SetLooping",
+    "AddMaskTexture", "SetLooping",
     "SetFromAlpha", "SetToAlpha", "SetDuration", "Play", "Stop", "RemoveMaskTexture", "SetDrawLayer",
     "SetToplevel", "SetMovable", "SetClampedToScreen", "RegisterForDrag", "SetMaxLetters", "SetFocus",
     "Enable", "Disable", "SetValueStep", "SetObeyStepOnDrag", "SetAutoFocus", "SetFontObject", "SetAlpha", "EnableGamePadButton" }) do
@@ -121,9 +121,18 @@ function Frame:GenerateMenu()
 end
 function Frame:GetScript(k) return self.scripts[k] end
 function Frame:IsMouseOver() return false end
-for _, m in ipairs({ "CreateMaskTexture", "CreateAnimationGroup", "CreateAnimation", "GetNormalTexture",
-    "GetPushedTexture", "GetHighlightTexture" }) do
+for _, m in ipairs({ "CreateMaskTexture", "CreateAnimationGroup", "CreateAnimation" }) do
     Frame[m] = region
+end
+-- a button's own art: one texture per state, wearing the atlas set on it
+for _, kind in ipairs({ "Normal", "Pushed", "Highlight" }) do
+    local key = "art" .. kind
+    local function Art(self)
+        self[key] = self[key] or region()
+        return self[key]
+    end
+    Frame["Get" .. kind .. "Texture"] = Art
+    Frame["Set" .. kind .. "Atlas"] = function(self, atlas) Art(self).atlas = atlas end
 end
 -- as the client: the scripts run only when the frame's own state changes
 function Frame:Hide()
@@ -279,7 +288,19 @@ GameTooltip = {
     Hide = function(self) self.owner = nil end,
     SetText = noop, AddLine = noop, Show = noop, SetSpellByID = noop, SetItemByID = noop,
 }
-C_Texture = { GetAtlasInfo = function(atlas) return W.noArt ~= atlas and {} or nil end }
+-- The game's button frame art, by its own size: a ring of 46 by 45, alone
+-- on a bar, or in a 51 square with its shadow for a button off the bars.
+local ART_SIZE = {
+    ["UI-HUD-ActionBar-IconFrame"] = { 46, 45 }, ["UI-HUD-ActionBar-IconFrame-Down"] = { 46, 45 },
+    ["UI-HUD-ActionBar-IconFrame-AddRow"] = { 51, 51 }, ["UI-HUD-ActionBar-IconFrame-AddRow-Down"] = { 51, 51 },
+    ["UI-HUD-ActionBar-IconFrame-Mouseover"] = { 46, 45 }, ["UI-HUD-ActionBar-IconFrame-Background"] = { 46, 45 },
+}
+RING_W, RING_H = 46, 45
+C_Texture = { GetAtlasInfo = function(atlas)
+    if W.noArt == atlas then return nil end
+    local size = ART_SIZE[atlas]
+    return size and { width = size[1], height = size[2] } or {}
+end }
 local function flushAll()
     for _ = 1, 400 do
         if #W.queue == 0 then return end
@@ -295,11 +316,41 @@ function ClearCursor()
     W.cursor = nil
     fire("ACTIONBAR_HIDEGRID")
 end
--- a controller: W.pad is the one in use, nil for none
+-- A controller: W.pad is the one plugged in, nil for none. Plugged in is not
+-- in use: W.padInUse is the game's own word on which input is in use.
 C_GamePad = {
     GetActiveDeviceID = function() return W.pad end,
     GetDeviceMappedState = function() return { labelStyle = "Letters" } end,
+    IsEnabled = function() return W.padOff ~= true end,
 }
+function IsBindingForGamePad(key) return type(key) == "string" and key:find("PAD", 1, true) ~= nil end
+-- a command's keys, those of the input in use first: what the game's bars show
+function GetBindingKey(command)
+    local first, rest = {}, {}
+    for key, action in pairs(W.base) do
+        if action == command then
+            local list = IsBindingForGamePad(key) == (W.padInUse == true) and first or rest
+            list[#list + 1] = key
+        end
+    end
+    table.sort(first)
+    table.sort(rest)
+    for _, key in ipairs(rest) do first[#first + 1] = key end
+    return table.unpack(first)
+end
+local function commands()
+    local seen, out = {}, {}
+    for _, action in pairs(W.base) do
+        if not seen[action] then
+            seen[action] = true
+            out[#out + 1] = action
+        end
+    end
+    table.sort(out)
+    return out
+end
+function GetNumBindings() return #commands() end
+function GetBinding(n) return commands()[n] end
 -- a pad button comes back as its symbol, any other key shortened
 function GetBindingText(key)
     if key:find("PAD", 1, true) then return "|A:Gamepad_Gen_" .. key .. ":14:14|a" end
@@ -455,6 +506,8 @@ local function boot(alone)
             E = "ACTIONBUTTON1", Q = "ACTIONBUTTON2" },
         seq = 0, clock = 0, combat = false, loaded = {}, cooling = {}, short = {}, unusable = {}, caught = {} }
     W.base["CTRL-6"] = "ACTIONBUTTON1"
+    -- as the game's defaults: one command with a key and a pad button both
+    W.base.SPACE, W.base.PAD1 = "JUMP", "JUMP"
     for name, on in pairs(enabled) do W.loaded[name] = on and installed[name] or false end
     wantReload = false
     SlashCmdList = {}

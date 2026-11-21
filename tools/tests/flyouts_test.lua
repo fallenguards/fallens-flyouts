@@ -95,23 +95,73 @@ check(not window:IsShown() and W.errors[#W.errors]:find("fight"), "in a fight th
 W.combat = false
 check(W.released == 4, "each showing hands the game's icon list back")
 
-print("pad symbols on the icons")
+print("an icon's frame hugs the icon, as on the game's own flyout")
+do
+    local Art = NS.Art
+    for i = 1, 4 do
+        local e = entry(one, i)
+        for _, kind in ipairs({ "artNormal", "artPushed" }) do
+            local art = e[kind]
+            local own = C_Texture.GetAtlasInfo(art.atlas)
+            -- the ring's drawn size: its share of the piece, at the size the piece is drawn
+            local ringW, ringH = art.w * RING_W / own.width, art.h * RING_H / own.height
+            check(ringW - Art.ICON < 2 and ringH - Art.ICON < 2 and ringW >= Art.ICON and ringH >= Art.ICON,
+                ("icon %d %s: the ring is %.1f by %.1f on a %d icon, not hanging off it"):format(i, kind, ringW, ringH, Art.ICON))
+        end
+        check(e.artNormal.atlas == Art.NAMES.frame and e.artNormal.w == Art.FRAME, "icon " .. i .. " wears the row frame at 35")
+        check(e.artHighlight.w == Art.OVER_W and e.artHighlight.h == Art.OVER_H, "icon " .. i .. " highlights at the ring's size")
+        check(e.back ~= nil and e.back.atlas == Art.NAMES.back, "icon " .. i .. " has the game's dark slot under it")
+    end
+    check(NS.Drop.pop == nil or NS.Drop.pop.frame.atlas == Art.NAMES.frame, "the drop slot wears the same frame")
+end
+
+print("pad symbols on the icons: only while the pad is the input in use")
 local function label(i) return entry(one, i).key.text end
+local function symbol(i) return (label(i) or ""):find("|A", 1, true) ~= nil end
 check(label(1) == "1" and label(2) == "2" and label(4) == "4", "no controller: each icon shows its key")
+-- plugged in and never touched: the game's bars keep showing keys
 W.pad = 1
 fire("GAME_PAD_CONNECTED")
+check(label(1) == "1" and label(4) == "4", "a controller plugged in but idle: still the keys, as on the game's bars")
+mouse(host)
+check(menu:IsShown() and label(1) == "1", "and still the keys on an open flyout")
+mouse(host)
+W.padInUse = true
+fire("GAME_PAD_ACTIVE_CHANGED", true)
 check(label(4) == "|A:Gamepad_Ltr_Up:11:11|a" and label(1):find("Gamepad_Gen_PADDDOWN", 1, true) ~= nil,
-    "a controller in use: the top icon shows D-pad up and the one by the button D-pad down, as symbols")
+    "the controller picked up: the top icon shows D-pad up and the one by the button D-pad down, as symbols")
 check(label(3):find("PADDRIGHT", 1, true) ~= nil and label(2):find("PADDLEFT", 1, true) ~= nil,
     "the icons between take right and left")
 for i = 1, 6 do
     local text = label(i) or ""
     check(text == "" or #text == 1 or text:find("|A", 1, true) ~= nil, "label " .. i .. " is a symbol or a key, never words")
 end
+W.padInUse = false
 fire("GAME_PAD_ACTIVE_CHANGED", false)
 check(label(1) == "1", "back on keyboard and mouse: the keys again")
+-- the game switched and no word of it came: nothing stays stuck past the next showing
+W.padInUse = true
+mouse(host)
+check(menu:IsShown() and symbol(1), "the pad in use with no word from the game: an opening flyout shows symbols all the same")
+W.padInUse = false
+mouse(host); mouse(host)
+check(menu:IsShown() and label(1) == "1", "and keys the same way once the keyboard is back")
+mouse(host)
+W.padInUse = true
+W.padOff = true
 fire("GAME_PAD_ACTIVE_CHANGED", true)
-check(label(1):find("|A", 1, true) ~= nil, "on the pad again: the symbols again")
+check(label(1) == "1", "the controller turned off in the game's settings: keys")
+W.padOff = nil
+-- no command with a key and a pad button both: the game's last word decides
+W.base.PAD1 = nil
+fire("UPDATE_BINDINGS")
+fire("GAME_PAD_ACTIVE_CHANGED", true)
+check(symbol(1), "no command to tell by: the game saying the pad is in use shows symbols")
+fire("GAME_PAD_ACTIVE_CHANGED", false)
+check(label(1) == "1", "and its saying otherwise shows keys")
+W.base.PAD1 = "JUMP"
+W.padInUse = false
+fire("UPDATE_BINDINGS")
 W.pad = nil
 fire("GAME_PAD_DISCONNECTED")
 check(label(1) == "1", "controller unplugged: the keys again")

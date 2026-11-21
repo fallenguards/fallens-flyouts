@@ -9,7 +9,8 @@ ns.Art = A
 -- 9 before the first, 4 between, 8 past the last, a strip 47 wide.
 A.BUTTON, A.ICON, A.OVERLAP = 45, 30, 4
 A.FIRST, A.NEXT, A.PAD, A.STRIP = 9, 4, 8, 47
--- its small button: mask, frame art, highlight, glow, key text, sweep
+-- its small button: mask, frame art, highlight, glow, key text, sweep.
+-- The frame art is a ring with its shadow beside it: 35 draws a 31.6 ring.
 A.MASK, A.FRAME, A.OVER_W, A.OVER_H, A.GLOW = 45, 35, 31.6, 30.9, 4
 A.KEY_X, A.KEY_Y = -3, -4
 A.SWEEP = { 1.7, -1.7, -1, 1 }
@@ -26,11 +27,12 @@ A.NAMES = {
     last = "UI-HUD-ActionBar-IconFrame-FlyoutButton",
     upright = "!UI-HUD-ActionBar-IconFrame-FlyoutMid",
     level = "_UI-HUD-ActionBar-IconFrame-FlyoutMidLeft",
-    frame = "UI-HUD-ActionBar-IconFrame",
-    frameDown = "UI-HUD-ActionBar-IconFrame-Down",
+    -- a button off the bars wears the row frame, as the game's flyout does
+    frame = "UI-HUD-ActionBar-IconFrame-AddRow",
+    frameDown = "UI-HUD-ActionBar-IconFrame-AddRow-Down",
     frameOver = "UI-HUD-ActionBar-IconFrame-Mouseover",
     mask = "UI-HUD-ActionBar-IconFrame-Mask",
-    slot = "ui-hud-actionbar-iconframe-slot",
+    back = "UI-HUD-ActionBar-IconFrame-Background",
 }
 local NAMES = A.NAMES
 
