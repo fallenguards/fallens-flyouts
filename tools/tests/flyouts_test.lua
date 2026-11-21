@@ -857,6 +857,141 @@ do
     check(NS.Flyouts.At("ActionButton8") == nil and order() == "101 501 502", "the bars are as before")
 end
 
+print("flyouts that fill themselves from the bags: food, drink and the rest, each kind apart")
+do
+    local Auto = NS.Auto
+    local hadPlaced = W.placed
+    W.placed = W.placed or {}
+    W.macros, W.level = {}, 10
+    -- sub: the game's kind (5 food and drink, 1 potion, 2 elixir); level: how good; needs: the level to use it
+    W.items = {
+        [4540] = { sub = 5, level = 5 }, [4541] = { sub = 5, level = 15, needs = 5 },
+        [4542] = { sub = 5, level = 25, needs = 15 }, [4543] = { sub = 5, level = 20, needs = 10 },
+        [159] = { sub = 5, drink = true, level = 5 }, [1179] = { sub = 5, drink = true, level = 15, needs = 5 },
+        [118] = { sub = 1, level = 5 }, [5997] = { sub = 2, level = 5 },
+    }
+    W.bags = { 4540, 159, 4541, 118, 4542, 777777 }
+    local function ids(flyout)
+        local out = {}
+        for i, entry in ipairs(flyout and flyout.entries or {}) do out[i] = tostring(entry.id) end
+        return table.concat(out, " ")
+    end
+    local function bags(list)
+        W.bags = list
+        fire("BAG_UPDATE_DELAYED")
+        flushAll()
+    end
+    local picked, macroName = Auto.Pick("food")
+    check(picked == true and macroName == "Food" and W.cursor ~= nil and W.cursor[1] == "macro" and W.cursor[2] == "Food",
+        "picked, a macro named for the kind is on the cursor")
+    check(W.macros.Food ~= nil and W.macros.Food[1] == 133952 and W.macros.Food[2] == "#fallensflyouts food",
+        "it is made with the kind's own fixed icon, never an item's, and marked as the addon's")
+    check(NS.Flyouts.At("ActionButton9") == nil, "nothing is on a bar until it is dropped on one")
+    PlaceAction(9)
+    flushAll()
+    local food, foodUnit = NS.Flyouts.At("ActionButton9")
+    check(food ~= nil and food.auto == "food" and ids(food) == "4541 4540",
+        "dropped on a bar button, its flyout is the food in the bags this character can eat, the best first")
+    check(food ~= nil and food.main.kind == "macro" and food.main.id == "Food", "the macro leads it and is no icon in it")
+    local before = #W.casts
+    mouse(W.frames.ActionButton9)
+    check(foodUnit ~= nil and foodUnit.menu:IsShown() and #W.casts == before, "a press on the button opens it")
+    mouse(entry(foodUnit.index, 1))
+    check(W.casts[#W.casts] == "item:item:4541" and not foodUnit.menu:IsShown(), "a pick eats that food and shuts it")
+    bags({ 4540, 159, 118, 4542 })
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4540", "the last of one eaten: it is gone from the flyout")
+    bags({ 4540, 159, 118, 4542, 4541, 4543 })
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4543 4541 4540", "more food in the bags: it is in the flyout, in its place by how good it is")
+    fire("PLAYER_LEVEL_UP", 15)
+    flushAll()
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4542 4543 4541 4540", "a level gained: food that needed it joins")
+    -- nothing on a bar changes in a fight
+    W.combat = true
+    bags({ 159, 118 })
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4542 4543 4541 4540", "in a fight the flyout stays as it was")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    flushAll()
+    check(NS.Flyouts.At("ActionButton9") == nil and W.placed[9][2] == "Food", "the fight over and no food left: the button is its macro alone")
+    bags({ 4540, 159, 118, 1179, 5997 })
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4540", "food again, the flyout is back by itself")
+    -- drink is a kind apart, and so are the rest
+    Auto.Pick("drink")
+    PlaceAction(10)
+    flushAll()
+    check(ids(NS.Flyouts.At("ActionButton10")) == "1179 159" and W.macros.Drink[1] == 132793,
+        "the drink flyout holds the drinks and no food, under its own icon")
+    check(ids({ entries = (Auto.Entries("potions")) }) == "118" and ids({ entries = (Auto.Entries("elixirs")) }) == "5997"
+        and ids({ entries = (Auto.Entries("scrolls")) }) == "", "potions and elixirs are each their own kind; a kind with nothing is empty")
+    -- more kinds of food than a flyout holds
+    for id = 4550, 4557 do W.items[id] = { sub = 5, level = id - 4500 } end
+    bags({ 4540, 4550, 4551, 4552, 4553, 4554, 4555, 4556, 4557 })
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4557 4556 4555 4554 4553 4552", "with more than six kinds of food, the six best are shown")
+    bags({ 4540, 159, 118, 1179, 5997 })
+    -- the game has no word yet on an item: it joins when the word comes
+    W.items[4544] = { sub = 5, level = 30, unknown = true }
+    bags({ 4540, 159, 4544 })
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4540", "an item the game has no word on yet is left out for now")
+    W.items[4544].unknown = nil
+    fire("GET_ITEM_INFO_RECEIVED", 4544)
+    flushAll()
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4544 4540", "and joins when the word comes")
+    -- it is not changed by hand
+    local errorsBefore = #W.errors
+    stack("ActionButton9", 777)
+    food = NS.Flyouts.At("ActionButton9")
+    check(ids(food) == "4544 4540" and #W.errors == errorsBefore + 1 and W.errors[#W.errors]:find("fills itself", 1, true) ~= nil,
+        "something dropped on its plus is refused, with the reason")
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    local removed, whyNot = NS.Flyouts.Remove(food, 1)
+    check(removed == false and whyNot ~= nil and NS.Flyouts.Move(food, 2, 1) == false and ids(food) == "4544 4540",
+        "its icons are not taken off or moved by hand")
+    check(rowName(food.number):find(": Food", 1, true) ~= nil, "its row in the key menu is named after the kind")
+    -- a name already taken by a macro of the player's own
+    W.macros.Potions = { 1, "/cast Something" }
+    local _, potionName = Auto.Pick("potions")
+    check(potionName == "Potions 2" and W.macros.Potions[2] == "/cast Something" and Auto.Macro("potions") == "Potions 2",
+        "a macro of the player's own with that name is left alone: ours takes the next name")
+    W.cursor = nil
+    W.macroFull = true
+    local elixir, whyFull = Auto.Pick("elixirs")
+    check(elixir == false and whyFull == Auto.TEXT.full, "with the macro list full it says so and makes nothing")
+    W.macroFull = nil
+    W.combat = true
+    check(Auto.Pick("scrolls") == false and W.macros.Scrolls == nil, "in a fight nothing is made or picked up")
+    W.combat = false
+    -- the settings page, and the same from chat
+    local autoPage = NS.AutoUI.panel
+    NS.AutoUI.Build()
+    check(#autoPage.icons == #Auto.KINDS and autoPage.icons[1].icon.texture == 133952,
+        "the settings page has an icon for each kind, the kind's own")
+    W.cursor = nil
+    autoPage.icons[2].scripts.OnClick(autoPage.icons[2])
+    check(W.cursor ~= nil and W.cursor[2] == "Drink", "a click on one picks its macro up")
+    W.cursor = nil
+    autoPage.icons[1].scripts.OnDragStart(autoPage.icons[1])
+    check(W.cursor ~= nil and W.cursor[2] == "Food", "so does a drag")
+    W.cursor = nil
+    SlashCmdList.FALLENSFLYOUTS("drink")
+    check(W.cursor ~= nil and W.cursor[2] == "Drink", "and /ff drink from chat")
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    -- the bars as they were
+    local all = NS.Flyouts.List()
+    for i = #all, 1, -1 do
+        if all[i].auto then table.remove(all, i) end
+    end
+    W.placed[9], W.placed[10] = nil, nil
+    W.macros, W.items, W.bags, W.level, W.macroCount = nil, nil, nil, nil, nil
+    if not hadPlaced then W.placed = nil end
+    NS.Flyouts.Apply()
+    for _, slot in ipairs({ 9, 10 }) do fire("ACTIONBAR_SLOT_CHANGED", slot) end
+    flushAll()
+    check(NS.Flyouts.At("ActionButton9") == nil and NS.Flyouts.At("ActionButton10") == nil and order() == "101 501 502",
+        "the bars are as before")
+end
+
 print("gamepad mode, binding or moving onto a taken button: swap the old one out, or add to its flyout")
 do
     local Pad = NS.PadBind

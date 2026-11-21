@@ -37,6 +37,7 @@ local TEXT = {
     full = "That flyout is full.",
     twice = "That is in the flyout already.",
     noLead = "That button's action cannot lead a flyout.",
+    auto = "That flyout fills itself from your bags.",
     how = "Drag",
     howHeld = "%s-drag",
     remove = "%s to move it. Right-click takes it off the flyout.",
@@ -1026,6 +1027,8 @@ function F.Apply()
     used = 0
     local ranked = F.Ranked()
     for _, flyout in ipairs(list or {}) do
+        -- one that fills itself: what is in the bags now
+        if flyout.auto and ns.Auto then flyout.entries = (ns.Auto.Entries(flyout.auto)) end
         if ranked then Order(flyout) end
         local state = Run(flyout)
         local name = flyout.host
@@ -1296,6 +1299,7 @@ function F.Stack(button, entry)
         flyout = F.Of(main)
     end
     if flyout then
+        if flyout.auto then return nil, TEXT.auto end
         if #flyout.entries >= MAX then return nil, TEXT.full end
         if Has(flyout, entry) then return nil, TEXT.twice end
         flyout.host = name
@@ -1319,6 +1323,7 @@ function F.StackLed(main, entry, button)
     local name = button and button:GetName()
     local flyout = name and F.At(name)
     if not (flyout and Same(flyout.main, main)) then flyout = F.Of(main) end
+    if flyout and flyout.auto then return nil, TEXT.auto end
     if flyout then
         if not Has(flyout, entry) then
             if #flyout.entries >= MAX then return nil, TEXT.full end
@@ -1350,6 +1355,7 @@ end
 function F.Remove(flyout, i)
     if InCombatLockdown() then return false, TEXT.fight end
     if not (list and flyout and flyout.entries[i]) then return false end
+    if flyout.auto then return false, TEXT.auto end
     local shown = open ~= nil and open.flyout == flyout
     local gone = F.Ends(flyout, i)
     table.remove(flyout.entries, i)
@@ -1367,6 +1373,7 @@ function F.Move(flyout, from, to)
     if InCombatLockdown() then return false, TEXT.fight end
     local entries = flyout and flyout.entries
     if not (list and entries and entries[from] and entries[to]) then return false end
+    if flyout.auto then return false, TEXT.auto end
     if from == to then return true end
     local shown = open ~= nil and open.flyout == flyout
     table.insert(entries, to, table.remove(entries, from))

@@ -16,6 +16,7 @@ Core\Bars.lua
 UI\Art.lua
 Core\Binds.lua
 Core\Flyouts.lua
+Core\Auto.lua
 UI\Move.lua
 UI\Drop.lua
 UI\Icon.lua
@@ -24,3 +25,4 @@ UI\KeyMenu.lua
 UI\PadBind.lua
 Options\Profiles.lua
 Options\Arrange.lua
+Options\Auto.lua

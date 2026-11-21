@@ -425,6 +425,7 @@ function HasAction(slot)
 end
 function GetActionInfo(slot)
     local placed = W.placed and W.placed[slot]
+    if type(placed) == "table" then return placed[1], 1, placed[1] end
     if placed then return "spell", placed, "spell" end
     if placed == false or not HasAction(slot) then return nil end
     return "spell", 100 + own(slot) + (char.shift or 0), "spell"
@@ -432,12 +433,23 @@ end
 -- the cursor's spell goes onto the slot; what the slot held comes onto the cursor
 function PlaceAction(slot)
     local carried = W.cursor
-    if not (carried and carried[1] == "spell") then return end
-    local _, had = GetActionInfo(slot)
+    if not (carried and (carried[1] == "spell" or carried[1] == "macro")) then return end
+    local kind, had = GetActionInfo(slot)
+    local name = GetActionText(slot)
     W.placed = W.placed or {}
-    W.placed[slot] = carried[4]
-    W.cursor = had and { "spell", 7, "spell", had, had } or nil
+    if carried[1] == "macro" then
+        W.placed[slot] = { "macro", carried[2] }
+    else
+        W.placed[slot] = carried[4]
+    end
+    if kind == "macro" then
+        W.cursor = { "macro", name }
+    else
+        W.cursor = had and { "spell", 7, "spell", had, had } or nil
+    end
     fire("ACTIONBAR_SLOT_CHANGED", slot)
+    -- the cursor left empty, the bars' empty slots hide again
+    if not W.cursor then fire("ACTIONBAR_HIDEGRID") end
 end
 -- a call runs after another's, as the client lets an addon listen in
 function hooksecurefunc(holder, name, after)
@@ -448,8 +460,34 @@ function hooksecurefunc(holder, name, after)
         return table.unpack(out)
     end
 end
-function GetActionText() return nil end
-function GetMacroInfo(x) return "Macro" .. tostring(x), 1234 end
+-- a macro on a slot is known to the bars by its name
+function GetActionText(slot)
+    local placed = W.placed and W.placed[slot]
+    return type(placed) == "table" and placed[2] or nil
+end
+-- W.macros: the macro list, name to icon and text; with none set, any macro there is asked for exists
+function GetMacroInfo(x)
+    if W.macros then
+        local macro = W.macros[x]
+        if macro then return x, macro[1], macro[2] end
+        return nil
+    end
+    return "Macro" .. tostring(x), 1234
+end
+function CreateMacro(name, icon, body)
+    assert(not W.combat, "CreateMacro in a fight")
+    if W.macroFull then error("the macro list is full") end
+    W.macros = W.macros or {}
+    W.macros[name] = { icon, body }
+    W.macroCount = (W.macroCount or 0) + 1
+    return W.macroCount
+end
+function UnitLevel() return W.level or 10 end
+-- W.bags: the items in the bags, one stack each; W.items: what the game knows of an item
+C_Container = {
+    GetContainerNumSlots = function(bag) return bag == 0 and #(W.bags or {}) or 0 end,
+    GetContainerItemID = function(bag, slot) return bag == 0 and (W.bags or {})[slot] or nil end,
+}
 C_Spell = {
     PickupSpell = function(id) W.cursor = { "spell", 7, "spell", id, id } end,
     GetSpellTexture = function(id) return id end,
@@ -481,6 +519,26 @@ C_Item = {
     GetItemIconByID = function(id) return id end,
     GetItemNameByID = function(id) return "Item " .. id end,
     GetItemCooldown = function() return 0, 0, 1 end,
+    -- class 0 is a consumable; its kind is the item's `sub` (5 food and drink, 1 potion, 2 elixir)
+    GetItemInfoInstant = function(id)
+        local item = W.items and W.items[id]
+        if not item then return id, "Miscellaneous", "Junk", "", id, 15, 0 end
+        return id, "Consumable", "Kind", "", id, 0, item.sub
+    end,
+    -- name, link, quality, level, the level it needs; nothing while the game has no word on it
+    GetItemInfo = function(id)
+        local item = W.items and W.items[id]
+        if not item or item.unknown then return nil end
+        return "Item " .. id, "link", 1, item.level or 1, item.needs or 1
+    end,
+    -- what using it casts: eating is spell 433, drinking 430
+    GetItemSpell = function(id)
+        local item = W.items and W.items[id]
+        if not item or item.unknown then return nil end
+        if item.sub ~= 5 then return "Use", 9000 end
+        if item.drink then return "Drink", 430 end
+        return "Food", 433
+    end,
     IsUsableItem = function() return true, false end,
 }
 -- the game's controller cursor and its Options window, as far as the page leans on them

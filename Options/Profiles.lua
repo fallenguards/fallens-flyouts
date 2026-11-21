@@ -342,23 +342,31 @@ end
 panel = CreateFrame("Frame")
 panel:Hide()
 panel.name = TITLE
+-- A page of ours came up: the controller's cursor read the window before
+-- the page's buttons were built, so it is asked again. Any page of the addon's.
+function ns.OptionsPageShown(page)
+    C_Timer.After(0, function()
+        if not page:IsVisible() then return end
+        Hush(true)
+        local cursor = SmartNavigation
+        if cursor and cursor.UpdateParent and not InCombatLockdown() then cursor:UpdateParent(page) end
+    end)
+end
+function ns.OptionsPageHidden() Hush(false) end
+
 panel:SetScript("OnShow", function()
     UI.Build()
     UI.Refresh()
-    -- the cursor read the window before these buttons were built: asked again
-    C_Timer.After(0, function()
-        if not panel:IsVisible() then return end
-        Hush(true)
-        local cursor = SmartNavigation
-        if cursor and cursor.UpdateParent and not InCombatLockdown() then cursor:UpdateParent(panel) end
-    end)
+    ns.OptionsPageShown(panel)
 end)
-panel:SetScript("OnHide", function() Hush(false) end)
+panel:SetScript("OnHide", ns.OptionsPageHidden)
 UI.panel = panel
 
 if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
     category = Settings.RegisterCanvasLayoutCategory(panel, TITLE)
     Settings.RegisterAddOnCategory(category)
+    -- for the pages under this one
+    ns.OptionsCategory = category
 end
 
 -- its row in the game's addon list at the minimap
