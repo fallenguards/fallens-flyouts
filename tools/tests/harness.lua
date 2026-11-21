@@ -38,7 +38,7 @@ Frame.__index = Frame
 local function noop() end
 for _, m in ipairs({ "ClearAllPoints", "RegisterForClicks", "EnableMouse",
     "SetHighlightTexture", "SetAllPoints", "SetColorTexture",
-    "SetJustifyH", "HighlightText", "SetHorizTile", "SetVertTile", "SetFrameLevel",
+    "SetJustifyH", "HighlightText", "SetHorizTile", "SetVertTile",
     "SetDrawBling", "SetDrawEdge", "SetSwipeColor", "SetHideCountdownNumbers", "SetUsingParentLevel",
     "AddMaskTexture", "SetLooping",
     "SetFromAlpha", "SetToAlpha", "SetDuration", "Play", "Stop", "RemoveMaskTexture", "SetDrawLayer",
@@ -79,8 +79,14 @@ function Frame:GetTop() return self.rect and self.rect[3] end
 function Frame:GetBottom() return self.rect and self.rect[4] end
 -- the layer a frame is drawn on: its own when given one, else that of its parent
 function Frame:SetFrameStrata(strata) self.strata = strata end
-function Frame:GetFrameStrata() return self.strata or (self.parent and self.parent:GetFrameStrata()) or "MEDIUM" end
-function Frame:GetFrameLevel() return 1 end
+-- The game lifts its own action bars to the top layer while a spell is on the
+-- cursor (ActionBarMixin:UpdateFrameStrata); their buttons go up with them.
+function Frame:GetFrameStrata()
+    if self.raises and W.cursor and W.cursor[1] == "spell" then return "TOOLTIP" end
+    return self.strata or (self.parent and self.parent:GetFrameStrata()) or "MEDIUM"
+end
+function Frame:SetFrameLevel(level) self.level = level end
+function Frame:GetFrameLevel() return self.level or 1 end
 function Frame:SetScale(v) self.scale = v end
 function Frame:GetScale() return self.scale or 1 end
 function Frame:SetTexture(v) self.texture = v end
@@ -563,6 +569,7 @@ local function boot(alone)
     local kind = barWorld()
     local other = kind ~= "game"
     local main = CreateFrame("Frame", "MainActionBar", UIParent)
+    main.raises = true
     main.w, main.h = 500, 40
     main.shown = not other
     -- not placed yet, as at a login before the UI addon has moved its bars

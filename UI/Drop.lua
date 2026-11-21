@@ -18,9 +18,10 @@ local TEXT = {
     kind = "Only spells, items and macros go in a flyout.",
 }
 D.GROW_FROM, D.BADGE_OUT, D.BADGE_PAST = GROW_FROM, BADGE_OUT, BADGE_PAST
--- above every bar, a neighbouring bar too, and above a shown flyout; below tooltips
-local LAYER = "FULLSCREEN_DIALOG"
-D.LAYER = LAYER
+-- While a spell is dragged the game lifts its bars to the top layer. The plus
+-- stands there too, at a level over every bar button and the frames on it.
+local LAYER, LEVEL = "TOOLTIP", 9000
+D.LAYER, D.LEVEL = LAYER, LEVEL
 
 local tabs = {}
 local pop, lastKind
@@ -174,6 +175,7 @@ local function Tab(button, name)
     tab = CreateFrame("Frame", nil, UIParent)
     tab:Hide()
     tab:SetFrameStrata(LAYER)
+    tab:SetFrameLevel(LEVEL)
     tab:EnableMouse(true)
     tab.host, tab.button = name, button
     tab.badge = tab:CreateTexture(nil, "ARTWORK")

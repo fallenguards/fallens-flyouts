@@ -12,11 +12,12 @@ for _, id in ipairs({ 501, 502, 503 }) do
     fire("ACTIONBAR_SHOWGRID")
     local tab = tabOf("ActionButton1")
     check(tab and tab:IsShown(), "tab shown on ActionButton1 while carrying " .. id)
-    -- a bar close above this one must not cover the plus: it is drawn over every bar button
-    local LAYERS = { BACKGROUND = 1, LOW = 2, MEDIUM = 3, HIGH = 4, DIALOG = 5, FULLSCREEN = 6, FULLSCREEN_DIALOG = 7, TOOLTIP = 8 }
-    check(LAYERS[tab:GetFrameStrata()] > LAYERS[W.frames.ActionButton2:GetFrameStrata()]
-        and LAYERS[tab:GetFrameStrata()] > LAYERS.DIALOG and LAYERS[tab:GetFrameStrata()] < LAYERS.TOOLTIP,
-        "the plus is on a layer over the bar buttons and a shown flyout, under tooltips")
+    -- A bar close above this one must not cover the plus. While a spell is carried the game
+    -- lifts its bars to the top layer: only a higher level on that same layer is over them.
+    local beside = W.frames.ActionButton2
+    check(beside:GetFrameStrata() == "TOOLTIP", "the game's bar buttons are on the top layer while a spell is carried")
+    check(tab:GetFrameStrata() == "TOOLTIP" and tab:GetFrameLevel() > beside:GetFrameLevel() + 600,
+        "the plus is on that layer too, at a level over every bar button and the frames on it")
     -- the arrow of a flyout ends 4 past the button's edge: the plus stands past its tip
     local out = math.abs(tab.point[4]) + math.abs(tab.point[5])
     if id == 501 then
