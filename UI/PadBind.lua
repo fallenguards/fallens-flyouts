@@ -52,6 +52,8 @@ local function Entry(fn, params)
     if C_Spell and fn == C_Spell.PickupSpell then return { kind = "spell", id = id } end
     if C_Item and fn == C_Item.PickupItem then return { kind = "item", id = id } end
     if fn == PickupMacro then
+        local entry = ns.Macros.Entry(id)
+        if entry then return entry end
         local name = GetMacroInfo(id)
         return name and { kind = "macro", id = name } or nil
     end

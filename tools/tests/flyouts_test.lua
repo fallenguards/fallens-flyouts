@@ -1719,6 +1719,94 @@ stack("OwnBarButton3", 501)
 check(opener("3") ~= nil and way("3") == "LEFT", "the key is found, and the flyout grows left, away from the edge")
 barWorld = function() return "game" end
 
+print("macros of one name are told apart by their text")
+do
+    login("Player-1-0000000J")
+    -- his own macros (2026-11-21): every one named with a single space, two of them with one icon
+    W.macros, W.shared = {}, {}
+    CreateMacro(" ", 134400, "/cast Lesser Heal(Rank 3)")
+    CreateMacro(" ", 135913, "#showtooltip greater heal(rank 2)")
+    CreateMacro(" ", 135913, "#showtooltip greater heal(rank 1)")
+    CreateMacro("Solo", 136243, "/cast Something")
+    local RANK2, RANK1 = "#showtooltip greater heal(rank 2)", "#showtooltip greater heal(rank 1)"
+    -- a macro onto a bar slot, and onto the plus of a button, as a drag puts it
+    local function put(place, slot)
+        PickupMacro(place)
+        PlaceAction(slot)
+        ClearCursor()
+        flushAll()
+    end
+    local function drop(place, host)
+        PickupMacro(place)
+        local tab = tabOf(host)
+        tab.scripts.OnReceiveDrag(tab)
+        ClearCursor()
+        flushAll()
+    end
+    local function runs(unit, i) return entry(unit.index, i).attrs.macro end
+
+    put(2, 8)
+    local kind, place, sub = GetActionInfo(8)
+    check(kind == "macro" and place == 2 and sub == "" and GetActionText(8) == " ",
+        "the game names a macro on a slot by its place in the list, as seen on his client")
+    drop(3, "ActionButton8")
+    local flyout, unit = NS.Flyouts.At("ActionButton8")
+    check(flyout ~= nil and #flyout.entries == 2 and flyout.entries[1].text == RANK2 and flyout.entries[2].text == RANK1,
+        "a macro dropped on one of the same name goes into its flyout: each is known by its text")
+    check(unit ~= nil and entry(unit.index, 1).attrs.type == "macro" and runs(unit, 1) == 2 and runs(unit, 2) == 3,
+        "each icon runs its own macro, by its place in the list while others share its name")
+    check(entry(unit.index, 1).icon.texture == 135913 and NS.Flyouts.Icon(flyout.entries[2]) == 135913,
+        "and wears its own macro's icon")
+    check(NS.Flyouts.Name(flyout.entries[1]) == "greater heal(rank 2)" and NS.Flyouts.Name(flyout.entries[2]) == "greater heal(rank 1)",
+        "a macro with a blank name is named by what its text asks for")
+    local said = #W.errors
+    drop(3, "ActionButton8")
+    flyout = NS.Flyouts.At("ActionButton8")
+    check(#flyout.entries == 2 and #W.errors == said + 1 and W.errors[#W.errors] == "That is in the flyout already.",
+        "the same macro a second time is refused as before")
+    drop(1, "ActionButton8")
+    flyout, unit = NS.Flyouts.At("ActionButton8")
+    check(#flyout.entries == 3 and runs(unit, 3) == 1, "a third of that name with a text of its own goes in too")
+
+    -- the flyout goes with its lead, not with any macro of that name
+    put(3, 9)
+    W.placed[8] = false
+    fire("ACTIONBAR_SLOT_CHANGED", 8)
+    put(2, 7)
+    for _ = 1, 3 do flushAll() end
+    check(NS.Flyouts.At("ActionButton7") == flyout and NS.Flyouts.At("ActionButton9") == nil,
+        "moved to another button, the flyout follows the macro that leads it, not the other one of its name")
+
+    -- the macro's text is changed in the macro window
+    W.shared[1][3] = RANK2 .. "\n/cast Greater Heal(Rank 2)"
+    fire("UPDATE_MACROS")
+    flushAll()
+    flyout, unit = NS.Flyouts.At("ActionButton7")
+    check(flyout ~= nil and flyout.main.text == W.shared[1][3] and flyout.entries[1].text == W.shared[1][3] and runs(unit, 1) == 2,
+        "its text changed, the flyout still knows it and stays on its button")
+
+    -- a macro above them is deleted and the places shift
+    DeleteMacro(1)
+    flushAll()
+    flyout, unit = NS.Flyouts.At("ActionButton7")
+    check(flyout ~= nil and #flyout.entries == 3 and runs(unit, 1) == 1 and runs(unit, 2) == 2,
+        "a macro above them deleted, each icon still runs its own macro at its new place")
+    check(NS.Macros.Find(flyout.entries[3]) == false, "and the icon of the deleted macro stands for none")
+
+    -- a name of its own is kept as what the button runs: it stays right whatever shifts
+    drop(3, "ActionButton7")
+    flyout, unit = NS.Flyouts.At("ActionButton7")
+    check(#flyout.entries == 4 and flyout.entries[4].id == "Solo" and runs(unit, 4) == "Solo",
+        "a macro with a name of its own is run by its name")
+    -- an older save knows a macro by its name alone
+    local old = { kind = "macro", id = "Solo" }
+    check(NS.Macros.Find(old) == 3 and NS.Macros.Same(old, flyout.entries[4]),
+        "a macro saved by an older version, with no text, is still found by its name")
+
+    W.macros, W.shared, W.macroCount = nil, nil, nil
+    W.placed[7], W.placed[8], W.placed[9] = nil, nil, nil
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")

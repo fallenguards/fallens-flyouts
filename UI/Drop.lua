@@ -35,6 +35,9 @@ function D.Carried()
     elseif kind == "item" then
         id = a
     elseif kind == "macro" then
+        -- by its place in the macro list, so its text is known with its name
+        local entry = ns.Macros.Entry(a)
+        if entry then return entry end
         id = (GetMacroInfo(a))
     end
     if id then return { kind = kind, id = id } end

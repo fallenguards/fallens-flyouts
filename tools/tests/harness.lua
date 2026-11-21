@@ -338,9 +338,37 @@ local function flushAll()
     end
     error("timers never ran dry")
 end
+-- The macro list as the game keeps it: by place, in name order, names shared freely. W.macros: name to
+-- icon and text, for macros with a name of their own; W.shared: more macros, each { name, icon, text },
+-- which may share a name. With neither set, any macro asked for by name exists.
+local function macroList()
+    local out = {}
+    for name, m in pairs(W.macros or {}) do out[#out + 1] = { name = name, icon = m[1], body = m[2], own = m, order = 0 } end
+    for i, m in ipairs(W.shared or {}) do out[#out + 1] = { name = m[1], icon = m[2], body = m[3], own = m, order = i } end
+    table.sort(out, function(a, b)
+        if a.name ~= b.name then return a.name < b.name end
+        return a.order < b.order
+    end)
+    return out
+end
+local function macroAt(x)
+    local list = macroList()
+    if type(x) == "number" then return list[x], x end
+    for i, m in ipairs(list) do
+        if m.name == x then return m, i end
+    end
+end
+local function macroPlace(own)
+    for i, m in ipairs(macroList()) do
+        if m.own == own then return i end
+    end
+end
 function GetCursorInfo()
     local c = W.cursor
-    if c then return c[1], c[2], c[3], c[4], c[5] end
+    if not c then return end
+    -- a carried macro is known by its place in the list
+    if c[1] == "macro" and c.own then return "macro", macroPlace(c.own) end
+    return c[1], c[2], c[3], c[4], c[5]
 end
 function ClearCursor()
     W.cursor = nil
@@ -425,7 +453,12 @@ function HasAction(slot)
 end
 function GetActionInfo(slot)
     local placed = W.placed and W.placed[slot]
-    if type(placed) == "table" then return placed[1], 1, placed[1] end
+    -- a macro: its place in the list, and no word on what it stands for (seen on Forever: "macro", 6, "")
+    if type(placed) == "table" then
+        local place = placed.own and macroPlace(placed.own)
+        if not place and (W.macros or W.shared) then place = select(2, macroAt(placed[2])) end
+        return placed[1], place or 1, ""
+    end
     if placed then return "spell", placed, "spell" end
     if placed == false or not HasAction(slot) then return nil end
     return "spell", 100 + own(slot) + (char.shift or 0), "spell"
@@ -437,13 +470,14 @@ function PlaceAction(slot)
     local kind, had = GetActionInfo(slot)
     local name = GetActionText(slot)
     W.placed = W.placed or {}
+    local was = W.placed[slot]
     if carried[1] == "macro" then
-        W.placed[slot] = { "macro", carried[2] }
+        W.placed[slot] = { "macro", carried[2], own = carried.own }
     else
         W.placed[slot] = carried[4]
     end
     if kind == "macro" then
-        W.cursor = { "macro", name }
+        W.cursor = { "macro", name, own = type(was) == "table" and was.own or nil }
     else
         W.cursor = had and { "spell", 7, "spell", had, had } or nil
     end
@@ -460,27 +494,66 @@ function hooksecurefunc(holder, name, after)
         return table.unpack(out)
     end
 end
+-- a slot's icon: a macro's own, a spell's
+function GetActionTexture(slot)
+    local placed = W.placed and W.placed[slot]
+    if type(placed) == "table" then
+        local place = placed.own and macroPlace(placed.own)
+        local m = macroAt(place or placed[2])
+        return m and m.icon or 1234
+    end
+    local kind, id = GetActionInfo(slot)
+    if kind == "spell" then return id end
+end
 -- a macro on a slot is known to the bars by its name
 function GetActionText(slot)
     local placed = W.placed and W.placed[slot]
     return type(placed) == "table" and placed[2] or nil
 end
--- W.macros: the macro list, name to icon and text; with none set, any macro there is asked for exists
+-- a macro by its place in the list or by its name (the first of that name)
 function GetMacroInfo(x)
-    if W.macros then
-        local macro = W.macros[x]
-        if macro then return x, macro[1], macro[2] end
+    if W.macros or W.shared then
+        local m = macroAt(x)
+        if m then return m.name, m.icon, m.body end
         return nil
     end
     return "Macro" .. tostring(x), 1234
+end
+function GetNumMacros()
+    if W.macros or W.shared then return #macroList(), 0 end
+    return 0, 0
 end
 function CreateMacro(name, icon, body)
     assert(not W.combat, "CreateMacro in a fight")
     if W.macroFull then error("the macro list is full") end
     W.macros = W.macros or {}
-    W.macros[name] = { icon, body }
+    local own = { icon, body }
+    if W.macros[name] or macroAt(name) then
+        -- a second macro of a name: the game makes it all the same
+        W.shared = W.shared or {}
+        own = { name, icon, body }
+        W.shared[#W.shared + 1] = own
+    else
+        W.macros[name] = own
+    end
     W.macroCount = (W.macroCount or 0) + 1
-    return W.macroCount
+    fire("UPDATE_MACROS")
+    return macroPlace(own)
+end
+function DeleteMacro(x)
+    local m = macroAt(x)
+    if not m then return end
+    if W.macros and W.macros[m.name] == m.own then
+        W.macros[m.name] = nil
+    else
+        for i, own in ipairs(W.shared or {}) do
+            if own == m.own then
+                table.remove(W.shared, i)
+                break
+            end
+        end
+    end
+    fire("UPDATE_MACROS")
 end
 function UnitLevel() return W.level or 10 end
 -- W.bags: the items in the bags, one stack each; W.items: what the game knows of an item
@@ -554,7 +627,6 @@ SettingsPanel = { Container = { SettingsList = {} } }
 SmartNavigation = { UpdateParent = function(_, frame) W.cursorRead = frame end }
 function SmartNavigation_MarkFrameIgnored(frame) frame.smartNavigationIgnored = true end
 function SmartNavigation_ClearIgnoreStatus(frame) frame.smartNavigationIgnored = nil end
-function GetNumMacros() return 0, 0 end
 -- picking up: the bars' lock, the pick up key, and what lands on the cursor
 Settings = { GetValue = function(name) return name == "lockActionBars" and W.locked == true end }
 function IsModifiedClick(what) return what == "PICKUPACTION" and W.shift == true end
@@ -567,8 +639,9 @@ function C_Item.PickupItem(id)
     W.cursor = { "item", id }
     fire("ACTIONBAR_SHOWGRID")
 end
-function PickupMacro(name)
-    W.cursor = { "macro", name }
+function PickupMacro(x)
+    local m = (W.macros or W.shared) and macroAt(x) or nil
+    W.cursor = { "macro", m and m.name or x, own = m and m.own or nil }
     fire("ACTIONBAR_SHOWGRID")
 end
 C_CVar = { GetCVar = function() return "1" end }

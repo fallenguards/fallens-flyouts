@@ -1,14 +1,14 @@
 local _, ns = ...
 -- luacheck: read globals UIParent CreateFrame GetTime InCombatLockdown C_Timer C_Spell C_Item GetMacroInfo
 -- luacheck: read globals SetOverrideBindingClick ClearOverrideBindings GameTooltip C_GamePad GetBindingText
--- luacheck: read globals issecretvalue C_CVar C_Container GetMacroSpell IsUsableItem geterrorhandler
+-- luacheck: read globals issecretvalue C_CVar C_Container GetMacroSpell GetMacroItem IsUsableItem geterrorhandler
 -- luacheck: read globals Settings IsModifiedClick GetModifiedClick PickupSpell PickupItem PickupMacro
 -- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding ACTIONBAR_HOTKEY_FONT_COLOR
 
 -- Flyouts on bar buttons. One secure root owns every key.
 local F = {}
 ns.Flyouts = F
-local P, Bars, Art, Binds = ns.Profiles, ns.Bars, ns.Art, ns.Binds
+local P, Bars, Art, Binds, Macros = ns.Profiles, ns.Bars, ns.Art, ns.Binds, ns.Macros
 
 local MAX = 6
 local KEYS = { "1", "2", "3", "4", "5", "6" }
@@ -209,9 +209,13 @@ end
 -- fn(what, ...) as flyouts are built, laid out, opened and shut
 function F.Watch(fn) watchers[#watchers + 1] = fn end
 
+-- two entries are one thing; macros of one name are told apart by their text
 local function Same(a, b)
-    return a ~= nil and b ~= nil and a.kind == b.kind and a.id == b.id
+    if a == nil or b == nil or a.kind ~= b.kind or a.id ~= b.id then return false end
+    return a.kind ~= "macro" or Macros.Same(a, b)
 end
+-- an entry of its own for a flyout to keep
+local function Copy(entry) return { kind = entry.kind, id = entry.id, text = entry.text } end
 
 -- whether taking entry i off leaves only the button's own ability, or nothing
 function F.Ends(flyout, i)
@@ -227,7 +231,7 @@ end
 function F.Icon(entry)
     if entry.kind == "spell" then return (C_Spell.GetSpellTexture(entry.id)) end
     if entry.kind == "item" then return C_Item.GetItemIconByID(entry.id) end
-    local _, icon = GetMacroInfo(entry.id)
+    local _, icon = GetMacroInfo(Macros.Ref(entry))
     return icon
 end
 
@@ -259,7 +263,18 @@ local function EntryTip(self)
     elseif entry.kind == "item" then
         GameTooltip:SetItemByID(entry.id)
     else
-        GameTooltip:SetText(tostring(entry.id))
+        -- as a bar button shows a macro: the spell or the item it stands for just now, else its name
+        local ref = Macros.Ref(entry)
+        local spell = GetMacroSpell and GetMacroSpell(ref)
+        local link
+        if not spell and GetMacroItem then link = select(2, GetMacroItem(ref)) end
+        if spell and not (issecretvalue and issecretvalue(spell)) then
+            GameTooltip:SetSpellByID(spell, false, true)
+        elseif type(link) == "string" and not (issecretvalue and issecretvalue(link)) then
+            GameTooltip:SetHyperlink(link)
+        else
+            GameTooltip:SetText(Macros.Name(entry) or tostring(entry.id))
+        end
     end
     -- says so beforehand when the flyout would go with it
     if not InCombatLockdown() then
@@ -294,6 +309,8 @@ local function Name(entry)
         name = C_Spell.GetSpellName and C_Spell.GetSpellName(entry.id)
     elseif entry.kind == "item" then
         name = C_Item.GetItemNameByID and C_Item.GetItemNameByID(entry.id)
+    elseif entry.kind == "macro" then
+        name = Macros.Name(entry)
     end
     if issecretvalue and issecretvalue(name) then return TEXT.it end
     if type(name) == "string" and name ~= "" then return name end
@@ -320,7 +337,7 @@ local function Pickup(entry)
     elseif entry.kind == "item" then
         (C_Item.PickupItem or PickupItem)(entry.id)
     else
-        PickupMacro(entry.id)
+        PickupMacro(Macros.Ref(entry))
     end
 end
 
@@ -358,7 +375,7 @@ local function Hidden(v) return issecretvalue ~= nil and issecretvalue(v) end
 -- what an entry casts, for its cooldown and its dimming: a macro's spell
 local function Casts(entry)
     if entry.kind ~= "macro" then return entry.kind, entry.id end
-    local spell = GetMacroSpell and GetMacroSpell(entry.id)
+    local spell = GetMacroSpell and GetMacroSpell(Macros.Ref(entry))
     if Hidden(spell) or not spell then return nil end
     return "spell", spell
 end
@@ -878,7 +895,13 @@ local function Lay(unit)
         frame:SetAttribute("item", nil)
         frame:SetAttribute("macro", nil)
         if entry then
-            frame:SetAttribute(entry.kind, entry.kind == "item" and ("item:" .. entry.id) or entry.id)
+            local casts = entry.id
+            if entry.kind == "item" then
+                casts = "item:" .. entry.id
+            elseif entry.kind == "macro" then
+                casts = Macros.Run(entry)
+            end
+            frame:SetAttribute(entry.kind, casts)
             frame.icon:SetTexture(F.Icon(entry))
         end
         frame:SetShown(entry ~= nil)
@@ -1149,6 +1172,8 @@ function F.Apply()
         return false
     end
     pending = nil
+    -- the macro list is read afresh for every laying out
+    Macros.Changed()
     Build()
     for _, unit in ipairs(units) do unit.menu:Hide() end
     root:SetAttribute("open", nil)
@@ -1312,7 +1337,7 @@ local function Adopt()
     for _, flyout in ipairs(list or {}) do
         local held, first = Bars.Named(flyout.host), flyout.entries[1]
         if not flyout.main and held and first and Bars.Holds(held, first) then
-            flyout.main = { kind = first.kind, id = first.id }
+            flyout.main = Copy(first)
         end
     end
 end
@@ -1489,11 +1514,11 @@ function F.Stack(button, entry)
         Run(flyout).lost = nil
     else
         if Same(main, entry) then return nil, TEXT.twice end
-        flyout = { host = name, main = main, entries = { { kind = main.kind, id = main.id } } }
+        flyout = { host = name, main = main, entries = { Copy(main) } }
         list[#list + 1] = flyout
     end
     local full = Full(flyout)
-    full[#full + 1] = { kind = entry.kind, id = entry.id }
+    full[#full + 1] = Copy(entry)
     F.Apply()
     return flyout
 end
@@ -1512,11 +1537,10 @@ function F.StackLed(main, entry, button)
         if not Has(flyout, entry) then
             local full = Full(flyout)
             if #full >= MAX then return nil, TEXT.full end
-            full[#full + 1] = { kind = entry.kind, id = entry.id }
+            full[#full + 1] = Copy(entry)
         end
     else
-        flyout = { host = name or "", main = { kind = main.kind, id = main.id },
-            entries = { { kind = main.kind, id = main.id }, { kind = entry.kind, id = entry.id } } }
+        flyout = { host = name or "", main = Copy(main), entries = { Copy(main), Copy(entry) } }
         list[#list + 1] = flyout
     end
     if name then
@@ -1648,8 +1672,60 @@ function FallensFlyouts_Layers(provider)
     FallensFlyouts_LayersChanged()
 end
 
+-- A macro's text was changed in the macro window: an entry that knew it by its old text learns the new
+-- one. Told from the macro list before and after: of one name, one text gone and one come.
+local macrosBefore
+local function MacroTexts()
+    local out = {}
+    for _, m in ipairs(Macros.List()) do
+        if m.text then
+            local texts = out[m.name] or {}
+            out[m.name] = texts
+            texts[m.text] = (texts[m.text] or 0) + 1
+        end
+    end
+    return out
+end
+local function Retext(name, gone, come)
+    local function Mend(entry)
+        if entry and entry.kind == "macro" and entry.id == name and entry.text == gone then entry.text = come end
+    end
+    for _, flyout in ipairs(list or {}) do
+        Mend(flyout.main)
+        for _, entry in ipairs(flyout.entries or {}) do Mend(entry) end
+        for _, entry in ipairs(flyout.all or {}) do Mend(entry) end
+    end
+end
+local function MacrosChanged()
+    Macros.Changed()
+    local now = MacroTexts()
+    for name, texts in pairs(macrosBefore or {}) do
+        local new = now[name] or {}
+        local gone, come
+        local lost, gained = 0, 0
+        for text, count in pairs(texts) do
+            local fewer = count - (new[text] or 0)
+            if fewer > 0 then gone, lost = text, lost + fewer end
+        end
+        for text, count in pairs(new) do
+            local more = count - (texts[text] or 0)
+            if more > 0 then come, gained = text, gained + more end
+        end
+        if lost == 1 and gained == 1 then Retext(name, gone, come) end
+    end
+    macrosBefore = now
+    if not ready then return end
+    -- places in the list shift with a change: flyouts that hold a macro are laid out again
+    for _, flyout in ipairs(list or {}) do
+        local holds = flyout.main ~= nil and flyout.main.kind == "macro"
+        for _, entry in ipairs(Full(flyout)) do holds = holds or entry.kind == "macro" end
+        if holds then return F.Apply() end
+    end
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+events:RegisterEvent("UPDATE_MACROS")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -1677,7 +1753,10 @@ events:SetScript("OnEvent", function(_, event, on)
         -- and the last moment a flyout can be laid for where its bar is now
         F.Follow()
     elseif event == "PLAYER_ENTERING_WORLD" then
+        macrosBefore = macrosBefore or MacroTexts()
         F.Follow()
+    elseif event == "UPDATE_MACROS" then
+        MacrosChanged()
     elseif event == "PLAYER_LOGOUT" then
         -- what is saved is the whole of each flyout
         Whole(list)
