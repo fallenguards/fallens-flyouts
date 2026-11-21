@@ -422,6 +422,8 @@ end
 DONE = "Done"
 -- the game's Quick Keybind Mode, and the modifiers held
 function KeybindFrames_InQuickKeybindMode() return W.quick == true end
+-- its window takes every key in that mode; a key that only goes with another is no binding
+function IsKeyPressIgnoredForBinding(key) return key == "LSHIFT" or key == "RSHIFT" or key == "LCTRL" end
 function IsShiftKeyDown() return W.shiftKey == true end
 function IsControlKeyDown() return W.ctrlKey == true end
 function IsAltKeyDown() return W.altKey == true end
@@ -457,6 +459,9 @@ local function boot(alone)
     wantReload = false
     SlashCmdList = {}
     UIParent = CreateFrame("Frame", "UIParent")
+    -- the game's Quick Keybind window: it has its own handlers for every key
+    local quickFrame = CreateFrame("Button", "QuickKeybindFrame", UIParent)
+    quickFrame.scripts.OnKeyDown, quickFrame.scripts.OnGamePadButtonDown = noop, noop
     UIParent.w, UIParent.h = 1920, 1080
     local kind = barWorld()
     local other = kind ~= "game"

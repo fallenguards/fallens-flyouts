@@ -241,36 +241,55 @@ mouse(host)
 NS.Flyouts.SetKey(mine, 3, nil)
 check(mine.entries[3].key == nil, "and its own key can be given back")
 
-print("setting keys by hovering, in the game's Quick Keybind Mode and from the settings")
+print("setting keys by hovering: in the game's Quick Keybind Mode")
 local top = entry(one, 4)
+local quick = QuickKeybindFrame
 mouse(host)
 -- the icon window's search box had the focus last
 W.focus = nil
 top.scripts.OnEnter(top)
-check(W.focus == nil, "out of that mode a hover only shows the tooltip")
+quick.scripts.OnKeyDown(quick, "R")
+check(W.focus == nil and mine.entries[4].key == nil, "out of that mode a hover only shows the tooltip, and a key sets nothing")
 W.quick = true
 top.scripts.OnEnter(top)
-check(W.focus ~= nil, "in Quick Keybind Mode a hover on an icon waits for a key")
-W.focus.scripts.OnKeyDown(W.focus, "LSHIFT")
+check(W.focus == nil, "in that mode no typing box takes the keyboard: the game's own window has it")
+quick.scripts.OnKeyDown(quick, "LSHIFT")
 check(mine.entries[4].key == nil, "a modifier alone sets nothing")
 W.shiftKey = true
-W.focus.scripts.OnKeyDown(W.focus, "R")
+quick.scripts.OnKeyDown(quick, "R")
 W.shiftKey = nil
-check(mine.entries[4].key == "SHIFT-R" and label(4) == "s-R", "the key pressed, with its modifier, becomes that icon's")
+check(mine.entries[4].key == "SHIFT-R" and label(4) == "s-R", "a key the game's window is given becomes the hovered icon's, with its modifier")
 check(W.base["SHIFT-R"] == nil and GetBindingAction("SHIFT-R", false) == "", "and the game's own bindings stay as they were")
 top.scripts.OnEnter(top)
-W.focus.scripts.OnGamePadButtonDown(W.focus, "PADRSHOULDER")
+quick.scripts.OnGamePadButtonDown(quick, "PADRSHOULDER")
 check(mine.entries[4].pad == "PADRSHOULDER", "a pad button pressed there becomes its pad button")
 top.scripts.OnEnter(top)
-W.focus.scripts.OnEscapePressed(W.focus)
-check(mine.entries[4].key == nil and mine.entries[4].pad == nil, "Escape over the icon gives it its own back")
+quick.scripts.OnKeyDown(quick, "BACKSPACE")
+check(mine.entries[4].key == nil and mine.entries[4].pad == nil, "Backspace over the icon gives it its own back")
 top.scripts.OnLeave(top)
-check(W.focus == nil, "leaving the icon stops the wait")
+quick.scripts.OnKeyDown(quick, "T")
+check(mine.entries[4].key == nil, "off the icon a key sets nothing")
 W.quick = false
+
+print("setting keys by hovering: from Set Keys in the settings")
 page.keys.scripts.OnClick(page.keys)
-check(W.popup ~= nil and W.popup.which == "FALLENSFLYOUTS_KEYS" and NS.Keys.On(), "Set Keys in the settings starts the same mode")
+check(W.popup ~= nil and W.popup.which == "FALLENSFLYOUTS_KEYS" and NS.Keys.On(), "Set Keys starts the mode")
+top.scripts.OnEnter(top)
+check(W.focus ~= nil, "a hover on an icon waits for a key in a typing box")
+W.focus.scripts.OnKeyDown(W.focus, "T")
+check(mine.entries[4].key == "T", "the key pressed becomes that icon's")
+top.scripts.OnEnter(top)
+W.clock = W.clock + 1
+W.focus.scripts.OnChar(W.focus, "g")
+check(mine.entries[4].key == "G", "a client that hands the box only the character typed: that names the key")
+top.scripts.OnEnter(top)
+W.focus.scripts.OnKeyDown(W.focus, "DELETE")
+check(mine.entries[4].key == nil, "Delete gives it its own back there too")
+top.scripts.OnEnter(top)
+W.focus.scripts.OnEscapePressed(W.focus)
+check(W.focus == nil, "Escape lets go of the keyboard")
 StaticPopup_Hide("FALLENSFLYOUTS_KEYS")
-check(not NS.Keys.On(), "and Done ends it")
+check(not NS.Keys.On(), "and Done ends the mode")
 if menu:IsShown() then mouse(host) end
 
 W.cursor = { "spell", 7, "spell", 501, 501 }

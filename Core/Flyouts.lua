@@ -938,6 +938,8 @@ function F.Open() return open end
 function F.Lost(flyout) return Run(flyout).lost == true end
 function F.UnitOf(flyout) return Run(flyout).unit end
 function F.Pause(on) paused = on end
+-- whether a controller is the input in use right now
+function F.PadInUse() return Pad() ~= nil end
 function F.Wrapped(name) return wrapped[name] == true end
 
 -- flyout size against the game's own (1), kept with the profile

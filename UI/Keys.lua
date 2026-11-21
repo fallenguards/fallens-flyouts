@@ -1,8 +1,8 @@
 local _, ns = ...
 -- luacheck: globals StaticPopupDialogs
 -- luacheck: read globals UIParent CreateFrame InCombatLockdown KeybindFrames_InQuickKeybindMode GameTooltip
--- luacheck: read globals CreateKeyChordStringUsingMetaKeyState IsAltKeyDown IsControlKeyDown IsShiftKeyDown
--- luacheck: read globals StaticPopup_Show StaticPopup_Hide DONE
+-- luacheck: read globals CreateKeyChordStringUsingMetaKeyState IsKeyPressIgnoredForBinding QuickKeybindFrame
+-- luacheck: read globals IsAltKeyDown IsControlKeyDown IsShiftKeyDown StaticPopup_Show StaticPopup_Hide DONE GetTime
 
 -- An icon's own key inside its flyout: hover the icon and press the key.
 -- On in the game's Quick Keybind Mode and from the settings. Nothing here
@@ -14,21 +14,30 @@ local F = ns.Flyouts
 local POPUP = "FALLENSFLYOUTS_KEYS"
 local TEXT = {
     popup = "Open a flyout, hover an icon and press the key to pick it with. "
-        .. "Escape over an icon gives it its own key back.",
+        .. "Backspace over an icon gives it its own key back.",
     press = "Press a key to pick this with.",
-    reset = "Escape gives it its own key back.",
+    reset = "Backspace gives it its own key back.",
 }
 -- keys that only go with another key
 local ALONE = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true, LMETA = true,
     RMETA = true, UNKNOWN = true }
+-- these give an icon its place's key and pad button back
+local RESET = { BACKSPACE = true, DELETE = true }
+-- typed characters whose key has another name
+local NAMED = { [" "] = "SPACE" }
 
-local own = false
+local own, hooked = false, false
 local catcher, hovered
+local keyAt = 0
+
+local function Quick()
+    return KeybindFrames_InQuickKeybindMode ~= nil and KeybindFrames_InQuickKeybindMode() == true
+end
 
 -- whether a hover and a press set a key right now
 function K.On()
     if InCombatLockdown() then return false end
-    return own or (KeybindFrames_InQuickKeybindMode ~= nil and KeybindFrames_InQuickKeybindMode() == true)
+    return own or Quick()
 end
 
 -- the key with the modifiers held, in the game's own order
@@ -56,10 +65,12 @@ end
 -- a key or pad button pressed over the hovered icon
 function K.Pressed(key, pad)
     local frame = hovered
+    ns.Log(("keys: %s %s over %s"):format(pad and "pad button" or "key", tostring(key),
+        frame and tostring(frame:GetName()) or "nothing"))
     if not (frame and frame.flyout and K.On()) then return K.Leave() end
-    if ALONE[key] then return end
+    if ALONE[key] or (IsKeyPressIgnoredForBinding and IsKeyPressIgnoredForBinding(key)) then return end
     local flyout, i = frame.flyout, frame.entryIndex
-    if key == "ESCAPE" then
+    if RESET[key] then
         F.SetKey(flyout, i, nil, false)
         F.SetKey(flyout, i, nil, true)
     elseif pad then
@@ -69,8 +80,20 @@ function K.Pressed(key, pad)
     end
 end
 
--- Keys are read from a typing box that holds the focus while an icon is
--- hovered in this mode: focus drops by itself when the box hides.
+-- In the game's Quick Keybind Mode its own window takes every key, so the
+-- key is read off that window; its own handling of the key runs first.
+local function HookQuick()
+    if hooked or not QuickKeybindFrame then return end
+    hooked = true
+    local function Seen(_, key)
+        if hovered and Quick() then K.Pressed(key, type(key) == "string" and key:find("^PAD") ~= nil) end
+    end
+    QuickKeybindFrame:HookScript("OnKeyDown", Seen)
+    QuickKeybindFrame:HookScript("OnGamePadButtonDown", Seen)
+end
+
+-- From the settings there is no such window: keys are read from a typing
+-- box that holds the focus while an icon is hovered, and drops it on hiding.
 local function Catcher()
     if catcher then return catcher end
     catcher = CreateFrame("EditBox", nil, UIParent)
@@ -81,13 +104,16 @@ local function Catcher()
     catcher:SetAlpha(0)
     catcher:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
     catcher:SetScript("OnKeyDown", function(self, key)
+        keyAt = GetTime()
         self:SetText("")
         if key ~= "ESCAPE" then K.Pressed(key, false) end
     end)
-    catcher:SetScript("OnEscapePressed", function() K.Pressed("ESCAPE", false) end)
-    catcher:SetScript("OnTextChanged", function(self, typed)
-        if typed then self:SetText("") end
+    -- a client that gives the box only what was typed: the character names the key
+    catcher:SetScript("OnChar", function(self, char)
+        self:SetText("")
+        if GetTime() ~= keyAt then K.Pressed(NAMED[char] or char:upper(), false) end
     end)
+    catcher:SetScript("OnEscapePressed", function() K.Leave() end)
     catcher:SetScript("OnEditFocusLost", function(self) self:Hide() end)
     -- not every client has a pad
     if catcher.EnableGamePadButton then
@@ -101,9 +127,15 @@ end
 function K.Enter(frame)
     if not K.On() then return false end
     hovered = frame
-    local box = Catcher()
-    box:Show()
-    box:SetFocus()
+    if Quick() then
+        HookQuick()
+    else
+        local box = Catcher()
+        box:Show()
+        box:SetFocus()
+    end
+    ns.Log(("keys: waiting over %s, %s"):format(tostring(frame:GetName()),
+        Quick() and ("the game's mode, its window hooked: " .. tostring(hooked)) or "our own mode"))
     Tip(frame)
     return true
 end
