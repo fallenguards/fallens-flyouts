@@ -211,12 +211,12 @@ end
 -- the arrow points out when shut and back when open
 local function Arrow(unit, art)
     unit.art = art or unit.art or "arrow"
-    local turn = Art.TURN[unit.way or "UP"].arrow
+    local turn = Art.TURN[unit.side or unit.way or "UP"].arrow
     if unit.menu:IsShown() then turn = (turn + 180) % 360 end
     unit.turn = turn
     Art.Set(unit.arrow, Art.NAMES[unit.art], turn, ARROW_W, ARROW_H)
     -- the game draws it 2 closer while open; left as it is in a fight
-    local side, host = Art.SIDES[unit.way or "UP"], unit.host
+    local side, host = Art.SIDES[unit.side or unit.way or "UP"], unit.host
     if host and not InCombatLockdown() then
         local out = unit.menu:IsShown() and ARROW_OPEN or ARROW_OUT
         unit.arrow:ClearAllPoints()
@@ -751,6 +751,24 @@ function F.Put(unit, frame, out)
 end
 
 -- a unit placed, sized and turned for its bar
+-- the ways a flyout can lie along each side of its button
+local ACROSS = {
+    UP = { "LEFT", "RIGHT" }, DOWN = { "LEFT", "RIGHT" },
+    LEFT = { "UP", "DOWN" }, RIGHT = { "UP", "DOWN" },
+}
+F.ACROSS = ACROSS
+
+-- A flyout's shape: the side of its button it opens on, and the way its
+-- icons run. The player's own choice; with none, straight out the bar's way.
+function F.Shape(flyout, auto)
+    local side = flyout.side
+    if not Art.SIDES[side] then return auto, auto end
+    for _, across in ipairs(ACROSS[side]) do
+        if across == flyout.run then return side, across end
+    end
+    return side, side
+end
+
 local function Lay(unit)
     local flyout, host = unit.flyout, unit.host
     local way, runs = Bars.Way(host)
@@ -759,18 +777,20 @@ local function Lay(unit)
     -- be laid again: the way and scale last used on this button stand in.
     local last = not ready and Laid()[flyout.host]
     if last and Art.SIDES[last.way] then way, runs, scale = last.way, "as last laid", last.scale or scale end
-    local side, count = Art.SIDES[way], #flyout.entries
-    local upright = side.x == 0
+    local sideName, runName = F.Shape(flyout, way)
+    local side, along, count = Art.SIDES[sideName], Art.SIDES[runName], #flyout.entries
+    -- the strip stands or lies by the way its icons run; the grip and arrow go by the button's side
+    local upright, edge = along.x == 0, side.x == 0
     local long = Art.FIRST + count * Art.ICON + (count - 1) * Art.NEXT + Art.PAD
     local opener, menu = unit.opener, unit.menu
-    unit.way, unit.runs = way, runs
+    unit.way, unit.side, unit.barWay, unit.runs = runName, sideName, way, runs
     -- the button's child: shows and hides with its bar
     opener:SetParent(host)
     opener:SetScale(Bars.Size(host))
     opener:SetFrameStrata(host:GetFrameStrata())
     opener:SetFrameLevel(host:GetFrameLevel() + 10)
     opener:ClearAllPoints()
-    opener:SetSize(upright and GRIP_W or GRIP_H, upright and GRIP_H or GRIP_W)
+    opener:SetSize(edge and GRIP_W or GRIP_H, edge and GRIP_H or GRIP_W)
     opener:SetPoint("CENTER", host, side.to, side.x * GRIP_OUT, side.y * GRIP_OUT)
     unit.arrow:ClearAllPoints()
     unit.arrow:SetPoint(side.to, host, side.to, side.x * ARROW_OUT, side.y * ARROW_OUT)
@@ -785,9 +805,16 @@ local function Lay(unit)
     -- the bar's scale times the size picked in the settings (1 is the game's own)
     menu:SetScale(scale * F.Size())
     menu:ClearAllPoints()
-    menu:SetPoint(side.point, host, side.to, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
+    if sideName == runName then
+        menu:SetPoint(side.point, host, side.to, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
+    else
+        -- lying along the button's side: its first icon by the button, the rest running on
+        local mine, its = along.point .. side.point, along.point .. side.to
+        if edge then mine, its = side.point .. along.point, side.to .. along.point end
+        menu:SetPoint(mine, host, its, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
+    end
     menu:SetSize(upright and Art.STRIP or long, upright and long or Art.STRIP)
-    Art.LayStrip(unit.strip, menu, way)
+    Art.LayStrip(unit.strip, menu, runName)
 
     for i, frame in ipairs(unit.entries) do
         local entry = flyout.entries[i]
@@ -1303,6 +1330,28 @@ function F.SetKey(flyout, i, key, pad)
 end
 
 -- the key and pad button each icon of a flyout on the bars is picked with
+-- Gives a flyout a shape of the player's own: a side of its button, and a
+-- way to lie along it or none for straight out. No side: the bar's way
+-- again. `live`: laid again at once and left open, while it is being turned.
+function F.SetShape(flyout, side, lie, live)
+    if InCombatLockdown() then return false, TEXT.fight end
+    if not (list and flyout) or (side ~= nil and not Art.SIDES[side]) then return false end
+    flyout.side, flyout.run = side, nil
+    for _, across in ipairs(side and ACROSS[side] or {}) do
+        if across == lie then flyout.run = lie end
+    end
+    local unit = Run(flyout).unit
+    if live and unit then
+        Lay(unit)
+        return true
+    end
+    local shown = unit ~= nil and open == unit
+    F.Apply()
+    unit = Run(flyout).unit
+    if shown and unit then F.Show(unit.index) end
+    return true
+end
+
 -- A flyout made by hand can leave out the items the player has none of,
 -- and take them back when there are some again. One that fills itself does so anyway.
 function F.SetHave(flyout, on)

@@ -18,6 +18,7 @@ Core\Binds.lua
 Core\Flyouts.lua
 Core\Auto.lua
 UI\Move.lua
+UI\Turn.lua
 UI\Drop.lua
 UI\Icon.lua
 UI\Keys.lua

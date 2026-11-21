@@ -22,6 +22,8 @@ local TEXT = {
     prevTip = "The flyout before this one.",
     nextTip = "The next flyout.",
     offTip = "Takes the picked icon off the flyout.",
+    turn = "Turn",
+    turnTip = "Turns the flyout to open another way: to each side of its button, straight out or lying along it.",
     ranks = "Keep a spell's ranks in order",
     ranksTip = "Ranks of one spell in a flyout stay in rank order, Rank 1 first.",
     have = "Only show what I have",
@@ -62,6 +64,7 @@ function A.Refresh()
     w.which:SetText(flyout and TEXT.which:format(at, count, F.Name(flyout.main)) or TEXT.none)
     w.prev:SetEnabled(count > 1)
     w.next:SetEnabled(count > 1)
+    w.turn:SetEnabled(flyout ~= nil and F.UnitOf(flyout) ~= nil)
     w.off:SetEnabled(held ~= nil)
     w.ranks:SetChecked(F.Ranked())
     -- this flyout's own: one that fills itself has no need of it
@@ -169,6 +172,16 @@ function A.Ranks(on)
     A.Refresh()
 end
 
+-- the flyout shown here takes its next shape
+function A.Turn()
+    local flyout = Current()
+    if flyout and ns.Turn then
+        local ok, why = ns.Turn.Next(flyout)
+        if not ok and why then ns.Warn(why) end
+    end
+    A.Refresh()
+end
+
 -- the other check box: the flyout shown here leaves out items the player has none of
 function A.Have(on)
     local flyout = Current()
@@ -193,8 +206,11 @@ function A.Build(page, above)
     w.prev:SetPoint("TOPLEFT", w.status, "BOTTOMLEFT", 0, -GAP * 2)
     w.next = Button(TEXT.next, TEXT.nextTip, function() A.Step(1) end)
     w.next:SetPoint("LEFT", w.prev, "RIGHT", GAP / 2, 0)
+    -- for those with no mouse to pull a flyout's grip
+    w.turn = Button(TEXT.turn, TEXT.turnTip, A.Turn)
+    w.turn:SetPoint("LEFT", w.next, "RIGHT", GAP / 2, 0)
     w.which = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    w.which:SetPoint("LEFT", w.next, "RIGHT", GAP, 0)
+    w.which:SetPoint("LEFT", w.turn, "RIGHT", GAP, 0)
     w.icons = {}
     for i = 1, F.MAX do
         local button = Icon(i)

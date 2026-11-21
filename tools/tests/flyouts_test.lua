@@ -1079,6 +1079,101 @@ do
     check(NS.Flyouts.At("ActionButton8") == nil and order() == "101 501 502", "the bars are as before")
 end
 
+print("turning a flyout: pulled by its end to open another way, or to lie along its button")
+do
+    local Turn = NS.Turn
+    local flyout, unit = NS.Flyouts.At("ActionButton1")
+    -- the bar in the open, lying flat, so that every shape has room
+    local was = {}
+    local function bar(y)
+        for i = 1, 12 do
+            local button = W.frames["ActionButton" .. i]
+            was[i] = was[i] or { button.cx, button.cy }
+            button.cx, button.cy = 900 + (i - 1) * 50, y
+        end
+        NS.Flyouts.Moved()
+        NS.Flyouts.Follow()
+    end
+    bar(500)
+    local function shape(side, run)
+        for _, s in ipairs(Turn.Shapes(unit)) do
+            if s.side == side and s.run == run then return s end
+        end
+    end
+    local function pull(side, run)
+        local s = shape(side, run)
+        Turn.At(s.x, s.y)
+    end
+    check(unit.side == "UP" and unit.way == "UP" and flyout.side == nil and #Turn.Shapes(unit) == 12,
+        "left alone it opens straight out the bar's way; there are twelve shapes it could take")
+    check(Turn.Start(unit) == false, "a shut flyout is not turned")
+    tap("E")
+    local grip = Turn.Grip()
+    check(unit.menu:IsShown() and grip ~= nil and grip:IsShown() and grip.point[2] == unit.menu and grip.point[3] == "TOP",
+        "open, out of a fight, it shows a grip at its far end")
+    check(Turn.Start(unit) == true and Turn.Turning(), "the grip grabbed, a turn is under way")
+    pull("RIGHT", "RIGHT")
+    check(unit.side == "RIGHT" and unit.way == "RIGHT" and unit.menu.point[1] == "LEFT" and unit.menu.point[3] == "RIGHT"
+        and unit.menu:IsShown(), "pulled out to the right of the button, it opens to the right at once, still open")
+    check(grip.point[3] == "RIGHT" and unit.arrow.point[1] == "RIGHT", "the grip is at its new end, and the button's arrow points that way")
+    pull("UP", "RIGHT")
+    check(unit.side == "UP" and unit.way == "RIGHT" and unit.menu.point[1] == "BOTTOMLEFT" and unit.menu.point[3] == "TOPLEFT",
+        "pulled up and across, it lies as a row over the button, running right from it")
+    check(unit.arrow.point[1] == "TOP" and entry(unit.index, 2).point[1] == "LEFT",
+        "the arrow says above; the icons run along the row")
+    pull("UP", "LEFT")
+    check(unit.way == "LEFT" and unit.menu.point[1] == "BOTTOMRIGHT" and unit.menu.point[3] == "TOPRIGHT", "or running left")
+    pull("LEFT", "DOWN")
+    check(unit.side == "LEFT" and unit.way == "DOWN" and unit.menu.point[1] == "TOPRIGHT" and unit.menu.point[3] == "TOPLEFT",
+        "beside the button it lies as a column, here running down")
+    check(Turn.Stop() == true and not Turn.Turning() and flyout.side == "LEFT" and flyout.run == "DOWN" and unit.menu:IsShown(),
+        "let go, the shape is the flyout's own from then on, and it is open as it was")
+    tap("E")
+    NS.Flyouts.Moved()
+    NS.Flyouts.Follow()
+    NS.Flyouts.Apply()
+    check(unit.side == "LEFT" and unit.way == "DOWN", "laid again later, it keeps the shape")
+    tap("E")
+    Turn.Start(unit)
+    pull("UP", "UP")
+    Turn.Stop()
+    check(flyout.side == nil and flyout.run == nil and unit.side == "UP", "pulled back to where the bar would open it, it is the bar's again")
+    -- a shape that would leave the screen is not taken
+    tap("E")
+    bar(30)
+    tap("E")
+    local below = shape("DOWN", "DOWN")
+    Turn.Start(unit)
+    Turn.At(below.x, below.y)
+    check(below.fits == false and unit.side ~= "DOWN", "a shape that would run off the screen is not offered")
+    Turn.Stop()
+    NS.Flyouts.SetShape(flyout, nil)
+    -- in a fight
+    W.combat = true
+    fire("PLAYER_REGEN_DISABLED")
+    check(not grip:IsShown() and Turn.Start(unit) == false, "in a fight there is no grip and nothing turns")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    flushAll()
+    if unit.menu:IsShown() then tap("E") end
+    -- stepped through from the settings, for those with no mouse
+    bar(500)
+    NS.Arrange.Refresh()
+    local seen = {}
+    for _ = 1, 12 do
+        page.arrange.turn.scripts.OnClick(page.arrange.turn)
+        seen[unit.side .. ">" .. unit.way] = true
+    end
+    local kinds = 0
+    for _ in pairs(seen) do kinds = kinds + 1 end
+    check(kinds == 12 and flyout.side == nil, "the Turn button under Arrange steps through all twelve and comes round to the bar's own")
+    for i = 1, 12 do W.frames["ActionButton" .. i].cx, W.frames["ActionButton" .. i].cy = was[i][1], was[i][2] end
+    NS.Flyouts.SetShape(flyout, nil)
+    NS.Flyouts.Moved()
+    NS.Flyouts.Follow()
+    check(unit.side == "UP" and unit.way == "UP" and order() == "101 501 502" and opener("1") == one, "the bars are as before")
+end
+
 print("gamepad mode, binding or moving onto a taken button: swap the old one out, or add to its flyout")
 do
     local Pad = NS.PadBind
