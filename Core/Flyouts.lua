@@ -571,10 +571,18 @@ local function PadInUse()
 end
 
 -- a pad button as the game draws it for that controller, small; never words
-local function Glyph(key, style)
+local function Glyph(key, style, size)
     local text = style and _G["KEY_ABBR_" .. key .. style] or GetBindingText(key, 1)
     if type(text) ~= "string" or not (text:find("|A", 1, true) or text:find("|T", 1, true)) then return "" end
-    return (text:gsub("(|A:[^:|]+):%d+:%d+", "%1:" .. GLYPH .. ":" .. GLYPH))
+    size = size or GLYPH
+    return (text:gsub("(|A:[^:|]+):%d+:%d+", "%1:" .. size .. ":" .. size))
+end
+
+-- a pad button's symbol for the controller in hand, at a size; "" when the game has none
+function F.PadGlyph(key, size)
+    local id = C_GamePad and C_GamePad.GetActiveDeviceID and C_GamePad.GetActiveDeviceID()
+    local state = id and C_GamePad.GetDeviceMappedState and C_GamePad.GetDeviceMappedState(id)
+    return Glyph(key, state and PAD_STYLES[state.labelStyle], size)
 end
 
 -- a key as the bars write it: a number as it is, the rest shortened by the game

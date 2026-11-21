@@ -413,11 +413,41 @@ local function own(slot)
     if char.swap and slot <= 2 then return 3 - slot end
     return slot
 end
-function HasAction(slot) return (slot >= 1 and slot <= 3) or (slot >= 13 and slot <= 15) end
-function GetActionInfo(slot) return "spell", 100 + own(slot) + (char.shift or 0), "spell" end
+-- a slot holds its bar's own spell unless something was placed on it by hand (W.placed)
+function HasAction(slot)
+    local placed = W.placed and W.placed[slot]
+    if placed ~= nil then return placed ~= false end
+    return (slot >= 1 and slot <= 3) or (slot >= 13 and slot <= 15)
+end
+function GetActionInfo(slot)
+    local placed = W.placed and W.placed[slot]
+    if placed then return "spell", placed, "spell" end
+    if placed == false or not HasAction(slot) then return nil end
+    return "spell", 100 + own(slot) + (char.shift or 0), "spell"
+end
+-- the cursor's spell goes onto the slot; what the slot held comes onto the cursor
+function PlaceAction(slot)
+    local carried = W.cursor
+    if not (carried and carried[1] == "spell") then return end
+    local _, had = GetActionInfo(slot)
+    W.placed = W.placed or {}
+    W.placed[slot] = carried[4]
+    W.cursor = had and { "spell", 7, "spell", had, had } or nil
+    fire("ACTIONBAR_SLOT_CHANGED", slot)
+end
+-- a call runs after another's, as the client lets an addon listen in
+function hooksecurefunc(holder, name, after)
+    local first = holder[name]
+    holder[name] = function(...)
+        local out = { first(...) }
+        after(...)
+        return table.unpack(out)
+    end
+end
 function GetActionText() return nil end
 function GetMacroInfo(x) return "Macro" .. tostring(x), 1234 end
 C_Spell = {
+    PickupSpell = function(id) W.cursor = { "spell", 7, "spell", id, id } end,
     GetSpellTexture = function(id) return id end,
     GetSpellName = function(id) return "Spell " .. id end,
     -- a spell's own cooldown, else the global one, else none
