@@ -64,6 +64,10 @@ local SHOW = [[
 ]]
 -- openers, each key with the click name that says whether it may be held;
 -- then the open one's shut keys, then its picks (listed by Rebind)
+-- The root's attributes this reads are read by our key layers addon too, in
+-- its own snippets: open, units, opener<f>, okeys<f>, okey<f>_<i>,
+-- obtn<f>_<i>, pkeys<f>, pkey<f>_<i>, pentry<f>_<i>, ckeys, ckey<i>. Their
+-- names and meanings stay as they are (a tracked test holds them).
 local BIND = [[
     owner:ClearBindings()
     local layers = owner:GetFrameRef("layers")

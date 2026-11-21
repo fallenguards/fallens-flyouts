@@ -791,6 +791,15 @@ do
     check(opener("1") == one, "with no such addon about, the key opens its flyout as before")
     tap("E")
     check(label(1) == "1" and label(2) == "2", "and the spots have their own keys again")
+    -- The names that addon reads off our root in its own snippets. They are a promise: a change
+    -- here breaks it in a fight, where nothing can be worked out afresh.
+    local promised = W.frames.FallensFlyoutsRoot.attrs
+    local at = one .. "_1"
+    check(promised.open == one and promised.units ~= nil and promised["opener" .. one] == "FallensFlyoutsOpener" .. one
+        and promised["okeys" .. one] ~= nil and promised["okey" .. at] ~= nil and promised["obtn" .. at] ~= nil
+        and promised["pkeys" .. one] ~= nil and promised["pkey" .. at] ~= nil
+        and promised["pentry" .. at] == "FallensFlyoutsEntry" .. at and promised.ckeys ~= nil and promised.ckey1 ~= nil,
+        "the root holds what that addon reads, under the names promised to it: the open flyout, each opener with its keys and clicks, the picks, the close keys")
     tap("E")
 end
 
