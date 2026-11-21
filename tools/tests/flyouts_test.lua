@@ -704,16 +704,43 @@ do
     page:Hide()
 end
 
-print("gamepad mode, Bind to Action Bar: onto a taken button the new ability can be stacked instead")
+print("gamepad mode, Bind to Action Bar: onto a taken button, swap the old one out or add to its flyout")
 do
     local Pad = NS.PadBind
-    local HINT = "CLICK FallensFlyoutsPadBindHint:LeftButton"
-    -- The game's dialog, as its code runs it: an empty button takes the ability and the dialog shuts;
-    -- a taken one takes it too, and the dialog then holds the ability it took off, to be placed elsewhere.
+    -- the game's hint bar maker: a bar of prompts, each a button's symbol and a text
+    InputPromptLegends = { CreateInputLegend = function(parent, key)
+        local bar = CreateFrame("Frame", nil, parent)
+        bar.made, bar.laid = {}, 0
+        function bar:GetOrCreatePromptFrameUsingTemplateAndInputs(template, keys)
+            local id = template .. table.concat(keys)
+            if not self.made[id] then
+                local prompt = CreateFrame("Frame", nil, self)
+                prompt.key = keys[1]
+                function prompt:SetPromptText(text) self.label = text end
+                function prompt:EnablePrompt() self.on = true end
+                self.made[id] = prompt
+            end
+            return self.made[id]
+        end
+        function bar:ApplyDefaultPromptPositioning() self.laid = self.laid + 1 end
+        parent[key] = bar
+        return bar
+    end }
+    -- The game's dialog, as its code runs it. It takes every pad button itself: with a trigger held
+    -- the press binds onto that group's button, a bare face button binds nothing. An empty button takes
+    -- the ability and the dialog shuts; a taken one takes it too, and the dialog then holds the old one.
     local dialog = CreateFrame("Frame", "TestPadBindDialog", UIParent)
     dialog.BindingInfoFrame = CreateFrame("Frame", nil, dialog)
     dialog:Hide()
-    function dialog:EnterBindingMode() self:Show() end
+    function dialog:StartListeningForButtons()
+        self.scripts.OnGamePadButtonDown = function(me)
+            if me.heldSlot then me:PlaceOrClearHeldActionCapturedInputHandler(me.heldSlot, false, true) end
+        end
+    end
+    function dialog:EnterBindingMode()
+        self:Show()
+        self:StartListeningForButtons()
+    end
     function dialog:ExitBindingMode() self:Hide() end
     function dialog:PlaceOrClearHeldActionCapturedInputHandler(slot, _, exitOnBind)
         local _, had = GetActionInfo(slot)
@@ -728,48 +755,69 @@ do
         self.pickupFunc, self.pickupParams = C_Spell.PickupSpell, { had }
         return true
     end
+    local function press(key, slot)
+        dialog.heldSlot = slot
+        dialog.scripts.OnGamePadButtonDown(dialog, key)
+        dialog.heldSlot = nil
+    end
     local function bind(id, slot)
         dialog.pickupFunc, dialog.pickupParams = C_Spell.PickupSpell, { id }
         dialog:EnterBindingMode()
-        dialog:PlaceOrClearHeldActionCapturedInputHandler(slot, false, true)
+        press("PAD1", slot)
+    end
+    local function up()
+        local bar = Pad.Bar()
+        return bar ~= nil and bar:IsVisible()
     end
     check(Pad.Install(dialog) == true, "the addon listens in on the game's bind dialog")
     bind(701, 5)
-    local hint = W.frames.FallensFlyoutsPadBindHint
-    check((hint == nil or not hint:IsShown()) and Pad.Offer() == nil and W.placed[5] == 701,
-        "bound onto an empty button, the ability is placed and nothing is offered")
+    check(not up() and Pad.Offer() == nil and W.placed[5] == 701, "bound onto an empty button, the ability is placed and nothing is offered")
     bind(702, 2)
-    hint = W.frames.FallensFlyoutsPadBindHint
-    check(W.placed[2] == 702, "bound onto a taken button, the new ability replaces the old, as ever")
-    check(hint ~= nil and hint:IsShown() and Pad.Offer() ~= nil and GetBindingAction("PAD3", true) == HINT,
-        "and a hint offers to add it to a flyout instead, on a pad button of its own")
+    local bar, prompts = Pad.Bar()
+    check(W.placed[2] == 702, "bound onto a taken button, the new ability takes the old one's place, as ever")
+    check(up() and Pad.Offer() ~= nil and bar.laid > 0, "and a hint bar of the game's own make comes up over the dialog's")
+    check(prompts.add.key == "PAD3" and prompts.add.label == "Add to Flyout" and prompts.add.shown
+        and prompts.back.key == "PAD2" and prompts.back.label == "Swap Out" and prompts.edit.key == "PAD4",
+        "it names both ways on: X adds to a flyout, B swaps the old one out; and the game's own Y beside them")
+    press("PAD2")
     dialog:ExitBindingMode()
-    check(not hint:IsShown() and Pad.Offer() == nil and W.placed[2] == 702 and GetBindingAction("PAD3", true) ~= HINT,
-        "left alone, the replace stands; the hint and its button go with the dialog")
+    check(not up() and Pad.Offer() == nil and W.placed[2] == 702 and NS.Flyouts.At("ActionButton2") == nil,
+        "B: the game shuts its dialog, the swap stands and no flyout is made")
     bind(703, 2)
-    hint.scripts.OnClick(hint)
+    press("PAD4")
+    check(Pad.Offer() ~= nil and W.placed[2] == 703, "a button that is not ours changes nothing")
+    press("PAD3")
     local made = NS.Flyouts.At("ActionButton2")
-    check(W.placed[2] == 702 and W.cursor == nil, "the hint pressed: the old ability is back on the button, the cursor empty")
+    check(W.placed[2] == 702 and W.cursor == nil, "X: the old ability is back on the button and the cursor is empty")
     check(made ~= nil and #made.entries == 2 and made.main.id == 702 and made.entries[2].id == 703,
         "and the new one is in a flyout made on that button")
-    check(not hint:IsShown() and lastChat("Spell 703 is in the flyout of Spell 702 now") ~= nil, "chat says so, and the hint is gone")
+    check(lastChat("Spell 703 is in the flyout of Spell 702 now") ~= nil and up() and not prompts.add.shown
+        and prompts.back.label == "Done", "chat says so, and the bar now says B is Done")
     dialog:ExitBindingMode()
+    check(not up(), "the dialog shut, the bar goes with it")
     bind(704, 1)
     -- time passes: the flyout's lead is off its button for now, so the flyout has left it
     flushAll()
-    hint.scripts.OnClick(hint)
+    press("PAD3")
     flushAll()
     check(order() == "101 501 502 704" and NS.Flyouts.At("ActionButton1") ~= nil and W.placed[1] == 101,
         "onto a button that has a flyout: the new one joins it, and the lead is on its button again")
     dialog:ExitBindingMode()
-    W.combat = true
     bind(705, 3)
-    check(Pad.Offer() == nil and not hint:IsShown(), "in a fight nothing is offered")
+    local before = Pad.Offer()
+    -- X with a trigger held is a bind onto that group's X button, not our hint
+    press("PAD3", 2)
+    check(Pad.Offer() ~= nil and Pad.Offer() ~= before and Pad.Offer().slot == 2 and W.placed[3] == 705,
+        "X pressed with a trigger held binds as the game means it, and is not taken for the hint")
+    dialog:ExitBindingMode()
+    W.combat = true
+    bind(706, 3)
+    check(Pad.Offer() == nil and not up(), "in a fight nothing is offered")
     W.combat = false
     dialog:ExitBindingMode()
     -- the bars as they were for what follows
     NS.Flyouts.Remove(NS.Flyouts.At("ActionButton1"), 4)
-    NS.Flyouts.Remove(NS.Flyouts.At("ActionButton2"), 2)
+    while NS.Flyouts.At("ActionButton2") do NS.Flyouts.Remove(NS.Flyouts.At("ActionButton2"), 2) end
     W.placed = nil
     for _, slot in ipairs({ 1, 2, 3, 5 }) do fire("ACTIONBAR_SLOT_CHANGED", slot) end
     flushAll()
