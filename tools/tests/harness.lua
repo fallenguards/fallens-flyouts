@@ -483,9 +483,14 @@ C_SpellBook = {
 C_AddOns = {
     IsAddOnLoaded = function(name) return W.loaded[name] or false end,
     DoesAddOnExist = function(name) return installed[name] or false end,
-    GetAddOnEnableState = function(name) return enabled[name] and 2 or 0 end,
-    EnableAddOn = function(name) enabled[name] = true end,
-    DisableAddOn = function(name) enabled[name] = false end,
+    -- The client knows a character here by its GUID alone, as its own addon list passes it. Given
+    -- a name it reads every installed addon as on and switches nothing (his client, 2026-11-21).
+    GetAddOnEnableState = function(name, character)
+        if character ~= char.guid then return installed[name] and 2 or 0 end
+        return enabled[name] and 2 or 0
+    end,
+    EnableAddOn = function(name, character) if character == char.guid then enabled[name] = true end end,
+    DisableAddOn = function(name, character) if character == char.guid then enabled[name] = false end end,
 }
 function GetBuildInfo() return "12.0.0", "70009", "Nov 1 2026", 16001 end
 function UnitClass() return char.class, char.class end
