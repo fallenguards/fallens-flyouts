@@ -2,6 +2,9 @@
 
 ## [1.1.1] - 2026-11-21
 
+### Changed
+- Macros that cast ranks of one spell are kept in rank order in a flyout, Rank 1 first, as the spells themselves are.
+
 ### Fixed
 - Macros that share a name were taken for one and the same macro. This is common: many players name their macros with a single space to keep the name off the button. A second such macro dropped on the first was refused with "That is in the flyout already.", and a flyout could show or run the wrong one. Macros are now told apart by their text as well as their name.
 - A macro's icon in a flyout now shows the tooltip its bar button would: the spell or the item the macro stands for. It used to show only the macro's name.

@@ -510,6 +510,13 @@ function GetActionText(slot)
     local placed = W.placed and W.placed[slot]
     return type(placed) == "table" and placed[2] or nil
 end
+-- W.macroSpell: the spell the game names for a macro just now, by the macro's text; with none set, no macro
+-- stands for a spell
+function GetMacroSpell(x)
+    if not W.macroSpell then return nil end
+    local m = macroAt(x)
+    return m and W.macroSpell[m.body] or nil
+end
 -- a macro by its place in the list or by its name (the first of that name)
 function GetMacroInfo(x)
     if W.macros or W.shared then

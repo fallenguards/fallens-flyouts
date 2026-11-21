@@ -1068,14 +1068,28 @@ local function Rekey()
     end
 end
 
--- a spell's name and its rank, for telling the ranks of one spell; nil for anything else
+-- the spell a macro stands for just now, by the game's own word; nil when it names none
+function F.Stands(entry)
+    local spell = GetMacroSpell and GetMacroSpell(Macros.Ref(entry))
+    if Hidden(spell) or type(spell) ~= "number" then return nil end
+    return spell
+end
+
+-- A spell's name, its rank and its number, for telling the ranks of one spell: of a spell, and of a
+-- macro that stands for one. Nil for anything else.
 local function RankOf(entry)
-    if entry.kind ~= "spell" then return nil end
-    local name = C_Spell.GetSpellName and C_Spell.GetSpellName(entry.id)
+    local spell
+    if entry.kind == "spell" then
+        spell = entry.id
+    elseif entry.kind == "macro" then
+        spell = F.Stands(entry)
+    end
+    if not spell then return nil end
+    local name = C_Spell.GetSpellName and C_Spell.GetSpellName(spell)
     if Hidden(name) or type(name) ~= "string" or name == "" then return nil end
-    local sub = C_Spell.GetSpellSubtext and C_Spell.GetSpellSubtext(entry.id)
-    if Hidden(sub) or type(sub) ~= "string" then return name, nil end
-    return name, tonumber(sub:match("%d+"))
+    local sub = C_Spell.GetSpellSubtext and C_Spell.GetSpellSubtext(spell)
+    if Hidden(sub) or type(sub) ~= "string" then return name, nil, spell end
+    return name, tonumber(sub:match("%d+")), spell
 end
 
 -- The ranks of one spell stand in rank order, in the places they hold
@@ -1083,7 +1097,7 @@ end
 local function Order(entries)
     local groups = {}
     for place, entry in ipairs(entries) do
-        local name, rank = RankOf(entry)
+        local name, rank, spell = RankOf(entry)
         if name then
             local group = groups[name]
             if not group then
@@ -1091,7 +1105,7 @@ local function Order(entries)
                 groups[name] = group
             end
             group.places[#group.places + 1] = place
-            group.members[#group.members + 1] = { entry = entry, rank = rank, at = place }
+            group.members[#group.members + 1] = { entry = entry, rank = rank, spell = spell, at = place }
             if not rank then group.ranked = false end
         end
     end
@@ -1100,7 +1114,7 @@ local function Order(entries)
         if #group.members > 1 then
             -- by the rank the game names for each; where it names none, by the spells' own numbers
             for _, member in ipairs(group.members) do
-                member.key = member.entry.id
+                member.key = member.spell
                 if group.ranked then member.key = member.rank end
             end
             table.sort(group.members, function(a, b)

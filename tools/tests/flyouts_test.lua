@@ -1807,6 +1807,41 @@ do
     W.placed[7], W.placed[8], W.placed[9] = nil, nil, nil
 end
 
+print("macros that stand for ranks of one spell are kept in rank order, as the spells are")
+do
+    login("Player-1-0000000K")
+    W.macros, W.shared = {}, {}
+    W.ranks = W.ranks or {}
+    W.ranks[2101], W.ranks[2102], W.ranks[2103] = { "Greater Heal", 1 }, { "Greater Heal", 2 }, { "Greater Heal", 3 }
+    CreateMacro(" ", 135913, "/cast Greater Heal(Rank 3)")
+    CreateMacro(" ", 135913, "/cast Greater Heal(Rank 1)")
+    CreateMacro(" ", 135913, "/cast Greater Heal(Rank 2)")
+    W.macroSpell = { ["/cast Greater Heal(Rank 3)"] = 2103, ["/cast Greater Heal(Rank 1)"] = 2101,
+        ["/cast Greater Heal(Rank 2)"] = 2102 }
+    local function drop(place, host)
+        PickupMacro(place)
+        local tab = tabOf(host)
+        tab.scripts.OnReceiveDrag(tab)
+        ClearCursor()
+        flushAll()
+    end
+    PickupMacro(1)
+    PlaceAction(8)
+    ClearCursor()
+    flushAll()
+    drop(2, "ActionButton8")
+    drop(3, "ActionButton8")
+    local flyout, unit = NS.Flyouts.At("ActionButton8")
+    local texts = {}
+    for i, e in ipairs(flyout.entries) do texts[i] = e.text:match("Rank %d") end
+    check(table.concat(texts, ", ") == "Rank 1, Rank 2, Rank 3",
+        "the button holds the Rank 3 macro, and the flyout runs Rank 1, Rank 2, Rank 3: " .. table.concat(texts, ", "))
+    check(entry(unit.index, 1).attrs.macro == 2 and entry(unit.index, 3).attrs.macro == 1 and flyout.main.text:find("Rank 3", 1, true),
+        "each icon runs its own macro, and the button's own still leads the flyout")
+    W.macros, W.shared, W.macroCount, W.macroSpell = nil, nil, nil, nil
+    W.placed[8] = nil
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")
