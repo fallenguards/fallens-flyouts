@@ -1,0 +1,300 @@
+local _, ns = ...
+-- luacheck: globals SLASH_FALLENSFLYOUTS1 SLASH_FALLENSFLYOUTS2 SlashCmdList StaticPopupDialogs
+-- luacheck: globals FallensFlyouts_OnAddonCompartmentClick
+-- luacheck: read globals CreateFrame Settings MenuUtil StaticPopup_Show InCombatLockdown C_Timer
+-- luacheck: read globals OKAY CANCEL YES NO GameTooltip SettingsPanel SmartNavigation
+-- luacheck: read globals SmartNavigation_MarkFrameIgnored SmartNavigation_ClearIgnoreStatus
+
+-- The Profiles page in the game's options; /ff and /flyouts open it.
+local P = ns.Profiles
+local UI = {}
+ns.ProfileUI = UI
+
+local TITLE = "Fallen's Flyouts"
+local EDGE, GAP, LINE = 16, 8, 22
+-- floors: each grows to the text it holds
+local DROP_FLOOR, BUTTON_FLOOR, CHROME = 200, 70, 40
+
+local TEXT = {
+    head = "Profiles",
+    intro = "A profile is a set of flyouts. Each character uses one.",
+    own = "%s (this character)",
+    class = "%s (this class)",
+    all = "%s (every character)",
+    onlyMe = "Only this character uses it.",
+    users = "Used by %s.",
+    askNew = "Name the new profile. It starts empty.",
+    askCopy = "Name the new profile. It starts as a copy of this one.",
+    askRename = "A new name for the profile %s.",
+    askDelete = "Delete the profile %s? Characters on it go back to their own.",
+    askReset = "Remove every flyout from the profile %s?",
+    askCopyFrom = "Replace the flyouts of %s with those of %s?",
+    noOthers = "There is no other profile to copy from.",
+    fight = "The options open out of a fight.",
+}
+
+local panel, category
+
+local Warn = ns.Warn
+
+-- a name popup's box, under whichever name this client gives it
+local function Box(dialog)
+    if dialog.GetEditBox then return dialog:GetEditBox() end
+    local name = dialog.GetName and dialog:GetName()
+    return dialog.EditBox or dialog.editBox or (name and _G[name .. "EditBox"])
+end
+
+-- a refused name keeps the box open
+local function Named(dialog, data)
+    local box = Box(dialog)
+    local name, why = data.run(box and box:GetText())
+    if name then return false end
+    Warn(why)
+    return true
+end
+
+StaticPopupDialogs.FALLENSFLYOUTS_NAME = {
+    text = "%s",
+    button1 = OKAY,
+    button2 = CANCEL,
+    hasEditBox = 1,
+    maxLetters = 32,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+    OnShow = function(self, data)
+        local box = Box(self)
+        if not box then return end
+        box:SetText(data and data.start or "")
+        box:HighlightText()
+    end,
+    OnAccept = Named,
+    EditBoxOnEnterPressed = function(self, data)
+        local dialog = self:GetParent()
+        if not Named(dialog, data) then dialog:Hide() end
+    end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+}
+
+StaticPopupDialogs.FALLENSFLYOUTS_CONFIRM = {
+    text = "%s",
+    button1 = YES,
+    button2 = NO,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+    OnAccept = function(_, data)
+        local ok, why = data()
+        if ok == false then Warn(why) end
+    end,
+}
+
+local function AskName(text, start, run)
+    StaticPopup_Show("FALLENSFLYOUTS_NAME", text, nil, { start = start, run = run })
+end
+
+local function Confirm(text, run)
+    StaticPopup_Show("FALLENSFLYOUTS_CONFIRM", text, nil, run)
+end
+
+function UI.Label(entry)
+    if entry.kind == "own" then return TEXT.own:format(entry.name) end
+    if entry.kind == "class" then return TEXT.class:format(entry.name) end
+    if entry.kind == "all" then return TEXT.all:format(entry.name) end
+    return entry.name
+end
+
+local function IsOn(name) return name == P.Active() end
+
+function UI.Pick(name)
+    local ok, why = P.Use(name)
+    if not ok then Warn(why) end
+end
+
+-- the rows: every character's three, then the rest
+function UI.Fill(_, root)
+    for _, entry in ipairs(P.Names()) do
+        root:CreateRadio(UI.Label(entry), IsOn, UI.Pick, entry.name)
+    end
+end
+
+-- every made profile but the one in use
+local function Others()
+    local out = {}
+    for _, entry in ipairs(P.Names()) do
+        if entry.made and entry.name ~= P.Active() then out[#out + 1] = entry end
+    end
+    return out
+end
+
+local function CopyFromMenu(owner)
+    local others = Others()
+    if #others == 0 then return Warn(TEXT.noOthers) end
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        for _, entry in ipairs(others) do
+            root:CreateButton(UI.Label(entry), function()
+                Confirm(TEXT.askCopyFrom:format(P.Active(), entry.name), function() return P.CopyFrom(entry.name) end)
+            end)
+        end
+    end)
+end
+
+local BUTTONS = {
+    { key = "new", label = "New", tip = "A new, empty profile for this character.",
+        run = function() AskName(TEXT.askNew, "", function(text) return P.New(text, false) end) end },
+    { key = "copy", label = "Copy", tip = "A new profile that starts as a copy of this one.",
+        run = function() AskName(TEXT.askCopy, "", function(text) return P.New(text, true) end) end },
+    { key = "from", label = "Copy From", tip = "Replaces this profile's flyouts with another profile's.",
+        run = CopyFromMenu },
+    { key = "rename", label = "Rename", tip = "Renames the profile in use.",
+        run = function()
+            local old = P.Active()
+            AskName(TEXT.askRename:format(old), old, function(text) return P.Rename(old, text) end)
+        end },
+    { key = "delete", label = "Delete", tip = "Deletes the profile in use.",
+        run = function()
+            local old = P.Active()
+            Confirm(TEXT.askDelete:format(old), function() return P.Delete(old) end)
+        end },
+    { key = "reset", label = "Reset", tip = "Removes every flyout from the profile in use.",
+        run = function() Confirm(TEXT.askReset:format(P.Active()), function() return P.Reset() end) end },
+}
+
+local function ShowTip(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(self.label)
+    GameTooltip:AddLine(self.tip, 1, 1, 1, true)
+    GameTooltip:Show()
+end
+
+local function HideTip() GameTooltip:Hide() end
+
+-- wide enough for the longest row
+local function DropWidth()
+    local widest = 0
+    for _, entry in ipairs(P.Names()) do
+        panel.measure:SetText(UI.Label(entry))
+        widest = math.max(widest, panel.measure:GetStringWidth() or 0)
+    end
+    return math.max(DROP_FLOOR, widest + CHROME)
+end
+
+function UI.Refresh()
+    if not (panel and panel.built) then return end
+    local active = P.Active()
+    panel.dropdown:SetWidth(DropWidth())
+    panel.dropdown:GenerateMenu()
+    local users = P.Users(active)
+    if #users > 1 then
+        panel.users:SetText(TEXT.users:format(table.concat(users, ", ")))
+    else
+        panel.users:SetText(TEXT.onlyMe)
+    end
+    panel.rename:SetEnabled(P.Kind(active) == nil)
+    panel.delete:SetEnabled(active ~= P.Own())
+end
+
+function UI.Build()
+    if panel.built then return end
+    ns.Start()
+    local head = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    head:SetPoint("TOPLEFT", panel, "TOPLEFT", EDGE, -EDGE)
+    head:SetText(TEXT.head)
+    local intro = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    intro:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -GAP)
+    intro:SetText(TEXT.intro)
+    panel.measure = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    panel.measure:Hide()
+
+    local dropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
+    dropdown:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -GAP * 2)
+    dropdown:SetWidth(DropWidth())
+    dropdown:SetupMenu(UI.Fill)
+    panel.dropdown = dropdown
+
+    local users = panel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    users:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -GAP)
+    users:SetJustifyH("LEFT")
+    panel.users = users
+
+    local last
+    for _, spec in ipairs(BUTTONS) do
+        local button = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        button:SetText(spec.label)
+        button:SetSize(math.max(BUTTON_FLOOR, (button:GetTextWidth() or 0) + CHROME / 2), LINE)
+        if last then
+            button:SetPoint("LEFT", last, "RIGHT", GAP / 2, 0)
+        else
+            button:SetPoint("TOPLEFT", users, "BOTTOMLEFT", 0, -GAP * 2)
+        end
+        button.label, button.tip = spec.label, spec.tip
+        button:SetScript("OnClick", spec.run)
+        button:SetScript("OnEnter", ShowTip)
+        button:SetScript("OnLeave", HideTip)
+        panel[spec.key] = button
+        last = button
+    end
+    panel.built = true
+    P.OnChange(UI.Refresh)
+end
+
+function ns.OpenOptions()
+    if InCombatLockdown() then return ns.Say(TEXT.fight) end
+    if category and Settings.OpenToCategory then Settings.OpenToCategory(category:GetID()) end
+end
+
+-- With a controller, as FlickChat's page does it. The game's own rows
+-- stay under an addon's page and its cursor would stop on them: they are
+-- marked as not the cursor's while this page is up. Out of a fight only.
+local hushed = false
+local function Hush(on)
+    local list = SettingsPanel and SettingsPanel.Container and SettingsPanel.Container.SettingsList
+    if not list or not SmartNavigation_MarkFrameIgnored or not SmartNavigation_ClearIgnoreStatus then return end
+    if InCombatLockdown() then
+        -- a giving back owed is tried again until it is done
+        if not on and hushed then
+            C_Timer.After(1, function()
+                if not panel:IsVisible() then Hush(false) end
+            end)
+        end
+        return
+    end
+    if on and not hushed and not list.smartNavigationIgnored then
+        hushed = true
+        SmartNavigation_MarkFrameIgnored(list)
+    elseif not on and hushed then
+        hushed = false
+        SmartNavigation_ClearIgnoreStatus(list)
+    end
+end
+
+panel = CreateFrame("Frame")
+panel:Hide()
+panel.name = TITLE
+panel:SetScript("OnShow", function()
+    UI.Build()
+    UI.Refresh()
+    -- the cursor read the window before these buttons were built: asked again
+    C_Timer.After(0, function()
+        if not panel:IsVisible() then return end
+        Hush(true)
+        local cursor = SmartNavigation
+        if cursor and cursor.UpdateParent and not InCombatLockdown() then cursor:UpdateParent(panel) end
+    end)
+end)
+panel:SetScript("OnHide", function() Hush(false) end)
+UI.panel = panel
+
+if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
+    category = Settings.RegisterCanvasLayoutCategory(panel, TITLE)
+    Settings.RegisterAddOnCategory(category)
+end
+
+-- its row in the game's addon list at the minimap
+function FallensFlyouts_OnAddonCompartmentClick() ns.OpenOptions() end
+
+SLASH_FALLENSFLYOUTS1 = "/ff"
+SLASH_FALLENSFLYOUTS2 = "/flyouts"
+SlashCmdList.FALLENSFLYOUTS = function() ns.OpenOptions() end

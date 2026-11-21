@@ -1,0 +1,19 @@
+## Interface: 16001, 120105, 120107
+## Title: Fallen's Flyouts
+## Notes: Drag a spell onto an action bar button to stack it into your own flyout. Press the button's key, then 1, 2 or 3.
+## Author: justawower
+## Version: 1.0.0
+## IconTexture: Interface\Icons\INV_Misc_Bag_10
+## Category: Action Bars
+## AddonCompartmentFunc: FallensFlyouts_OnAddonCompartmentClick
+## SavedVariables: FallensFlyoutsDB
+## DefaultState: enabled
+
+Core\Profiles.lua
+Core\Core.lua
+Core\Bars.lua
+UI\Art.lua
+Core\Flyouts.lua
+UI\Drop.lua
+UI\Icon.lua
+Options\Profiles.lua
