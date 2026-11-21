@@ -537,6 +537,23 @@ check(Move.Moving() == nil and count(one) == 3 and W.cursor == nil and W.errors[
 tap("ESCAPE")
 W.combat, W.shift = false, false
 
+print("a flyout saved on a button that is gone, its ability on a hidden bar of the game's")
+do
+    -- as after a bar addon is taken off: the flyout was saved on one of its buttons
+    local saved = NS.Flyouts.At("ActionButton1")
+    saved.host = "GoneBarButton36"
+    W.frames.ActionButton1.shown = false
+    NS.Flyouts.Moved()
+    fire("PLAYER_ENTERING_WORLD")
+    check(saved.host == "ActionButton1", "it goes to the game's own button that holds its ability, hidden as that is")
+    check(NS.Flyouts.Lost(saved) == false, "and waits there, to show with its bar")
+    W.frames.ActionButton1.shown = true
+    NS.Flyouts.Moved()
+    fire("PLAYER_ENTERING_WORLD")
+    check(saved.host == "ActionButton1" and opener("1") == one and NS.Flyouts.At("ActionButton1") == saved,
+        "its bar shown again, it is on its button as before")
+end
+
 print("the game's key menu: a row for each flyout, and for each place of an open one")
 local Binds = NS.Binds
 do

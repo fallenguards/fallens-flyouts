@@ -234,9 +234,18 @@ function B.Used(button)
     return button:IsVisible() and slot ~= nil and HasAction(slot)
 end
 
--- the first shown button that holds an action, by name
-function B.Find(main, buttons)
+-- The first shown button that holds an action, by name. With `hidden`, and
+-- none shown, a button of the game's own bars that holds it on a hidden bar.
+function B.Find(main, buttons, hidden)
     for _, button in ipairs(buttons or B.All(true)) do
         if button:IsVisible() and B.Holds(button, main) then return button:GetName() end
     end
+    if not hidden then return nil end
+    for _, bar in ipairs(CLIENT_BARS) do
+        for i = 1, 12 do
+            local button = B.Named(bar[1] .. i)
+            if button and B.Holds(button, main) then return button:GetName() end
+        end
+    end
+    return nil
 end

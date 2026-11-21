@@ -979,7 +979,8 @@ function F.Follow()
             if search or state.sought ~= why then
                 state.sought = why
                 buttons = buttons or Bars.All(true)
-                local found = Bars.Find(main, buttons)
+                -- its saved button gone for good (a bar addon taken off): a hidden bar of the game's will do
+                local found = Bars.Find(main, buttons, held == nil)
                 if found then
                     Tell("follow", flyout, flyout.host, found)
                     flyout.host, state.lost, state.sought, change = found, nil, nil, true
