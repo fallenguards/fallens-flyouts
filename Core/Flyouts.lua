@@ -367,7 +367,7 @@ local function Sweep(cool, kind, id)
     end
 end
 
--- dimmed as a bar button: blue short of power, grey unusable
+-- dimmed as a bar button: blue short of power, gray unusable
 local function Dim(icon, kind, id)
     local usable, short = true, false
     if kind == "spell" then
@@ -806,6 +806,61 @@ local function Lay(unit)
     if ready then Laid()[flyout.host] = { way = way, scale = scale } end
 end
 
+-- where a flyout is: on the bars of gamepad mode, on any other bar, or on none (nil)
+local function Where(flyout)
+    if Run(flyout).lost then return nil end
+    local host = Bars.Named(flyout.host)
+    if not host then return nil end
+    return Bars.Pad(host) and "pad" or "bar"
+end
+
+-- The rows of one kind go to the flyouts that are `there`, each named after
+-- its ability. A row with a key set keeps its flyout, there or not: the
+-- key is never left on nothing. One with no key closes up to the top.
+local function Rows(field, pad, there)
+    local count, taken, loose = Binds.Rows(pad), {}, {}
+    for index, flyout in ipairs(list or {}) do
+        local n = flyout[field]
+        local fits = type(n) == "number" and n >= 1 and n <= count and not taken[n]
+        if fits and Binds.Keyed(n, pad) then
+            taken[n] = flyout
+        else
+            flyout[field] = nil
+            -- one that is there waits for a row: its old place first, new ones after
+            if there[flyout] then
+                loose[#loose + 1] = { flyout = flyout, was = fits and n or count + 1, index = index }
+            end
+        end
+    end
+    table.sort(loose, function(a, b)
+        if a.was ~= b.was then return a.was < b.was end
+        return a.index < b.index
+    end)
+    local n = 1
+    for _, item in ipairs(loose) do
+        while n <= count and taken[n] do n = n + 1 end
+        if n > count then break end
+        item.flyout[field], taken[n] = n, item.flyout
+    end
+    for row = 1, count do
+        local flyout = taken[row]
+        Binds.Name(row, flyout and Name(flyout.main) or nil, pad, flyout ~= nil and not there[flyout])
+    end
+end
+
+-- Each flyout's row in the game's key menu: under the action bars' heading
+-- or gamepad mode's, by where it is. One on no bar has no row.
+local function Number()
+    local bars, pads = {}, {}
+    for _, flyout in ipairs(list or {}) do
+        local where = Where(flyout)
+        if where == "bar" then bars[flyout] = true end
+        if where == "pad" then pads[flyout] = true end
+    end
+    Rows("number", false, bars)
+    Rows("pad", true, pads)
+end
+
 -- the keys that open a flyout: its bar button's, and its own row's in the key menu
 local function OpenKeys(unit)
     local keys, seen = {}, {}
@@ -813,6 +868,9 @@ local function OpenKeys(unit)
         keys[#keys + 1], seen[key] = key, true
     end
     for _, key in ipairs(Binds.Open(unit.flyout.number)) do
+        if not seen[key] then keys[#keys + 1], seen[key] = key, true end
+    end
+    for _, key in ipairs(Binds.Open(unit.flyout.pad, true)) do
         if not seen[key] then keys[#keys + 1], seen[key] = key, true end
     end
     return keys
@@ -886,6 +944,7 @@ local function Rekey()
     if Binds.State() ~= menuKeys then grown = true end
     if not grown and GetTime() < patient then return end
     local was = Signature()
+    Number()
     Rebind()
     if Signature() == was then
         idle = idle + 1
@@ -893,30 +952,6 @@ local function Rekey()
     else
         idle, patient = 0, 0
         Tell("rekey")
-    end
-end
-
--- Each flyout has a number of its own, kept for good: its row in the
--- game's key menu. The rows are named after the abilities they sit on.
-local function Number()
-    local taken = {}
-    for _, flyout in ipairs(list or {}) do
-        local n = flyout.number
-        if type(n) == "number" and n >= 1 and n <= Binds.SLOTS and not taken[n] then
-            taken[n] = flyout
-        else
-            flyout.number = nil
-        end
-    end
-    for _, flyout in ipairs(list or {}) do
-        local n = 1
-        while not flyout.number and n <= Binds.SLOTS do
-            if not taken[n] then flyout.number, taken[n] = n, flyout end
-            n = n + 1
-        end
-    end
-    for n = 1, Binds.SLOTS do
-        Binds.Name(n, taken[n] and Name(taken[n].main) or nil)
     end
 end
 
@@ -1090,7 +1125,7 @@ function F.Wrapped(name) return wrapped[name] == true end
 -- Lights the bar button of flyout number n, to show where it is; nil puts
 -- the light out. Returns the unit lit.
 local pointed
-function F.Point(n)
+function F.Point(n, pad)
     if pointed then
         pointed.ring:Hide()
         pointed.glow:SetShown(pointed.menu:IsShown() or pointed.opener:IsMouseOver())
@@ -1098,7 +1133,8 @@ function F.Point(n)
     end
     for f = 1, used do
         local unit = units[f]
-        if n and unit.flyout and unit.flyout.number == n then
+        local row = unit.flyout and unit.flyout[pad and "pad" or "number"]
+        if n and row == n then
             pointed = unit
             unit.ring:Show()
             unit.glow:Show()

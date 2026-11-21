@@ -169,6 +169,8 @@ function Frame:SetShown(v) if v then self:Show() else self:Hide() end end
 function Frame:IsShown() return self.shown end
 function Frame:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
 function Frame:GetName() return self.name end
+-- a button's number on its bar; on the bars of gamepad mode it is the button's slot
+function Frame:GetID() return self.id or 0 end
 function Frame:GetParent() return self.parent end
 function Frame:SetParent(parent) self.parent = parent end
 function Frame:IsForbidden() return false end

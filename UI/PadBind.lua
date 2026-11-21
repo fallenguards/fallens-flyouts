@@ -21,7 +21,6 @@ local F, Bars = ns.Flyouts, ns.Bars
 -- game's dialog uses the other three, in a bind or while moving abilities.
 local KEY_ADD, KEY_LEFT = GAMEPAD_FACE_BOTTOM or "PAD1", GAMEPAD_FACE_LEFT or "PAD3"
 local KEY_EDIT, KEY_BACK = GAMEPAD_FACE_TOP or "PAD4", GAMEPAD_FACE_RIGHT or "PAD2"
-local MAIN_BARS = "^GamepadMainActionBarFrame"
 local TEXT = {
     add = "Add to Flyout",
     swap = "Swap Out",
@@ -65,7 +64,7 @@ end
 local function Live(slot)
     local hidden
     for _, button in ipairs(Bars.All(true)) do
-        local its = Bars.Slot(button) == slot or (button:GetName():find(MAIN_BARS) ~= nil and button:GetID() == slot)
+        local its = Bars.Slot(button) == slot or (Bars.Pad(button) and button:GetID() == slot)
         if its then
             if button:IsVisible() then return button end
             hidden = hidden or button

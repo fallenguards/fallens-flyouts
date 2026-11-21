@@ -31,6 +31,8 @@ local OTHER_KEYS = {
 local BAR_BUTTON = 45
 -- the game's gamepad bind dialog shows copies of the console bar: no bar of anyone's
 local DIALOG_COPIES = "^GamepadActionBarEditFrame"
+-- and gamepad mode has bars of its own
+local PAD_BARS = "^GamepadMainActionBarFrame"
 
 local universe, keyMap, keyMapAt, inventory, inventoryAt
 
@@ -97,6 +99,12 @@ local function IsButton(frame)
     local name = frame:GetName()
     return frame:IsObjectType("CheckButton") and frame:IsProtected() and type(name) == "string"
         and not name:find(DIALOG_COPIES) and frame:GetAttribute("type") == "action" and B.Slot(frame) ~= nil
+end
+
+-- whether a button is on the bars of the game's gamepad mode
+function B.Pad(button)
+    local name = button and button:GetName()
+    return type(name) == "string" and name:find(PAD_BARS) ~= nil
 end
 
 -- every named action button there is

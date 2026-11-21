@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] - 2026-11-21
+
+### Changed
+- In the game's Keybindings options, the flyouts on the bars of gamepad mode have a heading and rows of their own, apart from the flyouts on your action bars.
+- A flyout whose ability is on no bar any more is no longer listed there, and the listed flyouts close up with no gaps between them. A row with a key set on it always keeps its flyout.
+
 ## [1.0.0] - 2026-11-21
 
 ### Added
