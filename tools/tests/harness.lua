@@ -463,7 +463,10 @@ local DEFINED = {}
 do
     local file = io.open("Bindings.xml")
     if file then
-        for name in file:read("a"):gmatch('<Binding name="([%w_]+)"') do DEFINED[#DEFINED + 1] = name end
+        -- a row marked hidden is a command like any other, and no row of the key menu
+        for row in file:read("a"):gmatch("<Binding [^>]+>") do
+            if not row:find('hidden="true"', 1, true) then DEFINED[#DEFINED + 1] = row:match('name="([%w_]+)"') end
+        end
         file:close()
     end
 end

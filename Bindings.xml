@@ -1,75 +1,10 @@
 <Bindings>
-	<!-- The addon's section of the game's key menu. A row only holds its keys: Core\Flyouts.lua binds
-	     them while a flyout is open. Texts and the count of rows are in Core\Binds.lua. The game
-	     lists these once, in this order: a heading and six spots for each of eight flyouts, then
-	     the twelve spots of every flyout alike. -->
+	<!-- The addon's section of the game's key menu: the keys of an open flyout's twelve spots, the same
+	     for every flyout. A row only holds its keys: Core\Flyouts.lua binds them while a flyout is open.
+	     Texts are in Core\Binds.lua. The lines of text under the rows say where a key for one icon of
+	     one flyout is set. -->
 	<Binding name="PREFACE_FALLENSFLYOUTS_HELP" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_F1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F1S1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F1S2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F1S3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F1S4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F1S5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F1S6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_F2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F2S1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F2S2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F2S3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F2S4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F2S5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F2S6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_F3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F3S1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F3S2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F3S3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F3S4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F3S5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F3S6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_F4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F4S1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F4S2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F4S3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F4S4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F4S5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F4S6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_F5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F5S1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F5S2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F5S3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F5S4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F5S5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F5S6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_F6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F6S1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F6S2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F6S3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F6S4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F6S5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F6S6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP7" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_F7" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F7S1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F7S2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F7S3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F7S4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F7S5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F7S6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP8" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_F8" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F8S1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F8S2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F8S3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F8S4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F8S5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="FALLENSFLYOUTS_F8S6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="HEADER_FALLENSFLYOUTS_GAP" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
-	<Binding name="PREFACE_FALLENSFLYOUTS_PICK" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="PREFACE_FALLENSFLYOUTS_HELP2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="FALLENSFLYOUTS_PICK1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="FALLENSFLYOUTS_PICK2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="FALLENSFLYOUTS_PICK3" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
@@ -82,4 +17,58 @@
 	<Binding name="FALLENSFLYOUTS_PICK10" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="FALLENSFLYOUTS_PICK11" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="FALLENSFLYOUTS_PICK12" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="HEADER_FALLENSFLYOUTS_GAP" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="PREFACE_FALLENSFLYOUTS_ONE" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="PREFACE_FALLENSFLYOUTS_ONE2" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<!-- The rows of versions before 1.1.4: six spots under a heading for each of eight flyouts. The game
+	     lists none of them any more (hidden). They are kept for their keys' sake: a key someone set on
+	     one is read from it and becomes its icon's own key (Core\Flyouts.lua). -->
+	<Binding name="FALLENSFLYOUTS_F1S1" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F1S2" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F1S3" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F1S4" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F1S5" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F1S6" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F2S1" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F2S2" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F2S3" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F2S4" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F2S5" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F2S6" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F3S1" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F3S2" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F3S3" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F3S4" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F3S5" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F3S6" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F4S1" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F4S2" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F4S3" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F4S4" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F4S5" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F4S6" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F5S1" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F5S2" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F5S3" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F5S4" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F5S5" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F5S6" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F6S1" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F6S2" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F6S3" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F6S4" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F6S5" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F6S6" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F7S1" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F7S2" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F7S3" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F7S4" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F7S5" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F7S6" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F8S1" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F8S2" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F8S3" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F8S4" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F8S5" hidden="true"></Binding>
+	<Binding name="FALLENSFLYOUTS_F8S6" hidden="true"></Binding>
 </Bindings>

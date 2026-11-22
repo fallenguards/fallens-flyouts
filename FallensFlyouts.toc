@@ -22,7 +22,6 @@ UI\Turn.lua
 UI\Drop.lua
 UI\Icon.lua
 UI\Keys.lua
-UI\KeyMenu.lua
 UI\PadBind.lua
 Options\Profiles.lua
 Options\Arrange.lua

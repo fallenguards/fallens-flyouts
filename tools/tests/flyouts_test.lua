@@ -762,75 +762,85 @@ do
         "its bar shown again, it is on its button as before")
 end
 
-print("the game's key menu: a heading for each flyout, a row for each of its spots")
+print("the game's key menu: a row for each of the twelve spots of every flyout, and none of any one flyout")
 local Binds = NS.Binds
 do
+    -- His words (2026-11-22), of the eight headings with six rows each that stood here: "why have empty flyouts
+    -- here? that makes no sense. can in principle make infinite num flyouts, right? this makes it seem like 8
+    -- is max." And of what stands here now: "ok do that and then a sentence at bottom or top that says \"For
+    -- flyout-specific keybindings rather than this general set, see the addon settings menu.\"??? where we
+    -- allow ppl to set specifics? or what". A key for one icon is set by a hover in the game's Quick Keybind
+    -- Mode, on the same page of the game's options: the sentence names that.
     local file = assert(io.open("Bindings.xml"))
     local xml = file:read("a")
     file:close()
-    local spotsListed, picksListed, fine = 0, 0, true
-    for name, category in xml:gmatch('<Binding name="([%w_]+)" category="([%w_]+)">') do
-        if Binds.Number(name) then
-            spotsListed = spotsListed + 1
-            fine = fine and _G["BINDING_NAME_" .. name] ~= nil
-        elseif name:find("^" .. Binds.PICK .. "%d+$") then
-            picksListed = picksListed + 1
-            fine = fine and _G["BINDING_NAME_" .. name] ~= nil
-        elseif name:find("^PREFACE_") then
-            fine = fine and type(_G[name]) == "string"
+    local listed, hidden, picks, texts, gaps, fine = 0, 0, 0, {}, 0, true
+    for row in xml:gmatch("<Binding [^>]+>") do
+        local name = row:match('name="([%w_]+)"')
+        if row:find('hidden="true"', 1, true) then
+            hidden = hidden + 1
+            fine = fine and name:find("^" .. Binds.SPOT .. "%d+S%d+$") ~= nil and not row:find("category=", 1, true)
         else
-            fine = fine and name:find("^HEADER_") ~= nil
+            listed = listed + 1
+            fine = fine and row:match('category="([%w_]+)"') == Binds.CATEGORY
+            if name:find("^" .. Binds.PICK .. "%d+$") then
+                picks = picks + 1
+                fine = fine and _G["BINDING_NAME_" .. name] == "Spot " .. name:match("%d+$") .. " of every flyout"
+            elseif name:find("^PREFACE_") then
+                texts[#texts + 1] = _G[name]
+                -- one line of the key menu is 580 wide: about 88 letters of its font
+                fine = fine and type(_G[name]) == "string" and #_G[name] <= 88
+            else
+                gaps = gaps + 1
+                fine = fine and name:find("^HEADER_") ~= nil
+            end
         end
-        fine = fine and category == Binds.CATEGORY
     end
-    check(spotsListed == Binds.SLOTS * Binds.PLACES and picksListed == Binds.PICKS and fine
+    check(picks == 12 and Binds.PICKS == 12 and #texts == 4 and gaps == 1 and listed == 17 and fine
         and _G[Binds.CATEGORY] == "Fallen's Flyouts",
-        "Bindings.xml lists every row the code reads, each with its text, under the addon's own heading")
+        "Bindings.xml lists twelve rows, one for each spot of every flyout, each with its text, under the addon's own heading")
+    check(hidden == Binds.SLOTS * Binds.PLACES and hidden == 48,
+        "the rows of before, a heading's six for each of eight flyouts, are no row of the menu any more: hidden, kept for their keys")
+    local ours, old = 0, 0
+    for i = 1, GetNumBindings() do
+        local command = GetBinding(i)
+        if command:find("^" .. Binds.PICK .. "%d+$") then ours = ours + 1 end
+        if command:find("^" .. Binds.SPOT .. "%d+S%d+$") then old = old + 1 end
+    end
+    check(ours == 12 and old == 0, ("what the game lists of ours: %d rows of every flyout, %d of any one flyout"):format(ours, old))
+    check(texts[1] == "Keys for the icons inside your flyouts, the same for every flyout."
+        and texts[2]:find("1 to 9, 0, - and =", 1, true) ~= nil,
+        "over the rows it says what they are, and what the keys are with none set: " .. tostring(texts[2]))
+    check(texts[3] == "For a key on one icon of one flyout, use Quick Keybind Mode at the top of this page:"
+        and texts[4] == "open the flyout, hover the icon and press the key.",
+        "under them it says where a key for one icon of one flyout is set: " .. tostring(texts[3]) .. " " .. tostring(texts[4]))
+    check(NS.KeyMenu == nil and NS.Flyouts.Point == nil and Binds.Head == nil and Binds.Number == nil,
+        "nothing is left of the headings: no names for them, and no hover that lit a flyout's button from its rows")
 end
 local function rebound()
     W.clock = W.clock + 10
     fire("UPDATE_BINDINGS")
     W.ticker()
 end
-local function head(n) return _G[Binds.Heading(n)] end
-local function spotName(n, i) return _G["BINDING_NAME_" .. Binds.Command(n, i)] end
-local keyed, keyedUnit = NS.Flyouts.At("ActionButton1")
+local keyed = NS.Flyouts.At("ActionButton1")
 local second2 = "CLICK FallensFlyoutsEntry" .. one .. "_2:Key"
-check(keyed.number == 1 and head(1) == "Spell 101" and spotName(1, 1) == "1: Spell 101" and spotName(1, 2) == "2: Spell 501"
-    and spotName(1, 4) == "4: (empty)" and head(2) == "Flyout 2: none yet" and spotName(2, 1) == "1: (empty)",
-    "a flyout has a heading named after its ability and a row for each icon; a spot or a heading with nothing says so")
--- a key on a spot's row picks that spot while its flyout is open
-W.base.F9 = Binds.Command(1, 2)
-rebound()
-check(opener("F9") == nil and opener("1") == one, "a key on a spot's row opens nothing: the flyout opens by its bar button's key")
-tap("E")
-check(menu:IsShown() and GetBindingAction("F9", true) == second2 and label(2) == "F9",
-    "with the flyout open, that key picks its spot, and the icon shows it")
-tap("F9")
-check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "pressed, it casts that icon and shuts the flyout")
-check(GetBindingAction("F9", true) == Binds.Command(1, 2), "shut, the key is the row's again: it does nothing")
--- the rows for the spots of every flyout
+-- a key on a row of every flyout picks that spot while a flyout is open
 W.base.T = Binds.PICK .. "2"
 W.base.PADLSHOULDER = Binds.PICK .. "2"
 rebound()
+check(opener("T") == nil and opener("1") == one, "a key on a row opens nothing: the flyout opens by its bar button's key")
 tap("E")
-check(GetBindingAction("F9", true) == second2 and GetBindingAction("T", true) ~= second2,
-    "a key set for spot 2 of every flyout stands behind this flyout's own row")
-tap("E")
-W.base.F9 = nil
-rebound()
-tap("E")
-check(GetBindingAction("T", true) == second2 and label(2) == "T",
-    "with none on the flyout's own row, the key for that spot of every flyout picks it")
+check(menu:IsShown() and GetBindingAction("T", true) == second2 and label(2) == "T",
+    "with a flyout open, the key set for spot 2 of every flyout picks its second icon, and the icon shows it")
 check(GetBindingAction("PADLSHOULDER", true) == second2, "a pad button set there picks it too")
 check(GetBindingAction("2", true) == "ACTIONBUTTON2", "and 2 is the bar's own then")
 tap("T")
 check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "pressed, it casts that icon and shuts the flyout")
-check(GetBindingAction("T", true) == Binds.PICK .. "2", "shut, that key too is its row's again")
+check(GetBindingAction("T", true) == Binds.PICK .. "2", "shut, the key is its row's again: it does nothing")
 NS.Flyouts.SetKey(keyed, 2, "Y", false)
 tap("E")
 check(GetBindingAction("Y", true) == second2 and GetBindingAction("T", true) ~= second2,
-    "an icon's own key stands before any row's")
+    "an icon's own key stands before the row's")
 tap("E")
 NS.Flyouts.SetKey(keyed, 2, nil, false)
 W.base.T, W.base.PADLSHOULDER = nil, nil
@@ -845,76 +855,35 @@ W.ticker()
 check(opener("F12") == one, "a key given to the bar button in the moment after the addon bound its own is taken up all the same")
 W.base.F12 = nil
 rebound()
--- a heading with a key under it keeps its flyout when an earlier one goes; one with none closes up
-stack("ActionButton2", 601)
-stack("ActionButton3", 602)
-local rowTwo, rowThree = NS.Flyouts.At("ActionButton2"), NS.Flyouts.At("ActionButton3")
-check(rowTwo.number == 2 and rowThree.number == 3 and head(2) == "Spell 102" and head(3) == "Spell 103"
-    and spotName(3, 2) == "2: Spell 602", "later flyouts take the next headings")
-W.base.F10 = Binds.Command(3, 1)
+-- A key set on one of the old rows, by someone on a version before 1.1.4: the flyout was saved with its
+-- heading's number, and the game's bindings still hold the key on that row's command.
+keyed.number = 1
+W.base.F9 = Binds.Command(1, 2)
+W.base.PADRSHOULDER = Binds.Command(1, 3)
+NS.Flyouts.SetKey(keyed, 1, "U", false)
+W.base.F10 = Binds.Command(1, 1)
 rebound()
-NS.Flyouts.Remove(rowTwo, 2)
-check(NS.Flyouts.At("ActionButton2") == nil and rowThree.number == 3 and head(2) == "Flyout 2: none yet" and head(3) == "Spell 103",
-    "one taken away, a flyout with a key under its heading keeps the heading and the key")
-W.base.F10 = nil
+NS.Flyouts.Apply()
+check(keyed.entries[2].key == "F9" and keyed.entries[3].pad == "PADRSHOULDER" and keyed.number == nil,
+    "a key and a pad button set on rows of before are their icons' own now, and the heading's number is gone from the flyout")
+check(keyed.entries[1].key == "U", "an icon that has a key of its own keeps it")
+check(W.base.F9 == Binds.Command(1, 2) and GetBindingAction("F9", false) == Binds.Command(1, 2),
+    "nothing of the game's bindings is rewritten: the old row still holds its key there")
+tap("E")
+check(menu:IsShown() and GetBindingAction("F9", true) == second2 and label(2) == "F9", "open, that key picks its icon as it did")
+tap("F9")
+check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "and casts it")
+-- a character of the same account on a later login: the row still holds its key, the icon has one of its own
+keyed.number = 1
+NS.Flyouts.SetKey(keyed, 2, "G", false)
+NS.Flyouts.Apply()
+check(keyed.entries[2].key == "G" and keyed.number == nil, "an icon's own key, set since, is not overwritten by the old row's")
+NS.Flyouts.SetKey(keyed, 1, nil, false)
+NS.Flyouts.SetKey(keyed, 2, nil, false)
+NS.Flyouts.SetKey(keyed, 3, nil, true)
+W.base.F9, W.base.F10, W.base.PADRSHOULDER = nil, nil, nil
 rebound()
-check(rowThree.number == 2 and head(2) == "Spell 103" and head(3) == "Flyout 3: none yet",
-    "with no key under it, it closes up: the named headings are the flyouts on the bars, with no gaps")
-
--- his list (2026-11-21): six named rows, four flyouts on his bars. One sat on a bar of gamepad
--- mode, one was a leftover whose ability was on no bar any more.
-local padBar = CreateFrame("Frame", "GamepadMainActionBarFrame", UIParent)
-actionButton("GamepadMainActionBarFrameTestActionButton1", 20, padBar).id = 20
-W.placed = W.placed or {}
-W.placed[20] = 811
-fire("ACTIONBAR_SLOT_CHANGED", 20)
-flushAll()
-stack("GamepadMainActionBarFrameTestActionButton1", 812)
-local onPad, padUnit = NS.Flyouts.At("GamepadMainActionBarFrameTestActionButton1")
-check(onPad ~= nil and onPad.number == 3 and head(3) == "Spell 811 (gamepad mode)",
-    "a flyout on a bar of gamepad mode has a heading too, and the heading says where it is")
-NS.KeyMenu.Hover(Binds.Command(3, 1))
-check(padUnit.ring.shown and not keyedUnit.ring.shown, "a hover on one of its rows lights its own button")
-NS.KeyMenu.Hover(Binds.Command(3, 2))
-check(padUnit.ring.shown, "and another row of the same flyout keeps it lit")
-NS.KeyMenu.Hover(nil)
--- the leftover: its ability taken off the bars, the flyout is on no button
-W.placed[3] = 999
-fire("ACTIONBAR_SLOT_CHANGED", 3)
-flushAll()
-check(NS.Flyouts.At("ActionButton3") == nil and NS.Flyouts.Lost(rowThree) and rowThree.number == nil
-    and head(2) == "Spell 811 (gamepad mode)" and head(3) == "Flyout 3: none yet",
-    "a flyout whose ability is on no bar has no heading in the key menu; the rest close up")
-W.placed[3] = nil
-fire("ACTIONBAR_SLOT_CHANGED", 3)
-flushAll()
-check(NS.Flyouts.At("ActionButton3") == rowThree and rowThree.number == 3 and head(3) == "Spell 103", "back on a bar, it has a heading again")
-W.base.F10 = Binds.Command(3, 2)
-rebound()
-W.placed[3] = 999
-fire("ACTIONBAR_SLOT_CHANGED", 3)
-flushAll()
-check(rowThree.number == 3 and head(3):find("Spell 103 (off your bars)", 1, true) ~= nil and head(3):find("|cff808080", 1, true) == 1
-    and spotName(3, 2) == "2: Spell 602", "with a key under its heading the heading is kept for it, grayed and marked off the bars")
-W.placed[3] = nil
-fire("ACTIONBAR_SLOT_CHANGED", 3)
-flushAll()
-W.base.F10 = nil
-rebound()
-check(rowThree.number == 3 and head(3) == "Spell 103", "and back on its bar the heading reads as before")
-NS.Flyouts.Remove(onPad, 2)
-W.placed[20] = nil
-padBar:Hide()
-NS.Flyouts.Remove(rowThree, 2)
-check(NS.Flyouts.At("ActionButton3") == nil and head(2) == "Flyout 2: none yet" and head(3) == "Flyout 3: none yet"
-    and spotName(2, 1) == "1: (empty)", "headings with no flyout left say so again, and their rows are empty")
-NS.KeyMenu.Hover(Binds.Command(1, 1))
-check(keyedUnit.ring.shown and keyedUnit.glow.shown, "a hover on a flyout's row in the key menu lights its bar button")
-NS.KeyMenu.Hover(Binds.PICK .. "1")
-check(not keyedUnit.ring.shown and not keyedUnit.glow.shown, "a hover on a row that is no one flyout's puts the light out")
-NS.KeyMenu.Hover(Binds.Command(1, 3))
-NS.KeyMenu.Hover(nil)
-check(not keyedUnit.ring.shown, "and so does leaving the rows")
+check(opener("1") == one and label(1) == "1" and label(2) == "2", "the keys given back, all is as before")
 
 print("our key layers addon: its hold keys open nothing, an open flyout's keys are the flyout's, nothing is read off the bars while one is down")
 do
@@ -1247,7 +1216,6 @@ do
     local removed, whyNot = NS.Flyouts.Remove(food, 1)
     check(removed == false and whyNot ~= nil and NS.Flyouts.Move(food, 2, 1) == false and ids(food) == "4544 4540",
         "its icons are not taken off or moved by hand")
-    check(head(food.number) == "Food" and spotName(food.number, 1) == "1: Item 4544", "its heading in the key menu is named after the kind, its rows after what is in it")
     -- a name already taken by a macro of the player's own
     W.macros.Potions = { 1, "/cast Something" }
     local _, potionName = Auto.Pick("potions")
@@ -2989,7 +2957,7 @@ do
     -- the game's key menu: a row for each of the twelve spots of every flyout
     local named = true
     for i = 1, 12 do named = named and _G["BINDING_NAME_" .. NS.Binds.PICK .. i] == "Spot " .. i .. " of every flyout" end
-    check(NS.Binds.PICKS == 12 and named and _G["PREFACE_" .. NS.Binds.PICK]:find("1 to 9, 0, - and =", 1, true) ~= nil,
+    check(NS.Binds.PICKS == 12 and named and _G.PREFACE_FALLENSFLYOUTS_HELP2:find("1 to 9, 0, - and =", 1, true) ~= nil,
         "the key menu has a row for each of the twelve spots, and says what their keys are with none set")
     -- a key set on the twelfth of those rows picks the twelfth icon
     W.base["F12"] = NS.Binds.PICK .. "12"

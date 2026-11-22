@@ -983,13 +983,7 @@ local function Picks(unit)
         if pad then taken[pad] = true end
         picks[i] = { key = key, pad = pad }
     end
-    -- then the keys set for this flyout's spots in the game's key menu
-    for i, pick in ipairs(picks) do
-        local key, pad = Binds.Spot(unit.flyout.number, i)
-        if not pick.key and key and not taken[key] then pick.key, taken[key] = key, true end
-        if not pick.pad and pad and not taken[pad] then pick.pad, taken[pad] = pad, true end
-    end
-    -- then the keys set there for the spots of every flyout
+    -- then the keys set in the game's key menu for the spots of every flyout
     for i, pick in ipairs(picks) do
         local key, pad = Binds.Pick(i)
         if not pick.key and key and not taken[key] then pick.key, taken[key] = key, true end
@@ -1310,62 +1304,24 @@ local function Lay(unit)
     if ready then Laid()[flyout.host] = { way = way, scale = scale } end
 end
 
--- where a flyout is: on the bars of gamepad mode, on any other bar, or on none (nil)
-local function Where(flyout)
-    if Run(flyout).lost then return nil end
-    local host = Bars.Named(flyout.host)
-    if not host then return nil end
-    return Bars.Pad(host) and "pad" or "bar"
-end
-
--- an icon's name for a row of the key menu: a spell's rank with it, to tell ranks apart
-local function Label(entry)
-    local name = Name(entry)
-    if entry.kind ~= "spell" or not C_Spell.GetSpellSubtext then return name end
-    local sub = C_Spell.GetSpellSubtext(entry.id)
-    if issecretvalue and issecretvalue(sub) then return name end
-    if type(sub) ~= "string" or sub == "" then return name end
-    return name .. " (" .. sub .. ")"
-end
-
--- Each flyout on the bars has a heading in the game's key menu, with a row
--- for each of its spots. A heading with a key set under it keeps its
--- flyout, on the bars or not: a key is never left on nothing. The rest
--- close up to the top, so the named headings are the flyouts on the bars.
-local function Number()
-    local count, taken, loose, there = Binds.SLOTS, {}, {}, {}
-    for index, flyout in ipairs(list or {}) do
-        there[flyout] = Where(flyout)
-        flyout.pad = nil
+-- Before 1.1.4 each flyout on the bars had a heading in the game's key menu with a row for each of six
+-- spots (flyout.number said which heading). Those rows are no longer listed. A key someone set on one
+-- becomes that icon's own key, once: it goes on working, and it can be seen and changed where an
+-- icon's own key is set, by a hover in Quick Keybind Mode. The old row keeps its key in the game's
+-- bindings: nothing of the game's is rewritten.
+local function Carry()
+    for _, flyout in ipairs(list or {}) do
         local n = flyout.number
-        local fits = type(n) == "number" and n >= 1 and n <= count and not taken[n]
-        if fits and Binds.Keyed(n) then
-            taken[n] = flyout
-        else
-            flyout.number = nil
-            -- one that is there waits for a heading: its old place first, new ones after
-            if there[flyout] then
-                loose[#loose + 1] = { flyout = flyout, was = fits and n or count + 1, index = index }
+        if n ~= nil then
+            if type(n) == "number" then
+                for i = 1, Binds.PLACES do
+                    local entry = flyout.entries[i]
+                    local key, pad = Binds.Spot(n, i)
+                    if entry and key and entry.key == nil then entry.key = key end
+                    if entry and pad and entry.pad == nil then entry.pad = pad end
+                end
             end
-        end
-    end
-    table.sort(loose, function(a, b)
-        if a.was ~= b.was then return a.was < b.was end
-        return a.index < b.index
-    end)
-    local n = 1
-    for _, item in ipairs(loose) do
-        while n <= count and taken[n] do n = n + 1 end
-        if n > count then break end
-        item.flyout.number, taken[n] = n, item.flyout
-    end
-    for row = 1, count do
-        local flyout = taken[row]
-        Binds.Head(row, flyout and Name(flyout.main) or nil, flyout ~= nil and there[flyout] == "pad",
-            flyout ~= nil and there[flyout] == nil)
-        for i = 1, Binds.PLACES do
-            local entry = flyout and flyout.entries[i]
-            Binds.Name(row, i, entry and Label(entry) or nil)
+            flyout.number = nil
         end
     end
 end
@@ -1455,7 +1411,7 @@ local function Rekey()
     if Binds.State() ~= menuKeys then grown = true end
     if not grown and GetTime() < patient then return end
     local was = Signature()
-    Number()
+    Carry()
     Rebind()
     if Signature() == was then
         idle = idle + 1
@@ -1657,7 +1613,7 @@ function F.Apply()
         root:SetAttribute("count" .. f, 0)
     end
     root:SetAttribute("units", used)
-    Number()
+    Carry()
     Rebind()
     Tell("laid")
     return true
@@ -1765,26 +1721,6 @@ function F.Pause(on) paused = on end
 -- whether the pad is the input in use right now, and the command that tells
 function F.PadInUse() return PadInUse(), witness end
 function F.Wrapped(name) return wrapped[name] == true end
-
--- Lights the bar button of flyout number n, to show where it is; nil puts
--- the light out. Returns the unit lit.
-local pointed
-function F.Point(n)
-    if pointed then
-        pointed.ring:Hide()
-        pointed.glow:SetShown(pointed.menu:IsShown() or pointed.opener:IsMouseOver())
-        pointed = nil
-    end
-    for f = 1, used do
-        local unit = units[f]
-        if n and unit.flyout and unit.flyout.number == n then
-            pointed = unit
-            unit.ring:Show()
-            unit.glow:Show()
-        end
-    end
-    return pointed
-end
 
 -- flyout size against the game's own (1), kept with the profile
 F.SIZE_MIN, F.SIZE_MAX = SIZE_MIN, SIZE_MAX
