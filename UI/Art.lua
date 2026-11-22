@@ -169,6 +169,45 @@ function A.LayDisc(disc, frame, radius)
         piece:SetSize(2 * r, 2 * r)
     end
 end
+-- A mark for a button whose flyout opens around it: four small gold dots in a cross, as the pad's
+-- buttons lie. It points no way, where the bar arrow would seem to name a D-pad button.
+local DOT, DOT_RIM, DOT_OUT, DOT_IN = 4, 1, 4, 7
+local GOLD, DARK = { 1, 0.82, 0.25 }, { 0.08, 0.05, 0.02 }
+local DOT_WAYS = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
+function A.Dots(owner)
+    local dots = { known = A.Known(NAMES.disc), pieces = {} }
+    for i = 1, #DOT_WAYS do
+        local rim, dot = owner:CreateTexture(nil, "OVERLAY", nil, 5), owner:CreateTexture(nil, "OVERLAY", nil, 6)
+        if dots.known then
+            rim:SetAtlas(NAMES.disc)
+            dot:SetAtlas(NAMES.disc)
+            rim:SetVertexColor(DARK[1], DARK[2], DARK[3])
+            dot:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+        end
+        rim:SetSize(DOT + 2 * DOT_RIM, DOT + 2 * DOT_RIM)
+        dot:SetSize(DOT, DOT)
+        rim:Hide()
+        dot:Hide()
+        dots.pieces[i] = { rim = rim, dot = dot }
+    end
+    return dots
+end
+-- at the top right corner of that button, or put away
+function A.LayDots(dots, host, on)
+    dots.shown = on == true and dots.known
+    for i, piece in ipairs(dots.pieces) do
+        piece.rim:SetShown(dots.shown)
+        piece.dot:SetShown(dots.shown)
+        if dots.shown then
+            local x, y = -DOT_IN + DOT_WAYS[i][1] * DOT_OUT, -DOT_IN + DOT_WAYS[i][2] * DOT_OUT
+            for _, texture in ipairs({ piece.rim, piece.dot }) do
+                texture:ClearAllPoints()
+                texture:SetPoint("CENTER", host, "TOPRIGHT", x, y)
+            end
+        end
+    end
+end
+
 -- one of a flyout's icons as a picture alone: the icon in the game's small button frame
 function A.Token(owner)
     local token = CreateFrame("Frame", nil, owner)

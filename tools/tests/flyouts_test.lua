@@ -2044,6 +2044,13 @@ do
         "each is picked by the D-pad button of its side, the fifth by the face button of its side: " .. pads())
     check(unit.strip.first.shown == false and unit.strip.last.shown == false and unit.menu.point[1] == "CENTER",
         "there is no strip: the icons stand by themselves, around the button's middle")
+    -- His words (2026-11-21): "an up arrow confusingly makes one think possible that they need to hit dpad up".
+    local corner = unit.dots.pieces[1].dot.point
+    check(unit.dots.shown == true and not unit.arrow:IsShown() and #unit.dots.pieces == 4 and unit.dots.pieces[1].dot.shown
+        and corner[2] == unit.host and corner[3] == "TOPRIGHT",
+        "its button is marked by four dots at its corner, as the pad's buttons lie, and wears no arrow")
+    check(unit.plate.rim.shown and unit.hub.shown and unit.hub.icon.texture == 811,
+        "open, a round plate with a rim lies behind the icons, the button's own icon at its middle")
     tap(unit.keys[1] or "1")
     unit.menu.over = true
     NS.Turn.Poll()
@@ -2062,6 +2069,8 @@ do
     check(F2.SetAround(false) == true and unit.radial == false and unit.strip.first.shown ~= false
         and entry(unit.index, 2).point[1] ~= "CENTER",
         "with that turned off in the settings it opens as a strip, as on any bar")
+    check(unit.arrow:IsShown() and unit.dots.shown == false and not unit.plate.rim.shown and not unit.hub.shown,
+        "a strip has the bar's arrow again, and neither dots nor plate")
     F2.SetFaces(true)
     check(pads() == table.concat({ "PAD1", "PAD3", "PAD2", "PAD4", "PADDUP" }, " "),
         "a strip picked with the face buttons takes the one on the same side as each D-pad button was: " .. pads())

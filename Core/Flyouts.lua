@@ -546,6 +546,8 @@ local function Unit(f)
     unit.opener = opener
     -- the game's flyout arrow, and its glow around the button
     unit.arrow = opener:CreateTexture(nil, "OVERLAY")
+    -- in the arrow's place for a flyout that opens around its button
+    unit.dots = Art.Dots(opener)
     -- a chosen icon, drawn over the bar button's own
     unit.face = opener:CreateTexture(nil, "BACKGROUND")
     unit.face:Hide()
@@ -1041,6 +1043,10 @@ local function Lay(unit)
     unit.ring:SetPoint("TOPLEFT", host, "TOPLEFT")
     unit.ring:SetSize(Art.RING_W, Art.RING_H)
     Arrow(unit, "arrow")
+    -- Around its button a flyout has no way it opens: four dots mark its button, where an arrow would
+    -- seem to name a button of the D-pad.
+    Art.LayDots(unit.dots, host, unit.radial)
+    unit.arrow:SetShown(not unit.dots.shown)
     opener:Show()
     -- the bar's scale times the size picked in the settings (1 is the game's own)
     menu:SetScale(scale * F.Size())
