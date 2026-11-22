@@ -70,6 +70,7 @@ local TOOLS = { "next", "move", "off", "faces", "plate" }
 -- of the button symbol on the line that is lit, and how dim the other lines are.
 local panel, covered
 local LIST_X, LIST_Y, LIST_STEP, LIST_GLYPH, LIST_DIM = 70, 74, 18, 14, 0.6
+local PANEL_LEVEL = 100
 local SEL_Y = 46
 -- between the dialog's opening for a bind and its shutting; else abilities are being moved
 local binding = false
@@ -353,10 +354,19 @@ local function Panel(frame, e)
         panel.lines = {}
         for i = 1, #TOOLS do panel.lines[i] = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal") end
     end
-    -- in the box's own layer, over what it draws
-    if box.GetFrameStrata and box.GetFrameLevel then
-        panel:SetFrameStrata(box:GetFrameStrata())
-        panel:SetFrameLevel(box:GetFrameLevel() + LIST_STEP)
+    -- Over everything the box draws. The box's own layer and a few levels up was not enough: its border
+    -- and title box are frames of their own, higher up, and our words stood behind their dark fill
+    -- (his snip, 2026-11-21). The top layer is used: nothing else is over this box while it is up.
+    panel:SetFrameStrata("TOOLTIP")
+    panel:SetFrameLevel(PANEL_LEVEL)
+    if not panel.said then
+        panel.said = true
+        local function At(it)
+            if type(it) ~= "table" or not (it.GetFrameStrata and it.GetFrameLevel) then return "none" end
+            return ("%s %s"):format(tostring(it:GetFrameStrata()), tostring(it:GetFrameLevel()))
+        end
+        ns.Log(("pad bind: layers: the dialog %s, its box %s, the box's border %s, title box %s, glow %s; ours %s")
+            :format(At(frame), At(box), At(box.Border), At(box.TitleBox), At(box.HighlightFrame), At(panel)))
     end
     panel:ClearAllPoints()
     panel:SetAllPoints(box)

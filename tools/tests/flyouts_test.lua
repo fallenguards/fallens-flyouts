@@ -1753,6 +1753,9 @@ do
         check(box.BindInstructionText.alpha == 0 and box.ActionName.alpha == 0 and box.ActionIcon.alpha == 0
             and box.TitleBox.TitleText.alpha == 0 and not dialog.ActionTooltip:IsShown(),
             "editing, the game's words about binding the ability are out of sight")
+        -- his snip after that (2026-11-21): the words stood behind the box's own dark fill, unreadable
+        check(words ~= nil and words:GetFrameStrata() == "TOOLTIP" and words:GetFrameLevel() >= 100,
+            "our words are in the top layer, over the box and every frame of it")
         check(words ~= nil and words:IsShown() and words.title.text == "Edit Flyout"
             and words.selected.text == "Selected: Spell 771 (1 of 3). It is lit in the picture below.",
             "and the box says Edit Flyout, and which icon is selected: " .. tostring(words.selected.text))
