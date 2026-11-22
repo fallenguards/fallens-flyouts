@@ -1550,6 +1550,17 @@ do
         self:StartListeningForButtons()
     end
     function dialog:TransitionToSelectActionToPickup() self.BindingInfoFrame:Hide() end
+    -- as the game's: the ability comes off the button and is held, and the box says what is held
+    function dialog:SelectActionToPickupCapturedInputHandler(slot)
+        ClearCursor()
+        local _, had = GetActionInfo(slot)
+        if not had then return false end
+        W.placed[slot] = false
+        fire("ACTIONBAR_SLOT_CHANGED", slot)
+        self.pickupFunc, self.pickupParams, self.pickupSlot = C_Spell.PickupSpell, { had }, slot
+        self.BindingInfoFrame:Show()
+        return true
+    end
     function dialog:ExitEditMode() self:Hide() end
     function dialog:PlaceOrClearHeldActionCapturedInputHandler(slot, _, exitOnBind)
         local _, had = GetActionInfo(slot)
@@ -1589,15 +1600,31 @@ do
     check(up() and Pad.Offer() ~= nil and bar.laid > 0, "and a hint bar of the game's own make comes up over the dialog's")
     check(prompts.add.key == "PAD1" and prompts.add.label == "Add to Flyout" and prompts.add.shown
         and prompts.back.key == "PAD2" and prompts.back.label == "Swap Out" and prompts.back.shown
-        and prompts.edit.key == "PAD4" and prompts.edit.shown and not prompts.left.shown,
+        and prompts.edit.key == "PAD4" and prompts.edit.shown,
         "in a bind it names both ways on: A adds to a flyout, B swaps the old one out; and the game's own Y")
+    -- His words (2026-11-21): "it should show a preview of what it will look like, and update in real time",
+    -- and an X option for a round background with a border.
+    local view = Pad.View()
+    check(view ~= nil and view:IsShown() and view.count == 2 and view.tokens[1]:IsShown() and view.tokens[2]:IsShown()
+        and not view.tokens[3]:IsShown() and view.tokens[1].icon.texture == Pad.Offer().old.id
+        and view.tokens[2].icon.texture == Pad.Offer().new.id and Pad.Offer().new.id == 702,
+        "under the bar a picture shows the flyout as it would be: what the button held and the new one, around the button")
+    check(view.tokens[1].pad == "PADDUP" and view.tokens[2].pad == "PADDRIGHT" and view.tokens[1].point[5] > 0 and view.tokens[2].point[4] > 0,
+        "each in its place, with the pad button that would pick it")
+    check(prompts.left.shown and prompts.left.key == "PAD3" and prompts.left.label == "Hide Background" and view.plate.rim.shown,
+        "the left button, free in a bind, shows or hides the round background, which the picture shows too")
+    press("PAD3")
+    check(NS.Flyouts.Plate() == false and prompts.left.label == "Show Background" and not view.plate.rim.shown and Pad.Offer() ~= nil,
+        "X: the background is off, in the picture at once, and the offer stands")
+    press("PAD3")
+    check(NS.Flyouts.Plate() == true and view.plate.rim.shown, "X again: on")
     press("PAD2")
     dialog:ExitBindingMode()
     check(not up() and Pad.Offer() == nil and W.placed[2] == 702 and NS.Flyouts.At("ActionButton2") == nil,
         "B: the game shuts its dialog, the swap stands and no flyout is made")
     bind(703, 2)
-    press("PAD3")
-    check(Pad.Offer() ~= nil and W.placed[2] == 703, "a button that is not the hint's changes nothing")
+    press("PADLSHOULDER")
+    check(Pad.Offer() ~= nil and W.placed[2] == 703 and NS.Flyouts.Plate() == true, "a button that is not the hint's changes nothing")
     press("PAD1")
     local made = NS.Flyouts.At("ActionButton2")
     check(W.placed[2] == 702 and W.cursor == nil, "A: the old ability is back on the button and the cursor is empty")
@@ -1612,6 +1639,8 @@ do
     press("PAD1")
     check(NS.Flyouts.Faces(made) == true and made.face == true and prompts.add.label == "Use D-Pad" and up(),
         "A again: this flyout picks with the face buttons, and the bar offers the D-pad back")
+    check(view:IsShown() and view.tokens[1].pad == "PAD4" and view.tokens[2].pad == "PAD2" and view.tokens[1].icon.texture == 702,
+        "and the picture changes with it: the flyout as it now is, each icon under its face button")
     press("PAD1")
     check(NS.Flyouts.Faces(made) == false and prompts.add.label == "Use Face Buttons", "and again: the D-pad once more")
     dialog:ExitBindingMode()
@@ -1677,6 +1706,81 @@ do
     dialog:TransitionToSelectActionToPickup()
     check(not up(), "the held one let go, the bar is gone")
     dialog:ExitEditMode()
+
+    -- His words (2026-11-21): Edit Action Bar on one of our flyouts "just removes it from the button
+    -- immediately ... and we have no option like Edit flyout": rearrange, remove, D-pad or face buttons.
+    do
+        -- a flyout of its own for this, of three, on a button of its own
+        W.placed[7] = 771
+        fire("ACTIONBAR_SLOT_CHANGED", 7)
+        flushAll()
+        stack("ActionButton7", 772)
+        stack("ActionButton7", 773)
+        local target = NS.Flyouts.At("ActionButton7")
+        local function ids()
+            local out = {}
+            for i, e in ipairs(target.entries) do out[i] = tostring(e.id) end
+            return table.concat(out, " ")
+        end
+        dialog:EnterEditMode()
+        W.clock = W.clock + 1
+        dialog:SelectActionToPickupCapturedInputHandler(5)
+        check(Pad.Picked() == nil and not up(), "a button with no flyout picked up: nothing is offered")
+        dialog:TransitionToSelectActionToPickup()
+        W.placed[5] = 701
+        fire("ACTIONBAR_SLOT_CHANGED", 5)
+        flushAll()
+        W.clock = W.clock + 1
+        dialog:SelectActionToPickupCapturedInputHandler(7)
+        check(Pad.Picked() ~= nil and up() and prompts.add.label == "Edit Flyout" and prompts.add.shown and prompts.back.label == "Cancel"
+            and prompts.left.shown and not prompts.edit.shown and GetActionInfo(7) == nil,
+            "a flyout's button picked up: its ability is off the button and held, and A offers Edit Flyout")
+        check(Pad.View():IsShown() and Pad.View().count == 3 and Pad.View().marked == nil, "with a picture of that flyout")
+        press("PAD1")
+        local e = Pad.Editing()
+        check(e ~= nil and e.flyout == target and select(2, GetActionInfo(7)) == 771 and NS.Flyouts.At("ActionButton7") == target
+            and ids() == "771 772 773",
+            "A: the ability is back on its button, the flyout whole, and it is being edited")
+        check(prompts.add.label == "Select Next Icon" and prompts.edit.shown and prompts.edit.label == "Next Option"
+            and prompts.back.label == "Done" and not prompts.left.shown and Pad.View().marked == 1,
+            "the bar reads: A does the option shown, Y goes to the next option, B is Done; the first icon is marked")
+        press("PAD1")
+        check(Pad.Editing().mark == 2 and Pad.View().marked == 2 and Pad.View().tokens[2].ring.shown, "A: the next icon is marked")
+        press("PAD4")
+        check(prompts.add.label == "Move Icon On", "Y: the next option, to move the marked icon on")
+        press("PAD1")
+        check(ids() == "771 773 772" and Pad.Editing().mark == 3 and Pad.View().marked == 3,
+            "A: the marked icon moves one place on and stays marked: " .. ids())
+        press("PAD4")
+        check(prompts.add.label == "Take Icon Off", "Y: the next option, to take the marked icon off")
+        press("PAD4")
+        check(prompts.add.label == "Use Face Buttons", "Y: and the next, to pick with the face buttons")
+        press("PAD1")
+        check(NS.Flyouts.Faces(target) == true and prompts.add.label == "Use D-Pad" and Pad.View().tokens[1].pad == "PAD4",
+            "A: this flyout picks with the face buttons, the picture with it")
+        press("PAD1")
+        press("PAD4")
+        check(prompts.add.label == "Hide Background", "Y: and the last, the round background: " .. tostring(prompts.add.label))
+        press("PAD1")
+        check(NS.Flyouts.Plate() == false and prompts.add.label == "Show Background" and not Pad.View().plate.rim.shown,
+            "A: the background is off, in the picture too")
+        press("PAD1")
+        press("PAD4")
+        press("PAD4")
+        press("PAD4")
+        check(NS.Flyouts.Plate() == true and prompts.add.label == "Take Icon Off", "Y goes round the options")
+        press("PAD1")
+        check(ids() == "771 773" and Pad.Editing() ~= nil and Pad.Editing().mark == 2 and up() and Pad.View().count == 2,
+            "A: the marked icon comes off and the editing goes on, the picture one icon the fewer: " .. ids())
+        press("PAD1")
+        check(NS.Flyouts.At("ActionButton7") == nil and Pad.Editing() == nil and not up(),
+            "the last but one taken off, the flyout is no more and the editing is over")
+        dialog:TransitionToSelectActionToPickup()
+        dialog:ExitEditMode()
+        W.placed[7] = nil
+        fire("ACTIONBAR_SLOT_CHANGED", 7)
+        flushAll()
+    end
 
     W.combat = true
     bind(707, 3)
@@ -1892,6 +1996,18 @@ login("Player-1-0000000I")
 stack("OwnBarButton3", 501)
 check(opener("3") ~= nil and way("3") == "LEFT", "the key is found, and the flyout grows left, away from the edge")
 barWorld = function() return "game" end
+
+print("a frame with a GetName of its own does not break the search for bar buttons")
+do
+    -- His error (2026-11-21): a spellbook entry's own GetName, which gives a spell's name, failed on an
+    -- entry with no spell while every frame was asked its name.
+    local odd = CreateFrame("Frame", nil, UIParent)
+    odd.GetName = function() error("a spellbook entry with no spell") end
+    local also = CreateFrame("CheckButton", nil, UIParent)
+    also.GetName = function() error("a check button with a GetName of its own") end
+    local ok, found = pcall(NS.Bars.All, true)
+    check(ok and type(found) == "table" and #found > 0, "every frame is asked by the frame calls themselves: " .. tostring(found))
+end
 
 print("in gamepad mode a flyout opens around its button, as the pad's buttons lie")
 do

@@ -97,10 +97,16 @@ function B.Slot(button)
     if type(slot) == "number" and slot > 0 then return slot end
 end
 
+-- Every frame there is gets asked: only by the frame calls themselves, never by a frame's own field
+-- of the same name. The game's spellbook entries have a GetName of their own (a spell's name), which
+-- fails on an entry with no spell.
+local FrameName, FrameIsType = UIParent.GetName, UIParent.IsObjectType
 local function IsButton(frame)
-    local name = frame:GetName()
-    return frame:IsObjectType("CheckButton") and frame:IsProtected() and type(name) == "string"
-        and not name:find(DIALOG_COPIES) and frame:GetAttribute("type") == "action" and B.Slot(frame) ~= nil
+    -- the cheap and certain test first: anything but a check button is no action button
+    if not FrameIsType(frame, "CheckButton") then return false end
+    local name = FrameName(frame)
+    return type(name) == "string" and frame:IsProtected() and not name:find(DIALOG_COPIES)
+        and frame:GetAttribute("type") == "action" and B.Slot(frame) ~= nil
 end
 
 -- whether a button is on the bars of the game's gamepad mode

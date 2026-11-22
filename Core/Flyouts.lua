@@ -32,6 +32,8 @@ local OTHER_CROSS = { PADDUP = "PAD4", PADDRIGHT = "PAD2", PADDDOWN = "PAD1", PA
 -- the ways the four of a ring lie from the button, and the room between the button and a ring
 local RING = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
 local RING_GAP = 6
+-- how far the round plate behind them reaches past the outmost icons
+local PLATE_PAD = 7
 -- the pad symbol's size on a flyout icon
 local GLYPH = 11
 -- a controller's label style, as the game's key strings end
@@ -525,6 +527,12 @@ local function Unit(f)
     menu:Hide()
     menu:SetSize(Art.STRIP, Art.POP)
     unit.menu, unit.strip = menu, Art.Strip(menu)
+    -- for icons standing around the button: a round plate behind them, and on it the button's own
+    -- icon, which the plate would else hide
+    unit.plate = Art.Disc(menu)
+    unit.hub = Art.Token(menu)
+    unit.hub:SetPoint("CENTER", menu, "CENTER")
+    unit.hub:Hide()
     root:SetFrameRef("menu" .. f, menu)
 
     local opener = CreateFrame("Button", OPENER .. f, UIParent, "SecureActionButtonTemplate")
@@ -749,15 +757,33 @@ end
 -- The pad button for each place of a unit's flyout. Around its button: the first four on one cross of the
 -- pad, each on its own side, any more on the other cross. As a strip: by where each lies along it. The
 -- D-pad comes first, or the face buttons where the flyout or the profile says so.
+-- around a button: the first four on one cross of the pad, each on its own side, any more on the other
+local function RingPads(count, faces)
+    local first, second = DPAD_RING, FACE_RING
+    if faces then first, second = FACE_RING, DPAD_RING end
+    local out = {}
+    for i = 1, count do out[i] = i <= DPAD and first[i] or second[(i - DPAD - 1) % DPAD + 1] end
+    return out
+end
+F.RingPads, F.RING_GAP = RingPads, RING_GAP
+-- where icon i stands around a button: how far across and up from its middle, the first ring `reach` out
+function F.RingSpot(i, reach)
+    local way = RING[(i - 1) % DPAD + 1]
+    local out = reach + math.floor((i - 1) / DPAD) * (Art.ICON + RING_GAP)
+    return way[1] * out, way[2] * out
+end
+-- the first ring's distance from the button's middle, in the flyout's own measure; and the plate's
+-- reach for that many icons
+function F.RingReach() return Art.BUTTON / 2 / F.Size() + RING_GAP + Art.ICON / 2 end
+function F.PlateReach(count, reach)
+    local rings = count > DPAD and 2 or 1
+    return reach + (rings - 1) * (Art.ICON + RING_GAP) + Art.ICON / 2 + PLATE_PAD
+end
+
 local function PadsOf(unit, count)
     local faces = F.Faces(unit.flyout)
     local out = {}
-    if unit.radial then
-        local first, second = DPAD_RING, FACE_RING
-        if faces then first, second = FACE_RING, DPAD_RING end
-        for i = 1, count do out[i] = i <= DPAD and first[i] or second[(i - DPAD - 1) % DPAD + 1] end
-        return out
-    end
+    if unit.radial then return RingPads(count, faces) end
     for i, pad in ipairs(PadsFor(unit.way or "UP", count)) do out[i] = faces and OTHER_CROSS[pad] or pad end
     return out
 end
@@ -798,12 +824,18 @@ local function Picks(unit)
 end
 
 -- one label per icon: the pad's symbol while the pad is the input in use, else the key
+-- the label style of the pad in use, and a pad button's symbol in it
+local function PadStyle()
+    local id = C_GamePad and C_GamePad.GetActiveDeviceID and C_GamePad.GetActiveDeviceID()
+    local state = id and C_GamePad.GetDeviceMappedState and C_GamePad.GetDeviceMappedState(id)
+    return state and PAD_STYLES[state.labelStyle]
+end
+function F.PadText(pad, size) return Glyph(pad, PadStyle(), size) end
+
 function Labels(unit)
     if not unit.picks then return end
     local pad = PadInUse()
-    local id = pad and C_GamePad.GetActiveDeviceID and C_GamePad.GetActiveDeviceID()
-    local state = id and C_GamePad.GetDeviceMappedState and C_GamePad.GetDeviceMappedState(id)
-    local style = state and PAD_STYLES[state.labelStyle]
+    local style = pad and PadStyle()
     for i, frame in ipairs(unit.entries) do
         local pick = unit.picks[i]
         local text = ""
@@ -930,10 +962,8 @@ end
 -- icon i in its place: along the strip, or around the button (up, right, down, left; a second ring past four)
 function F.Seat(unit, frame, i)
     if not unit.radial then return F.Put(unit, frame, F.Slot(i)) end
-    local way = RING[(i - 1) % DPAD + 1]
-    local out = unit.reach + math.floor((i - 1) / DPAD) * (Art.ICON + RING_GAP)
     frame:ClearAllPoints()
-    frame:SetPoint("CENTER", unit.menu, "CENTER", way[1] * out, way[2] * out)
+    frame:SetPoint("CENTER", unit.menu, "CENTER", F.RingSpot(i, unit.reach))
 end
 
 -- a unit placed, sized and turned for its bar
@@ -1018,11 +1048,16 @@ local function Lay(unit)
     menu:ClearAllPoints()
     if unit.radial then
         -- the first ring a step off the button, in the menu's own measure; the frame holds two rings
-        unit.reach = Art.BUTTON / 2 / F.Size() + RING_GAP + Art.ICON / 2
+        unit.reach = F.RingReach()
         local span = 2 * (unit.reach + Art.ICON + RING_GAP + Art.ICON / 2)
         menu:SetPoint("CENTER", host, "CENTER")
         menu:SetSize(span, span)
         Art.HideStrip(unit.strip)
+        -- the plate, where wanted, and the button's icon at its middle, as large as the button
+        Art.LayDisc(unit.plate, menu, F.Plate() and F.PlateReach(count, unit.reach) or nil)
+        unit.hub:SetShown(unit.plate.radius ~= nil)
+        unit.hub:SetScale(Art.BUTTON / F.Size() / Art.ICON)
+        unit.hub.icon:SetTexture(flyout.icon or (flyout.main and F.Icon(flyout.main)) or nil)
     elseif sideName == runName or centered then
         -- straight out, or lying along the side with its middle at the button's middle
         menu:SetPoint(side.point, host, side.to, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
@@ -1033,6 +1068,8 @@ local function Lay(unit)
         menu:SetPoint(mine, host, its, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
     end
     if not unit.radial then
+        Art.LayDisc(unit.plate, menu, nil)
+        unit.hub:Hide()
         menu:SetSize(upright and Art.STRIP or long, upright and long or Art.STRIP)
         -- lying along the side, neither end opens onto the button: both are closed
         Art.LayStrip(unit.strip, menu, runName, sideName ~= runName)
@@ -1632,6 +1669,27 @@ function F.SetAround(on)
     if not data then return false end
     data.padStrip = not on or nil
     F.Apply()
+    return true
+end
+
+-- Whether a flyout that stands around its button has a round plate behind it, to tell at a glance
+-- that it is open: the profile's, on unless turned off.
+function F.Plate()
+    local data = P.Data()
+    return not (data and data.padBare)
+end
+function F.SetPlate(on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    data.padBare = not on or nil
+    local was = open
+    F.Apply()
+    -- left open, to see it change
+    if was and was.flyout then
+        local unit = Run(was.flyout).unit
+        if unit then F.Show(unit.index) end
+    end
     return true
 end
 

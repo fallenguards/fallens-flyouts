@@ -32,6 +32,9 @@ local TEXT = {
     around = "Open around the button in gamepad mode",
     aroundTip = "On the bars of gamepad mode a flyout opens around its button, each icon on the side its pad "
         .. "button is: up, right, down, left. Off, it opens as a strip.",
+    plate = "Round background behind it",
+    plateTip = "A flyout that opens around its button has a round plate behind it, so an open flyout is "
+        .. "seen at a glance.",
     faces = "Pick with the face buttons",
     facesTip = "On a controller the first four icons take the face buttons, and the D-pad takes any past "
         .. "them. Off, the D-pad comes first. Each flyout can be swapped as it is made in gamepad mode.",
@@ -70,6 +73,7 @@ function A.Refresh()
     w.hide:SetChecked(F.Hiding())
     w.around:SetChecked(F.Around())
     w.faces:SetChecked(F.Faces())
+    w.plate:SetChecked(F.Plate())
     for i, button in ipairs(w.icons) do
         local entry = flyout and flyout.entries[i]
         button:SetShown(entry ~= nil)
@@ -200,6 +204,11 @@ function A.Faces(on)
     if not ok and why then ns.Warn(why) end
     A.Refresh()
 end
+function A.Plate(on)
+    local ok, why = F.SetPlate(on)
+    if not ok and why then ns.Warn(why) end
+    A.Refresh()
+end
 
 function A.Build(page, above)
     if page.arrange then return end
@@ -259,6 +268,7 @@ function A.Build(page, above)
     local aroundLabel
     w.around, aroundLabel = Check(TEXT.around, TEXT.aroundTip, A.Around, nil, w.ranks)
     w.faces = Check(TEXT.faces, TEXT.facesTip, A.Faces, aroundLabel)
+    w.plate = Check(TEXT.plate, TEXT.plateTip, A.Plate, nil, w.around)
     panel.arrange = w
     -- a flyout changed elsewhere shows here at once
     F.Watch(function(what)

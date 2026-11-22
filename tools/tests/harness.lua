@@ -334,6 +334,7 @@ local ART_SIZE = {
     ["UI-HUD-ActionBar-IconFrame"] = { 46, 45 }, ["UI-HUD-ActionBar-IconFrame-Down"] = { 46, 45 },
     ["UI-HUD-ActionBar-IconFrame-AddRow"] = { 51, 51 }, ["UI-HUD-ActionBar-IconFrame-AddRow-Down"] = { 51, 51 },
     ["UI-HUD-ActionBar-IconFrame-Mouseover"] = { 46, 45 }, ["UI-HUD-ActionBar-IconFrame-Background"] = { 46, 45 },
+    ["common-mask-circle"] = { 256, 256 },
 }
 RING_W, RING_H = 46, 45
 -- the gray the game's bar buttons show a key in; the key font's own is 0.6

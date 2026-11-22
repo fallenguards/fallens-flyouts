@@ -5,6 +5,9 @@
 ### Added
 - In gamepad mode a flyout opens around its button, each icon on the side its pad button is: the first above the button on D-pad up, then right, down and left. A fifth and sixth stand a step further out and take the face buttons of their sides. A check box under Arrange a flyout in the settings (`/ff`) turns this off, and a flyout given a shape of its own keeps it.
 - The face buttons can pick before the D-pad: a check box under Arrange a flyout sets it for every flyout, and in gamepad mode, right after Add to Flyout, the same button swaps it for the flyout just made (the hint bar names it: Use Face Buttons, Use D-Pad).
+- A flyout that opens around its button has a round background with a rim behind it, so an open flyout is seen at a glance. A check box under Arrange a flyout turns it off; in gamepad mode the hint bar does too (Hide Background, Show Background).
+- In gamepad mode, binding an ability onto a taken button shows a picture of the flyout under the hint bar: its icons around the button and the pad button that picks each. It changes at once when the face buttons, the D-pad or the background are swapped there.
+- Edit Flyout, in gamepad mode: in Edit Action Bar, pick up a button that has a flyout and the hint bar offers Edit Flyout. The ability goes back on its button, and the flyout is edited in place: select an icon, move it on, take it off, swap the face buttons and the D-pad, show or hide the background. One button does the option shown and another goes to the next option.
 - The icon window (right-click a flyout's button) has a row of the flyout's own icons over the game's list. Pick one and it goes onto the bar button itself, so its icon, tooltip and cooldown are there to see without opening the flyout. What was on the button stays in the flyout.
 - Reset to default icon, in the same window: the button gets back the ability it had, and any icon picked for it is taken off.
 - A flyout lying along a side of its button can be centered on the button. Drag its grip to the middle of that side of the button and it snaps there; the Turn button under Arrange a flyout in the settings steps through the centered shapes too.
@@ -17,6 +20,7 @@
 - Macros that share a name were taken for one and the same macro. This is common: many players name their macros with a single space to keep the name off the button. A second such macro dropped on the first was refused with "That is in the flyout already.", and a flyout could show or run the wrong one. Macros are now told apart by their text as well as their name.
 - A macro's icon in a flyout now shows the tooltip its bar button would: the spell or the item the macro stands for. It used to show only the macro's name.
 - A macro with a blank name is listed in the game's Keybindings options by what it casts.
+- An error from the spellbook while the addon looked for bar buttons ("attempt to index a nil value" in the game's spellbook code).
 - Flyouts showed through windows that were over the action bars. A flyout is now in the same layer as its bar, so such a window covers it too.
 - The arrow on a flyout's button could stay dimmed after a click.
 - A flyout lying along a side of its button had no edge at its near end. It is closed at both ends now.

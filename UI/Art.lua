@@ -1,5 +1,5 @@
 local _, ns = ...
--- luacheck: read globals C_Texture SpellFlyout unpack
+-- luacheck: read globals C_Texture SpellFlyout unpack CreateFrame
 
 -- The game's own flyout art: names, sizes and turns.
 local A = {}
@@ -34,6 +34,8 @@ A.NAMES = {
     frameDown = "UI-HUD-ActionBar-IconFrame-AddRow-Down",
     frameOver = "UI-HUD-ActionBar-IconFrame-Mouseover",
     mask = "UI-HUD-ActionBar-IconFrame-Mask",
+    -- the game's plain disc: tinted, it is a round plate
+    disc = "common-mask-circle",
     back = "UI-HUD-ActionBar-IconFrame-Background",
 }
 local NAMES = A.NAMES
@@ -132,6 +134,53 @@ function A.LayStrip(strip, frame, way, capped)
     for _, piece in ipairs({ strip.first, strip.last, mid }) do
         if upright then piece:SetWidth(A.STRIP) else piece:SetHeight(A.STRIP) end
     end
+end
+
+-- A round plate with a rim, behind icons that stand around a button: two of the game's discs, the
+-- rim's a little the larger. Its colors are those of the game's own gamepad bar plate.
+local RIM, PLATE = { 0.62, 0.6, 0.55 }, { 0.09, 0.07, 0.06 }
+A.RIM_W = 2
+function A.Disc(owner)
+    local disc = {
+        rim = owner:CreateTexture(nil, "BACKGROUND", nil, -8),
+        fill = owner:CreateTexture(nil, "BACKGROUND", nil, -7),
+    }
+    disc.known = A.Known(NAMES.disc)
+    if disc.known then
+        disc.rim:SetAtlas(NAMES.disc)
+        disc.fill:SetAtlas(NAMES.disc)
+        disc.rim:SetVertexColor(RIM[1], RIM[2], RIM[3])
+        disc.fill:SetVertexColor(PLATE[1], PLATE[2], PLATE[3])
+    end
+    disc.rim:Hide()
+    disc.fill:Hide()
+    return disc
+end
+-- the plate that far out from the frame's middle; no radius: none
+function A.LayDisc(disc, frame, radius)
+    local on = disc.known and radius ~= nil
+    disc.rim:SetShown(on)
+    disc.fill:SetShown(on)
+    disc.radius = on and radius or nil
+    if not on then return end
+    for piece, r in pairs({ [disc.rim] = radius, [disc.fill] = radius - A.RIM_W }) do
+        piece:ClearAllPoints()
+        piece:SetPoint("CENTER", frame, "CENTER")
+        piece:SetSize(2 * r, 2 * r)
+    end
+end
+-- one of a flyout's icons as a picture alone: the icon in the game's small button frame
+function A.Token(owner)
+    local token = CreateFrame("Frame", nil, owner)
+    token:SetSize(A.ICON, A.ICON)
+    token.icon = token:CreateTexture(nil, "ARTWORK")
+    token.icon:SetAllPoints()
+    A.Dress(token, token.icon)
+    token.frame = token:CreateTexture(nil, "OVERLAY")
+    token.frame:SetAtlas(NAMES.frame)
+    token.frame:SetSize(A.FRAME, A.FRAME)
+    token.frame:SetPoint("TOPLEFT")
+    return token
 end
 
 -- no strip at all: a flyout whose icons stand around their button
