@@ -1809,6 +1809,37 @@ do
         flushAll()
         check(Edit.Editing() == nil and not bound("PADDUP"), "the dialog left after that, nothing opens")
 
+        -- His words (2026-11-21): "backing out of the flyout editing just completely deleted the flyout
+        -- entirely". His log: the flyout's button picked up, then X, the game's own Unbind, then out. The
+        -- ability was unbound and the flyout, with no button, was put away without a word. It is kept, and
+        -- now that is said; back on a button, the ability has its flyout again.
+        local lines = #W.chat
+        dialog:EnterEditMode()
+        pickUp(7)
+        dialog:TransitionToSelectActionToPickup()
+        dialog:ExitEditMode()
+        for _ = 1, 3 do flushAll() end
+        check(#W.chat == lines + 1 and W.chat[#W.chat]:find("is off the bars, so its flyout is put away. It comes back when", 1, true) ~= nil,
+            "the game's Unbind on a flyout's button: a chat line says the flyout is put away and how it comes back: "
+            .. tostring(W.chat[#W.chat]))
+        W.placed[7] = 771
+        fire("ACTIONBAR_SLOT_CHANGED", 7)
+        for _ = 1, 3 do flushAll() end
+        check(NS.Flyouts.At("ActionButton7") == target and ids() == "771 772 773", "the ability bound again, its flyout is back, whole")
+        -- moved to an empty button instead, or put back: nothing is said
+        lines = #W.chat
+        dialog:EnterEditMode()
+        pickUp(7)
+        press("PADDLEFT", 6)
+        dialog:ExitEditMode()
+        for _ = 1, 3 do flushAll() end
+        check(#W.chat == lines and W.placed[6] == 771, "the ability moved to an empty button instead: no such line")
+        W.placed[6] = false
+        W.placed[7] = 771
+        fire("ACTIONBAR_SLOT_CHANGED", 6)
+        fire("ACTIONBAR_SLOT_CHANGED", 7)
+        for _ = 1, 3 do flushAll() end
+
         -- a flyout that lies along its button as a strip has no editor of this kind: nothing is offered
         NS.Flyouts.SetAround(false)
         dialog:EnterEditMode()

@@ -50,6 +50,8 @@ local TEXT = {
     note3 = "The D-pad moves the icons there. Pressed here it changes nothing.",
     editHint = "Editing: %s is selected. The D-pad moves it to that side of the button.",
     noSide = "No icon is on that side to change places with.",
+    -- the game's Unbind on a flyout's button: the flyout is kept, and that is said
+    putAway = "%s is off the bars, so its flyout is put away. It comes back when %s is on a button again.",
 }
 G.TEXT, G.KEY = TEXT, KEY_ADD
 
@@ -59,6 +61,8 @@ local latest
 -- Edit Action Bar: a flyout's button was picked up (its ability is held by the dialog); and the flyout
 -- being edited, with the icon marked and the option the bottom button does
 local picked, armed
+-- a flyout's ability let go of in the dialog, neither set down nor put back: looked at once the dialog is left
+local dropped
 -- the slot of the flyout last made, for its picture
 local latestSlot
 -- how far under the dialog the picture of the flyout stands (the hint bar is between)
@@ -791,12 +795,21 @@ function G.Install(frame)
     -- the dialog gone, the console bar is back: a flyout looks for its button again
     local function Gone()
         -- an edit asked for in the dialog begins now that the dialog is gone
-        local next = armed
-        armed = nil
+        local next, lost = armed, dropped
+        armed, dropped = nil, nil
         Clear()
         F.Moved()
         C_Timer.After(FIND_AFTER, function()
             F.Follow()
+            -- unbound there (the game's Unbind), the flyout's ability is on no button: the flyout waits, and says so
+            local kept = lost and Bars.Find(lost.lead, nil, true) ~= nil
+            for slot in pairs(lost and not kept and Bars.Copies() or {}) do
+                kept = kept or F.Same(Bars.ActionAt(slot), lost.lead)
+            end
+            if lost and not kept then
+                local name = F.Name(lost.lead)
+                ns.Say(TEXT.putAway:format(name, name))
+            end
             if next then E.Open(next.flyout) end
         end)
     end
@@ -806,6 +819,7 @@ function G.Install(frame)
     end))
     -- moving abilities: the held one was set down, let go or put back, or the mode left
     hooksecurefunc(frame, "TransitionToSelectActionToPickup", Guard(function(self)
+        if picked and not armed then dropped = picked end
         Clear()
         -- still waiting to be left for the editor: the bar goes on saying which button does it
         if armed then ShowPicked(self) end
