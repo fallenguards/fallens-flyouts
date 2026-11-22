@@ -1,7 +1,7 @@
 local _, ns = ...
 -- luacheck: globals FallensFlyoutsDB FallensFlyouts_AttachDevTools
 -- luacheck: read globals CreateFrame UnitGUID UnitName GetUnitName UnitClass GetRealmName issecretvalue
--- luacheck: read globals InCombatLockdown DEFAULT_CHAT_FRAME UIErrorsFrame
+-- luacheck: read globals InCombatLockdown DEFAULT_CHAT_FRAME UIErrorsFrame geterrorhandler
 
 -- the dev addon's way in
 function FallensFlyouts_AttachDevTools(take) take(ns) end
@@ -45,7 +45,8 @@ function ns.Start()
     FallensFlyoutsDB = FallensFlyoutsDB or {}
     ns.me = Who()
     ns.Profiles.Load(FallensFlyoutsDB, ns.me)
-    for _, fn in ipairs(starters) do fn() end
+    -- each part starts by itself: one that fails is reported and the rest still start
+    for _, fn in ipairs(starters) do xpcall(fn, geterrorhandler()) end
 end
 
 local events = CreateFrame("Frame")

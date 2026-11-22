@@ -9,6 +9,8 @@ local function check(ok, what)
     end
 end
 
+-- the game's way of reporting an error it does not let stop anything
+function geterrorhandler() return function(msg) print("  reported: " .. tostring(msg)) end end
 local saved = {}
 local busy = false
 -- a login: the module is loaded anew over the same saved table

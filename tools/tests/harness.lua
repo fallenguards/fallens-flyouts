@@ -920,6 +920,8 @@ local function boot(alone)
     end
     -- alone: the dev folder is off, as for anyone who downloads the addon
     if DRIVER and not alone then assert(loadfile(DRIVER))() end
+    -- a test's to set: what another addon registers ahead of the login
+    if type(BEFORE_LOGIN) == "function" then BEFORE_LOGIN() end
     fire("PLAYER_LOGIN")
 end
 

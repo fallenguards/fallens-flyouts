@@ -3106,6 +3106,75 @@ do
     login("Player-1-0000000A")
 end
 
+print("a listener that breaks at every lay stops nothing: flyouts are still made, followed and removed")
+do
+    -- His words (2026-11-22): "i just dragged flyouts off my bars and their flyouts are still there just with
+    -- empty icon????", "its not just automatic flyouts. its ALL flyouts", and later: "that should never have
+    -- happened in the first place." His error log for that session: a listener of another addon (the dev
+    -- one) threw at every lay, inside the addon's own laying out, so the addon never became ready and no
+    -- change on the bars was followed.
+    local savedDB = FallensFlyoutsDB
+    local hadPlaced = W.placed
+    FallensFlyoutsDB = nil
+    local told = 0
+    BEFORE_LOGIN = function()
+        NS.Flyouts.Watch(function()
+            told = told + 1
+            error("the listener broke")
+        end)
+        FallensFlyouts_Watch(function() error("so did another addon's") end)
+        NS.Profiles.OnChange(function() error("and one that listens for the profile") end)
+    end
+    login("Player-1-0000000V")
+    BEFORE_LOGIN = nil
+    local F7 = NS.Flyouts
+    local function settle() for _ = 1, 4 do flushAll() end end
+    check(told > 0 and #W.caught > 0 and W.caught[1]:find("the listener broke", 1, true) ~= nil,
+        ("the listeners were told at the login, broke, and were reported: %d errors"):format(#W.caught))
+    check(W.popup ~= nil and W.popup.which == NS.Welcome.POPUP, "every part of the addon came up all the same: the last one's dialog is there")
+    acceptPopup()
+    W.placed = {}
+    W.placed[1], W.placed[9] = 101, 9401
+    fire("ACTIONBAR_SLOT_CHANGED", 9)
+    settle()
+    stack("ActionButton1", 9403)
+    stack("ActionButton9", 9402)
+    local flyout, unit = F7.At("ActionButton9")
+    check(flyout ~= nil and #flyout.entries == 2 and unit ~= nil and opens("1"), "flyouts are made and laid on their buttons")
+    local before = #W.casts
+    tap("1")
+    tap("2")
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:9403", "one opens by its button's key and casts: " .. tostring(W.casts[#W.casts]))
+    -- what he did: the button's ability dragged off the bar and let go of
+    PickupAction(9)
+    settle()
+    ClearCursor()
+    settle()
+    check(F7.At("ActionButton9") == nil and #F7.List() == 1 and W.chat[#W.chat]:find("is off the bars. Its flyout is removed.", 1, true) ~= nil,
+        "a button's ability dragged off the bar and let go of: its flyout is gone from the button, removed")
+    PickupAction(1)
+    settle()
+    ClearCursor()
+    settle()
+    check(F7.At("ActionButton1") == nil and #F7.List() == 0 and not opens("1") and select(2, F7.Units()) == 0,
+        "and so is the other: no flyout is left on an empty button")
+    -- a change of profile is followed too, with its own listener broken
+    W.placed[1] = 101
+    fire("ACTIONBAR_SLOT_CHANGED", 1)
+    settle()
+    stack("ActionButton1", 9403)
+    check(F7.At("ActionButton1") ~= nil, "a flyout made again")
+    NS.Profiles.New("Another", false)
+    settle()
+    check(F7.At("ActionButton1") == nil and NS.Profiles.Active() == "Another", "on a new, empty profile it is off the bars")
+    NS.Profiles.Use("Tester V - Realm")
+    settle()
+    check(F7.At("ActionButton1") ~= nil, "and back on the first, it is on its button again")
+    W.placed = hadPlaced
+    FallensFlyoutsDB = savedDB
+    login("Player-1-0000000A")
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")

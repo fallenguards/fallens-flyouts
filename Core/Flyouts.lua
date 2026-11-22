@@ -236,8 +236,11 @@ local function Laid()
     return record.laid
 end
 
+-- A listener's error is its own. It is reported, and it stops neither the lay it was told of nor the
+-- listeners after it. (2026-11-22: a listener that broke at every lay cut each lay short and kept the
+-- addon from finishing its start, so flyouts stayed on buttons their abilities had left.)
 local function Tell(what, ...)
-    for _, fn in ipairs(watchers) do fn(what, ...) end
+    for _, fn in ipairs(watchers) do xpcall(fn, geterrorhandler(), what, ...) end
 end
 
 -- fn(what, ...) as flyouts are built, laid out, opened and shut
@@ -2362,15 +2365,17 @@ ns.OnStart(function()
         F.Load()
         if ready then F.Settle() end
     end)
-    -- at once: a login in a fight is not locked yet
-    F.Settle()
+    -- What comes later is asked for first: whatever the first lay runs into, the bars are still
+    -- followed and the addon still becomes ready.
     -- bars are still being placed: laid again if one moved
     for step = 1, 11 do C_Timer.After(step * 0.25, F.Follow) end
     -- and once other addons have placed their bars and keys
     C_Timer.After(3, function()
         ready = true
+        C_Timer.NewTicker(1, Sync)
         Adopt()
         F.Settle()
-        C_Timer.NewTicker(1, Sync)
     end)
+    -- at once: a login in a fight is not locked yet
+    F.Settle()
 end)

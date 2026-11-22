@@ -1,4 +1,5 @@
 local _, ns = ...
+-- luacheck: read globals geterrorhandler
 
 -- Named sets of flyouts. Each character picks one.
 local P = {}
@@ -28,8 +29,9 @@ end
 
 local function Record() return db.chars[me.id] end
 
+-- a listener that fails is reported; the rest are still told
 local function Fire()
-    for _, fn in ipairs(listeners) do fn(P.Data(), P.Active()) end
+    for _, fn in ipairs(listeners) do xpcall(fn, geterrorhandler(), P.Data(), P.Active()) end
 end
 
 -- fn(data, name) after the profile in use changes
