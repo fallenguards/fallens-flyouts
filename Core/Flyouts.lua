@@ -828,15 +828,17 @@ local ACROSS = {
 }
 F.ACROSS = ACROSS
 
--- A flyout's shape: the side of its button it opens on, and the way its
--- icons run. The player's own choice; with none, straight out the bar's way.
+-- A flyout's shape: the side of its button it opens on, the way its icons
+-- run, and, lying along that side, whether it is centered on the button
+-- (else its first icon is by the button and the rest run on). The player's
+-- own choice; with none, straight out the bar's way.
 function F.Shape(flyout, auto)
     local side = flyout.side
-    if not Art.SIDES[side] then return auto, auto end
+    if not Art.SIDES[side] then return auto, auto, false end
     for _, across in ipairs(ACROSS[side]) do
-        if across == flyout.run then return side, across end
+        if across == flyout.run then return side, across, flyout.mid == true end
     end
-    return side, side
+    return side, side, false
 end
 
 local function Lay(unit)
@@ -847,13 +849,13 @@ local function Lay(unit)
     -- be laid again: the way and scale last used on this button stand in.
     local last = not ready and Laid()[flyout.host]
     if last and Art.SIDES[last.way] then way, runs, scale = last.way, "as last laid", last.scale or scale end
-    local sideName, runName = F.Shape(flyout, way)
+    local sideName, runName, centered = F.Shape(flyout, way)
     local side, along, count = Art.SIDES[sideName], Art.SIDES[runName], #flyout.entries
     -- the strip stands or lies by the way its icons run; the grip and arrow go by the button's side
     local upright, edge = along.x == 0, side.x == 0
     local long = Art.FIRST + count * Art.ICON + (count - 1) * Art.NEXT + Art.PAD
     local opener, menu = unit.opener, unit.menu
-    unit.way, unit.side, unit.barWay, unit.runs = runName, sideName, way, runs
+    unit.way, unit.side, unit.barWay, unit.runs, unit.mid = runName, sideName, way, runs, centered
     -- the button's child: shows and hides with its bar
     opener:SetParent(host)
     opener:SetScale(Bars.Size(host))
@@ -875,7 +877,8 @@ local function Lay(unit)
     -- the bar's scale times the size picked in the settings (1 is the game's own)
     menu:SetScale(scale * F.Size())
     menu:ClearAllPoints()
-    if sideName == runName then
+    if sideName == runName or centered then
+        -- straight out, or lying along the side with its middle at the button's middle
         menu:SetPoint(side.point, host, side.to, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
     else
         -- lying along the button's side: its first icon by the button, the rest running on
@@ -884,7 +887,8 @@ local function Lay(unit)
         menu:SetPoint(mine, host, its, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
     end
     menu:SetSize(upright and Art.STRIP or long, upright and long or Art.STRIP)
-    Art.LayStrip(unit.strip, menu, runName)
+    -- lying along the side, neither end opens onto the button: both are closed
+    Art.LayStrip(unit.strip, menu, runName, sideName ~= runName)
 
     for i, frame in ipairs(unit.entries) do
         local entry = flyout.entries[i]
@@ -1431,13 +1435,15 @@ end
 -- Gives a flyout a shape of the player's own: a side of its button, and a
 -- way to lie along it or none for straight out. No side: the bar's way
 -- again. `live`: laid again at once and left open, while it is being turned.
-function F.SetShape(flyout, side, lie, live)
+-- `mid`: lying along the side, centered on the button.
+function F.SetShape(flyout, side, lie, live, mid)
     if InCombatLockdown() then return false, TEXT.fight end
     if not (list and flyout) or (side ~= nil and not Art.SIDES[side]) then return false end
-    flyout.side, flyout.run = side, nil
+    flyout.side, flyout.run, flyout.mid = side, nil, nil
     for _, across in ipairs(side and ACROSS[side] or {}) do
         if across == lie then flyout.run = lie end
     end
+    if flyout.run and mid then flyout.mid = true end
     local unit = Run(flyout).unit
     if live and unit then
         Lay(unit)

@@ -6,7 +6,7 @@ local _, ns = ...
 -- grip shows at its far end: the game's own move icon. Pulled to where the
 -- flyout should end, the flyout is laid again under the mouse and snaps to
 -- the nearest of its shapes: straight out from any side of its button, or
--- lying along a side, running either way. Opened by its key with the mouse
+-- lying along a side, running either way, from the button or centered on it. Opened by its key with the mouse
 -- elsewhere, a flyout shows no grip: it is not a second arrow to wonder at.
 -- Nor is there one while something is carried on the cursor.
 local T = {}
@@ -57,7 +57,7 @@ function T.Shapes(unit)
     local last = (Art.FIRST + (count - 1) * (Art.ICON + Art.NEXT) + Art.ICON / 2) * ms
     local wide, over = Art.STRIP * ms, Art.OVERLAP * ms
     local right, top = UIParent:GetWidth(), UIParent:GetHeight()
-    local function Add(sideName, runName)
+    local function Add(sideName, runName, mid)
         local side, along = Art.SIDES[sideName], Art.SIDES[runName]
         local x, y, x1, y1, x2, y2
         if sideName == runName then
@@ -68,9 +68,11 @@ function T.Shapes(unit)
             x1, y1 = hx + side.x * from - ax, hy + side.y * from - ay
             x2, y2 = hx + side.x * (from + long) + ax, hy + side.y * (from + long) + ay
         else
-            -- along the side: a strip's width off the button, from the button's own start
+            -- along the side, a strip's width off the button: from the button's own start, or with its
+            -- middle at the button's middle
             local off = half - over + wide / 2
-            local cx, cy = hx + side.x * off - along.x * half, hy + side.y * off - along.y * half
+            local back = mid and long / 2 or half
+            local cx, cy = hx + side.x * off - along.x * back, hy + side.y * off - along.y * back
             x, y = cx + along.x * last, cy + along.y * last
             local ax, ay = math.abs(side.x) * wide / 2, math.abs(side.y) * wide / 2
             x1, y1 = cx - ax, cy - ay
@@ -78,22 +80,25 @@ function T.Shapes(unit)
         end
         local fits = math.min(x1, x2) >= 0 and math.max(x1, x2) <= right
             and math.min(y1, y2) >= 0 and math.max(y1, y2) <= top
-        out[#out + 1] = { side = sideName, run = runName, x = x, y = y, fits = fits }
+        out[#out + 1] = { side = sideName, run = runName, mid = mid == true, x = x, y = y, fits = fits }
     end
     for _, side in ipairs(SIDES) do
         Add(side, side)
         for _, across in ipairs(F.ACROSS[side]) do Add(side, across) end
+        for _, across in ipairs(F.ACROSS[side]) do Add(side, across, true) end
     end
     return out
 end
 
-local function Is(shape, unit) return shape.side == unit.side and shape.run == unit.way end
+local function Is(shape, unit)
+    return shape.side == unit.side and shape.run == unit.way and shape.mid == (unit.mid == true)
+end
 
 -- a shape of the player's own, or none when it is the one the bar would give anyway
 local function Set(unit, shape, live)
     local straight = shape.side == shape.run
     if straight and shape.side == unit.barWay then return F.SetShape(unit.flyout, nil, nil, live) end
-    return F.SetShape(unit.flyout, shape.side, not straight and shape.run or nil, live)
+    return F.SetShape(unit.flyout, shape.side, not straight and shape.run or nil, live, shape.mid)
 end
 
 local function Place()
@@ -195,7 +200,7 @@ function T.At(x, y)
     if nowD and bestD > nowD * NEARER then return nil end
     if Set(unit, best, true) then
         Place()
-        ns.Log(("turn: now %s running %s"):format(best.side, best.run))
+        ns.Log(("turn: now %s running %s%s"):format(best.side, best.run, best.mid and ", centered" or ""))
     end
     return best
 end
@@ -209,8 +214,9 @@ function T.Stop()
     if InCombatLockdown() then return false end
     local flyout = unit.flyout
     -- laid for good: its keys and the D-pad follow the way it runs now
-    F.SetShape(flyout, flyout.side, flyout.run)
-    ns.Log(("turn: let go, saved as %s %s"):format(tostring(flyout.side), tostring(flyout.run)))
+    F.SetShape(flyout, flyout.side, flyout.run, nil, flyout.mid)
+    ns.Log(("turn: let go, saved as %s %s%s"):format(tostring(flyout.side), tostring(flyout.run),
+        flyout.mid and ", centered" or ""))
     return true
 end
 

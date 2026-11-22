@@ -1304,8 +1304,13 @@ do
         local s = shape(side, run)
         Turn.At(s.x, s.y)
     end
-    check(unit.side == "UP" and unit.way == "UP" and flyout.side == nil and #Turn.Shapes(unit) == 12,
-        "left alone it opens straight out the bar's way; there are twelve shapes it could take")
+    check(unit.side == "UP" and unit.way == "UP" and flyout.side == nil and #Turn.Shapes(unit) == 20,
+        "left alone it opens straight out the bar's way; there are twenty shapes it could take")
+    local START, CAP = NS.Art.NAMES.first, NS.Art.NAMES.last
+    local function cut(piece) return table.concat(piece.cut, " ") end
+    local function turned(degrees) return table.concat(NS.Art.CUT[degrees], " ") end
+    check(unit.strip.first.atlas == START and unit.strip.capped == false,
+        "straight out, the strip's near end is the open one, onto the button")
     check(Turn.Start(unit) == false, "a shut flyout is not turned")
     tap("E")
     check(unit.menu:IsShown() and (Turn.Grip() == nil or not Turn.Grip():IsShown()),
@@ -1339,6 +1344,32 @@ do
         "pulled up and across, it lies as a row over the button, running right from it")
     check(unit.arrow.point[1] == "TOP" and entry(unit.index, 2).point[1] == "LEFT",
         "the arrow says above; the icons run along the row")
+    -- His report (2026-11-21): lying along its button the strip had no edge at its near end. It is closed
+    -- there as at the far end: the end art, turned about.
+    check(unit.strip.capped == true and unit.strip.first.atlas == CAP and unit.strip.last.atlas == CAP
+        and cut(unit.strip.first) == turned(270) and cut(unit.strip.last) == turned(90),
+        "lying along the button, the strip is closed at both ends: the far end's art at the near end, turned about")
+    -- and it can lie centered on its button
+    local function centered(side, run)
+        for _, s in ipairs(Turn.Shapes(unit)) do
+            if s.side == side and s.run == run and s.mid then return s end
+        end
+    end
+    local mid, corner = centered("UP", "RIGHT"), shape("UP", "RIGHT")
+    check(mid ~= nil and corner ~= nil and not corner.mid and mid.x < corner.x and mid.y == corner.y,
+        "each lying shape has a twin centered on the button: its end is nearer the button's middle")
+    Turn.At(mid.x, mid.y)
+    check(unit.side == "UP" and unit.way == "RIGHT" and unit.mid == true and unit.menu.point[1] == "BOTTOM"
+        and unit.menu.point[3] == "TOP" and unit.strip.capped == true,
+        "pulled to that end it snaps centered: a row over the button, its middle over the button's middle")
+    Turn.Stop()
+    check(flyout.side == "UP" and flyout.run == "RIGHT" and flyout.mid == true, "let go, centered is the flyout's own shape")
+    NS.Flyouts.Apply()
+    tap("E")
+    check(unit.mid == true and unit.menu.point[1] == "BOTTOM", "and it is kept when laid again")
+    Turn.Start(unit)
+    pull("UP", "RIGHT")
+    check(unit.mid == false and flyout.mid == nil and unit.menu.point[1] == "BOTTOMLEFT", "pulled back to the corner shape it is off center again")
     pull("UP", "LEFT")
     check(unit.way == "LEFT" and unit.menu.point[1] == "BOTTOMRIGHT" and unit.menu.point[3] == "TOPRIGHT", "or running left")
     pull("LEFT", "DOWN")
@@ -1378,13 +1409,14 @@ do
     bar(500)
     NS.Arrange.Refresh()
     local seen = {}
-    for _ = 1, 12 do
+    for _ = 1, 20 do
         page.arrange.turn.scripts.OnClick(page.arrange.turn)
-        seen[unit.side .. ">" .. unit.way] = true
+        seen[unit.side .. ">" .. unit.way .. (unit.mid and " centered" or "")] = true
     end
     local kinds = 0
     for _ in pairs(seen) do kinds = kinds + 1 end
-    check(kinds == 12 and flyout.side == nil, "the Turn button under Arrange steps through all twelve and comes round to the bar's own")
+    check(kinds == 20 and seen["DOWN>RIGHT centered"] and flyout.side == nil,
+        "the Turn button under Arrange steps through all twenty, the centered ones among them, and comes round to the bar's own")
     unit.menu.over = nil
     for i = 1, 12 do W.frames["ActionButton" .. i].cx, W.frames["ActionButton" .. i].cy = was[i][1], was[i][2] end
     NS.Flyouts.SetShape(flyout, nil)

@@ -86,7 +86,8 @@ function A.Strip(frame)
     local function Piece(key, atlas)
         local source = live and live[key]
         local piece = frame:CreateTexture(nil, "BACKGROUND")
-        piece.atlas = source and source.GetAtlas and source:GetAtlas() or atlas
+        -- its own art's name (never a field called atlas: the test client keeps the shown one there)
+        piece.art = source and source.GetAtlas and source:GetAtlas() or atlas
         piece:SetVertexColor(TINT, TINT, TINT)
         return piece
     end
@@ -101,7 +102,11 @@ function A.Strip(frame)
     return strip
 end
 
-function A.LayStrip(strip, frame, way)
+local OPPOSITE = { UP = "DOWN", DOWN = "UP", LEFT = "RIGHT", RIGHT = "LEFT" }
+
+-- `capped`: the strip does not open onto its button (it lies along the button's side), so its near
+-- end is closed like its far end: the end art, turned about.
+function A.LayStrip(strip, frame, way, capped)
     local side, turn = A.SIDES[way], A.TURN[way]
     local upright = side.x == 0
     local mid = upright and strip.upright or strip.level
@@ -110,9 +115,14 @@ function A.LayStrip(strip, frame, way)
     strip.first:ClearAllPoints()
     strip.last:ClearAllPoints()
     mid:ClearAllPoints()
-    A.Set(strip.first, strip.first.atlas, turn.ends)
-    A.Set(strip.last, strip.last.atlas, turn.ends)
-    A.Set(mid, mid.atlas, turn.mid)
+    if capped then
+        A.Set(strip.first, strip.last.art, A.TURN[OPPOSITE[way]].ends)
+    else
+        A.Set(strip.first, strip.first.art, turn.ends)
+    end
+    strip.capped = capped == true
+    A.Set(strip.last, strip.last.art, turn.ends)
+    A.Set(mid, mid.art, turn.mid)
     strip.first:SetPoint(side.point, frame, side.point)
     strip.last:SetPoint(side.to, frame, side.to)
     mid:SetPoint(side.point, strip.first, side.to)

@@ -2,6 +2,9 @@
 
 ## [1.1.1] - 2026-11-21
 
+### Added
+- A flyout lying along a side of its button can be centered on the button. Drag its grip toward the middle and it snaps there; the Turn button under Arrange a flyout in the settings steps through the centered shapes too.
+
 ### Changed
 - Macros that cast ranks of one spell are kept in rank order in a flyout, Rank 1 first, as the spells themselves are.
 
@@ -9,6 +12,7 @@
 - Macros that share a name were taken for one and the same macro. This is common: many players name their macros with a single space to keep the name off the button. A second such macro dropped on the first was refused with "That is in the flyout already.", and a flyout could show or run the wrong one. Macros are now told apart by their text as well as their name.
 - A macro's icon in a flyout now shows the tooltip its bar button would: the spell or the item the macro stands for. It used to show only the macro's name.
 - A macro with a blank name is listed in the game's Keybindings options by what it casts.
+- A flyout lying along a side of its button had no edge at its near end. It is closed at both ends now.
 - A spell dragged out of a flyout had to be clicked onto a bar spot. Letting go over the spot now places it, as with a spell dragged from anywhere else.
 
 ## [1.1.0] - 2026-11-21
