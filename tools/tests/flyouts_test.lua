@@ -2978,6 +2978,92 @@ do
     end
 end
 
+print("a flyout can be given a name, written on its bar button as a macro's name is")
+do
+    -- His words (2026-11-22, with a snip of the icon window): "we need ability to put a name to the icon too,
+    -- just like we can with macros."
+    login("Player-1-0000000R")
+    local F8, Icon = NS.Flyouts, NS.Icon
+    stack("ActionButton1", 501)
+    stack("ActionButton1", 502)
+    local flyout, unit = F8.At("ActionButton1")
+    local host = W.frames.ActionButton1
+    -- as the game has it for a macro on the button: its name written at the button's foot
+    host.Name.text = ""
+    Icon.Open(flyout)
+    local window = Icon.popup
+    local box, search = window.BorderBox.IconSelectorEditBox, Icon.search
+    check(window:IsShown() and window.BorderBox.EditBoxHeaderText.text == "Name on the button (optional)" and box.maxLetters == 16
+        and box.text == "", "the icon window's own name box is the flyout's name: sixteen letters, as for a macro, empty to begin with")
+    check(search ~= nil and search ~= box and search.template == "SearchBoxTemplate" and search.maxLetters == 40
+        and search.Instructions.text == "Search spells, items, macros"
+        and search.point[1] == "RIGHT" and search.point[2] == window.BorderBox.IconTypeDropdown,
+        "the search has a box of its own, the game's search box, between the words over the list and the list of kinds")
+    search:SetText("FIRE")
+    search.scripts.OnTextChanged(search)
+    check(window.IconSelector.num() == 1, "typed into, the search narrows the icons as before")
+    -- Okay is lit with no name: a flyout needs none
+    window.BorderBox.OkayButton.off = true
+    box.scripts.OnTextChanged(box)
+    check(window.BorderBox.OkayButton:IsEnabled(), "an empty name leaves Okay lit: a flyout needs no name")
+    box:SetText("Heals")
+    window:OkayButton_OnClick()
+    local label = unit.label
+    check(flyout.name == "Heals" and NS.Profiles.Data().flyouts[1].name == "Heals", "Okay: the name is the flyout's, kept with it")
+    check(label.shown and label.text == "Heals" and label.parent == host and label.font == "GameFontHighlightSmallOutline",
+        "and it is written on the bar button, in the game's lettering for a macro's name")
+    check(host.Name.alpha == 0, "what the game writes there itself gives way to it")
+    check(flyout.icon == nil and not unit.face:IsShown(), "and nothing else of the flyout is changed by naming it")
+    -- opened again: the name is in the box, to be typed over
+    Icon.Open(flyout)
+    check(box.text == "Heals" and search.text == "", "opened again, the box holds the name and the search is empty")
+    box:SetText('  "Big" Heals  ')
+    window:OkayButton_OnClick()
+    check(flyout.name == "Big Heals" and label.text == "Big Heals", "a name is taken without quote marks or the room around it, as a macro's is: " .. tostring(flyout.name))
+    -- it goes with the flyout to another button, and the old button reads as the game has it
+    W.placed = W.placed or {}
+    local hadFive = W.placed[5]
+    W.placed[5] = false
+    fire("ACTIONBAR_SLOT_CHANGED", 5)
+    flushAll()
+    PickupAction(1)
+    for _ = 1, 4 do flushAll() end
+    PlaceAction(5)
+    for _ = 1, 4 do flushAll() end
+    local moved, there = F8.At("ActionButton5")
+    check(moved == flyout and there ~= nil and there.label.shown and there.label.text == "Big Heals"
+        and there.label.parent == W.frames.ActionButton5 and W.frames.ActionButton5.Name.alpha == 0,
+        "moved to another button, the flyout takes its name along")
+    check(host.Name.alpha == 1, "and the button it left reads as the game has it again")
+    PickupAction(5)
+    for _ = 1, 4 do flushAll() end
+    PlaceAction(1)
+    for _ = 1, 4 do flushAll() end
+    flyout, unit = F8.At("ActionButton1")
+    check(flyout ~= nil and unit.label.text == "Big Heals" and W.frames.ActionButton5.Name.alpha == 1, "and back again")
+    -- the name emptied: gone, and the game's own text is seen again
+    Icon.Open(flyout)
+    box:SetText("")
+    window:OkayButton_OnClick()
+    check(flyout.name == nil and not unit.label.shown and host.Name.alpha == 1,
+        "the box emptied and Okay: the flyout has no name, and the button reads as the game has it")
+    -- in a fight nothing is named
+    W.combat = true
+    local ok, why = F8.SetName(flyout, "No")
+    check(ok == false and why ~= nil and flyout.name == nil, "in a fight a name is refused, with the reason")
+    W.combat = false
+    -- a flyout done away with leaves nothing written on its button
+    F8.SetName(flyout, "Gone soon")
+    check(unit.label.shown and host.Name.alpha == 0, "named again")
+    for _ = 1, 3 do
+        local left = F8.At("ActionButton1")
+        if left then F8.Remove(left, #left.entries) end
+    end
+    check(F8.At("ActionButton1") == nil and not unit.label.shown and host.Name.alpha == 1,
+        "the flyout taken apart: its name is off the button, and the game's own text is seen there again")
+    W.placed[5] = hadFive
+end
+
 print("an icon says how many there are of its item, as a bar button does")
 do
     -- His words (2026-11-22): "for items with quantities, their quantities aren't showing up in our flyouts.

@@ -2,6 +2,9 @@
 
 ## [1.1.4] - 2026-11-22
 
+### Added
+- A flyout can be given a name, as a macro can. Right-click the flyout's bar button: the icon window has a name box, sixteen letters as for a macro, and the name is written on the button where a macro's name stands. The window's search has a box of its own now, beside Choose an Icon.
+
 ### Changed
 - The Fallen's Flyouts section of the game's Keybindings options is now only the twelve rows for the spots of every flyout. The heading and six rows it had for each of eight flyouts, used or not, are gone: they made eight look like a limit, which it is not. A key for one icon of one flyout is set as before, by hovering the icon in Quick Keybind Mode, and the section says so. A key already set on one of the old rows goes on working: it is that icon's own key now.
 

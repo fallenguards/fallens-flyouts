@@ -439,6 +439,10 @@ local function Build()
     F.root = root
 end
 
+-- A flyout's name on its bar button: the game's lettering for a macro's name there, how far over the
+-- button's foot it stands where the button has no such text of its own, and the most letters, as for
+-- a macro.
+local NAME_FONT, NAME_UP, NAME_LETTERS = "GameFontHighlightSmallOutline", 2, 16
 -- the bar button's own numbers: the sweep's inset and shade, the dimming
 local COOL_SHADE = 0.64
 -- the most an icon's corner says in digits, and what stands for more
@@ -678,6 +682,9 @@ local function Unit(f)
     -- a chosen icon, drawn over the bar button's own
     unit.face = opener:CreateTexture(nil, "BACKGROUND")
     unit.face:Hide()
+    -- a name given to the flyout, written on the bar button where the game writes a macro's
+    unit.label = opener:CreateFontString(nil, "OVERLAY", NAME_FONT)
+    unit.label:Hide()
     unit.glow = opener:CreateTexture(nil, "ARTWORK")
     unit.glow:SetAtlas(Art.NAMES.glow)
     unit.glow:Hide()
@@ -1053,6 +1060,59 @@ local function Face(unit)
     face:Show()
 end
 
+-- The flyout's name on its bar button: where the game writes a macro's name, and in its lettering. A
+-- name the game has written there itself (the button's own macro) gives way while the flyout has one.
+-- His words (2026-11-22): "we need ability to put a name to the icon too, just like we can with macros."
+local function Named(unit)
+    local host, label = unit.host, unit.label
+    local name = host and unit.flyout and unit.flyout.name
+    -- the game's own text is seen again on a button this left, or whose flyout has no name any more
+    -- (as it was seen before: another addon may have dimmed or hidden it)
+    if unit.under then
+        unit.under:SetAlpha(unit.underAlpha or 1)
+        unit.under, unit.underAlpha = nil, nil
+    end
+    if type(name) ~= "string" or name == "" then
+        label:Hide()
+        return
+    end
+    local theirs = host.Name
+    if type(theirs) ~= "table" or type(theirs.GetObjectType) ~= "function" then theirs = nil end
+    label:SetParent(host)
+    label:ClearAllPoints()
+    if theirs then
+        label:SetFontObject(theirs:GetFontObject() or NAME_FONT)
+        label:SetAllPoints(theirs)
+        unit.under, unit.underAlpha = theirs, theirs:GetAlpha()
+        theirs:SetAlpha(0)
+    else
+        -- a bar button with no such text of its own: at its foot, as wide as the button
+        label:SetFontObject(NAME_FONT)
+        label:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", 0, NAME_UP)
+        label:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, NAME_UP)
+    end
+    label:SetText(name)
+    label:Show()
+end
+
+-- A name for the flyout, as a macro has one: written on its bar button. An empty one takes it away.
+function F.SetName(flyout, text)
+    if InCombatLockdown() then return false, TEXT.fight end
+    if not flyout then return false end
+    local name = ""
+    if type(text) == "string" then
+        -- as the game does with a macro's name
+        name = text:gsub('"', "")
+        name = name:match("^%s*(.-)%s*$")
+    end
+    if name == "" then name = nil end
+    flyout.name = name
+    local unit = Run(flyout).unit
+    if unit then Named(unit) end
+    return true
+end
+F.NAME_LETTERS = NAME_LETTERS
+
 -- the "?" icon, as for a macro, means the ability's own icon
 local QUESTION = 134400
 
@@ -1298,6 +1358,7 @@ local function Lay(unit)
         frame:SetShown(entry ~= nil)
     end
     Face(unit)
+    Named(unit)
     State(unit)
     root:SetAttribute("count" .. unit.index, count)
     unit.placed = Bars.Placed(host)
@@ -1608,6 +1669,8 @@ function F.Apply()
         unit.flyout, unit.host, unit.placed, unit.keys = nil, nil, nil, {}
         Face(unit)
         unit.face:SetParent(unit.opener)
+        Named(unit)
+        unit.label:SetParent(unit.opener)
         root:SetAttribute("okeys" .. f, 0)
         root:SetAttribute("pkeys" .. f, 0)
         root:SetAttribute("count" .. f, 0)

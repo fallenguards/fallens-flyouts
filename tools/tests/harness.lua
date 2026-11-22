@@ -85,6 +85,14 @@ function Frame:GetAlpha() return self.alpha or 1 end
 function Frame:GetLeft() return self.rect and self.rect[1] end
 function Frame:GetRight() return self.rect and self.rect[2] end
 function Frame:GetTop() return self.rect and self.rect[3] end
+-- a text's lettering, and the most letters a box takes
+function Frame:GetObjectType() return self.otype or "Region" end
+-- a button lit or put out
+function Frame:Enable() self.off = false end
+function Frame:Disable() self.off = true end
+function Frame:SetFontObject(v) self.font = v end
+function Frame:GetFontObject() return self.font end
+function Frame:SetMaxLetters(n) self.maxLetters = n end
 -- a window that can be dragged: whether it may be, whether it is being, and that it was
 function Frame:SetMovable(v) self.movable = v == true end
 function Frame:IsMovable() return self.movable == true end
@@ -303,8 +311,10 @@ local function iconWindow(f)
         SetIconTexture = function(self, v) self.v = v == QUESTION_PATH and 134400 or v end,
         GetIconTexture = function(self) return self.v end,
     }
+    -- as the game's template: the words and the box for a name, the words over the list, the list of kinds
     f.BorderBox = { EditBoxHeaderText = region(), OkayButton = region(), CancelButton = region(),
-        IconSelectorEditBox = region(), SelectedIconArea = { SelectedIconButton = chosen } }
+        IconSelectorEditBox = region(), SelectedIconArea = { SelectedIconButton = chosen },
+        IconSelectionText = region(), IconTypeDropdown = region() }
     f.IconSelector = {
         SetSelectedCallback = function(self, fn) self.picked = fn end,
         SetSelectedIndex = function(self, i) self.index = i end,
@@ -325,6 +335,8 @@ function CreateFrame(otype, name, parent, template)
     local f = setmetatable({ name = name, scripts = {}, attrs = {}, shown = true, otype = otype, parent = parent,
         protected = protected, template = template }, Frame)
     if template == "IconSelectorPopupFrameTemplate" then iconWindow(f) end
+    -- the game's search box: a prompt of its own inside it
+    if template == "SearchBoxTemplate" then f.Instructions = region() end
     -- the game's flat panel: its title is a text of its own in the bar at its top
     if template == "DefaultPanelFlatTemplate" then f.TitleContainer = { TitleText = region() } end
     -- the game's icon button of its selector lists: an icon and a mark for the one picked
@@ -834,6 +846,9 @@ function ReloadUI() wantReload = true end
 local function actionButton(name, slot, parent)
     local b = CreateFrame("CheckButton", name, parent, "ActionBarButtonTemplate, SecureActionButtonTemplate")
     b.attrs.type, b.attrs.action, b.action = "action", slot, slot
+    -- where the game writes a macro's name on a bar button, in its own lettering
+    b.Name = b:CreateFontString()
+    b.Name.font = "GameFontHighlightSmallOutline"
     return b
 end
 

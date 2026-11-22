@@ -11,13 +11,18 @@ local F = ns.Flyouts
 
 local NAME = "FallensFlyoutsIconPopup"
 local ACCOUNT_MACROS, SEARCH_LETTERS = 120, 40
+-- the search box: its height, the room between it and what stands at its sides, and where it stands and
+-- how wide it is in a window whose own words are not to be found
+local SEARCH_H, SEARCH_GAP, SEARCH_X, SEARCH_Y, SEARCH_W = 20, 12, 130, 73, 190
 -- the client lists icons by number, so names come from what the character has
 local TEXT = {
-    search = "Search your spells, items and macros",
+    name = "Name on the button (optional)",
+    search = "Search spells, items, macros",
     own = "Click to put this one on the bar button: its icon, tooltip and cooldown show there.",
     reset = "Reset to default icon",
     resetTip = "Back to the button's own ability and its icon.",
 }
+I.TEXT = TEXT
 local BANK = Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
 -- The game's icon list in its window, as its template places it; and the row of the flyout's own icons
 -- over it: how high, how far in its first icon stands, the gap between icons, the room over them.
@@ -29,8 +34,8 @@ local DIVIDER_H, DIVIDER_UP = 8, 2
 local RESET_X, RESET_Y, RESET_H, RESET_PAD = 12, 13, 22, 30
 
 local popup, target
--- the row, the reset button, and the icon of the flyout picked in the row
-local own, reset, pending
+-- the row, the reset button, the search box, and the icon of the flyout picked in the row
+local own, reset, search, pending
 
 local function Usable(text)
     if issecretvalue and issecretvalue(text) then return false end
@@ -252,9 +257,12 @@ local function OnShow(self)
     reset:ClearAllPoints()
     reset:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", RESET_X, up)
     reset:SetSize((reset.GetTextWidth and reset:GetTextWidth() or 0) + RESET_PAD, high)
+    -- the flyout's name, ready to be typed over, as the game's own window has a macro's
     local box = self.BorderBox.IconSelectorEditBox
-    box:SetText("")
+    box:SetText(target.name or "")
+    box:HighlightText()
     box:SetFocus()
+    search:SetText("")
     self.BorderBox.OkayButton:Enable()
 end
 
@@ -267,12 +275,16 @@ local function OnHide(self)
     target, pending = nil, nil
 end
 
--- Okay with nothing picked changes nothing. One of the flyout's own, picked in the row, goes onto the
--- bar button itself; an icon of the game's list is drawn over the button's.
+-- Okay with nothing picked or typed changes nothing. The name in the box is the flyout's from then on.
+-- One of the flyout's own, picked in the row, goes onto the bar button itself; an icon of the game's
+-- list is drawn over the button's.
 local function Okay(self)
     local flyout, icon, opened, picked = target, Chosen(), self.opened, pending
+    local name = self.BorderBox.IconSelectorEditBox:GetText()
     IconSelectorPopupFrameTemplateMixin.OkayButton_OnClick(self)
     if not flyout then return end
+    local named, whyNot = F.SetName(flyout, name)
+    if not named and whyNot then ns.Warn(whyNot) end
     if picked then
         local ok, why = F.Lead(flyout, picked)
         if not ok and why then ns.Warn(why) end
@@ -298,6 +310,28 @@ local function RowTip(self)
 end
 local function HideTip() GameTooltip:Hide() end
 
+-- The search: the game's own search box, between "Choose an Icon" and the list of kinds.
+local function SearchBox()
+    local border = popup.BorderBox
+    local made, box = pcall(CreateFrame, "EditBox", nil, border, "SearchBoxTemplate")
+    if not made or not box then box = CreateFrame("EditBox", nil, border, "InputBoxTemplate") end
+    box:SetAutoFocus(false)
+    box:SetMaxLetters(SEARCH_LETTERS)
+    box:SetHeight(SEARCH_H)
+    local words, kinds = border.IconSelectionText, border.IconTypeDropdown
+    if words and kinds then
+        box:SetPoint("LEFT", words, "RIGHT", SEARCH_GAP, 0)
+        box:SetPoint("RIGHT", kinds, "LEFT", -SEARCH_GAP, 0)
+    else
+        box:SetPoint("TOPLEFT", popup, "TOPLEFT", SEARCH_X, -SEARCH_Y)
+        box:SetWidth(SEARCH_W)
+    end
+    if box.Instructions and box.Instructions.SetText then box.Instructions:SetText(TEXT.search) end
+    -- behind the box's own handling of its text (its prompt and its clear button)
+    box:HookScript("OnTextChanged", function(self) I.Search(self:GetText()) end)
+    return box
+end
+
 local function Build()
     if popup then return end
     popup = CreateFrame("Frame", NAME, UIParent, "IconSelectorPopupFrameTemplate")
@@ -315,13 +349,16 @@ local function Build()
     popup.Update, popup.OkayButton_OnClick = Update, Okay
     popup:SetScript("OnShow", OnShow)
     popup:SetScript("OnHide", OnHide)
-    -- the window's name box is the search here: a flyout has no name
+    -- The window's name box holds the flyout's name, as it holds a macro's in the game's own use of
+    -- this window: sixteen letters, written on the bar button. A flyout needs none, so Okay stays lit
+    -- with the box empty (the game's own handler would put it out).
     local box = popup.BorderBox.IconSelectorEditBox
-    popup.BorderBox.EditBoxHeaderText:SetText(TEXT.search)
-    box:SetMaxLetters(SEARCH_LETTERS)
-    box:SetScript("OnTextChanged", function(self) I.Search(self:GetText()) end)
+    popup.BorderBox.EditBoxHeaderText:SetText(TEXT.name)
+    box:SetMaxLetters(F.NAME_LETTERS)
+    box:SetScript("OnTextChanged", function() popup.BorderBox.OkayButton:Enable() end)
     box:SetScript("OnEnterPressed", function() popup:OkayButton_OnClick() end)
     box:SetScript("OnEscapePressed", function() popup:CancelButton_OnClick() end)
+    search = SearchBox()
     -- the flyout's own icons in a row over the game's list, cut off from it by a line
     own = CreateFrame("Frame", nil, popup)
     own:SetPoint("TOPLEFT", popup, "TOPLEFT", GRID_X, -GRID_Y)
@@ -358,7 +395,7 @@ local function Build()
         GameTooltip:Show()
     end)
     reset:SetScript("OnLeave", HideTip)
-    I.popup, I.own, I.reset = popup, own, reset
+    I.popup, I.own, I.reset, I.search = popup, own, reset, search
 end
 
 -- the icon window for one flyout
