@@ -352,6 +352,60 @@ check(W.cursorRead == page and rows.smartNavigationIgnored == true,
 page:Hide()
 check(rows.smartNavigationIgnored == nil, "leaving the page gives the game's rows back")
 
+print("the settings page scrolls: nothing it holds is drawn outside the game's window")
+do
+    -- His snip and words (2026-11-22): the page's last check boxes hung out under the game's window. "need
+    -- to fix spilling outside of settings window immediately. put a scroll in."
+    local scroll, content = page.scroll, page.content
+    check(scroll ~= nil and scroll.otype == "ScrollFrame" and scroll.parent == page and scroll.scrollChild == content
+        and content.parent == scroll, "the page holds a scroll frame, and what scrolls in it")
+    local point, to, toPoint, x, y = scroll:GetPoint()
+    check(point == "BOTTOMRIGHT" and to == page and toPoint == "BOTTOMRIGHT" and x < 0 and y == 0,
+        "the scroll frame ends at the page's own bottom, with room at the right for the bar")
+    check(page.bar ~= nil and page.bar.template == "MinimalScrollBar" and scroll.bar == page.bar
+        and page.bar.hideIfUnscrollable == true, "with the game's own scroll bar, there only when there is somewhere to scroll to")
+    -- every button, check box, slider and list of the page is inside what scrolls: the game cuts those off
+    -- at the scroll frame's edge
+    local inside, outside = 0, {}
+    for _, f in ipairs(W.all) do
+        local up, through = f.parent, false
+        while up and up ~= page do
+            if up == content then through = true end
+            up = up.parent
+        end
+        if up == page and f ~= scroll and f ~= page.bar then
+            if through or f.parent == content then
+                inside = inside + 1
+            elseif f ~= content then
+                outside[#outside + 1] = tostring(f.otype) .. " " .. tostring(f.text or f.label or "")
+            end
+        end
+    end
+    check(inside >= 20 and #outside == 0, ("all %d of the page's controls are inside it; outside: %s"):format(inside,
+        table.concat(outside, ", ")))
+    -- it scrolls as far as its lowest control, the last check box
+    local last = page.arrange.plate
+    content.rect, last.rect = { 0, 500, 1000, 999 }, { 0, 20, 300, 280 }
+    scroll.h = 500
+    NS.ProfileUI.Fit()
+    check(content.h == 1000 - 280 + 16 and scroll:GetVerticalScrollRange() == content.h - 500,
+        ("what scrolls is as tall as the page's content, down to its last check box: %s"):format(tostring(content.h)))
+    content.rect, last.rect = nil, nil
+end
+
+print("keys inside a flyout are set the game's own ways: the page has no Set Keys")
+do
+    -- His words (2026-11-22): "keys insdie a flyout should NOT be here since we have the default ways to
+    -- keybind things."
+    local found = {}
+    for _, f in ipairs(W.all) do
+        local text = tostring(f.text or "") .. " " .. tostring(f.label or "")
+        if text:find("Set Keys", 1, true) or text:find("Keys inside a flyout", 1, true) then found[#found + 1] = text end
+    end
+    check(page.keys == nil and #found == 0, "no Set Keys button and no heading for it: " .. table.concat(found, ", "))
+    check(NS.Keys.Start == nil and StaticPopupDialogs.FALLENSFLYOUTS_KEYS == nil, "and no key setting window of the addon's own")
+end
+
 print("flyout size")
 local base = menu.scale
 check(entry(one, 1).w == 30 and entry(one, 1).h == 30, "by default the icons are the game's own flyout size, 30 wide")
@@ -419,25 +473,6 @@ quick.scripts.OnKeyDown(quick, "T")
 check(mine.entries[4].key == nil, "off the icon a key sets nothing")
 W.quick = false
 
-print("setting keys by hovering: from Set Keys in the settings")
-page.keys.scripts.OnClick(page.keys)
-check(W.popup ~= nil and W.popup.which == "FALLENSFLYOUTS_KEYS" and NS.Keys.On(), "Set Keys starts the mode")
-top.scripts.OnEnter(top)
-check(W.focus ~= nil, "a hover on an icon waits for a key in a typing box")
-W.focus.scripts.OnKeyDown(W.focus, "T")
-check(mine.entries[4].key == "T", "the key pressed becomes that icon's")
-top.scripts.OnEnter(top)
-W.clock = W.clock + 1
-W.focus.scripts.OnChar(W.focus, "g")
-check(mine.entries[4].key == "G", "a client that hands the box only the character typed: that names the key")
-top.scripts.OnEnter(top)
-W.focus.scripts.OnKeyDown(W.focus, "DELETE")
-check(mine.entries[4].key == nil, "Delete gives it its own back there too")
-top.scripts.OnEnter(top)
-W.focus.scripts.OnEscapePressed(W.focus)
-check(W.focus == nil, "Escape lets go of the keyboard")
-StaticPopup_Hide("FALLENSFLYOUTS_KEYS")
-check(not NS.Keys.On(), "and Done ends the mode")
 if menu:IsShown() then mouse(host) end
 
 W.cursor = { "spell", 7, "spell", 501, 501 }

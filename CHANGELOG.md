@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3] - 2026-11-22
+
+### Fixed
+- The settings page was taller than the game's Options window, so its last check boxes hung out under it. The page now scrolls inside the window, with the game's own scroll bar, and a controller's cursor scrolls it too.
+
+### Removed
+- Set Keys is gone from the settings page. A key for an icon inside a flyout is set the game's own ways: in its Keybindings options, or by hovering the icon in Quick Keybind Mode and pressing the key.
+
 ## [1.1.2] - 2026-11-21
 
 ### Fixed

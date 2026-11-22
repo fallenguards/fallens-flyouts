@@ -3,7 +3,7 @@ local _, ns = ...
 -- luacheck: globals FallensFlyouts_OnAddonCompartmentClick
 -- luacheck: read globals CreateFrame Settings MenuUtil StaticPopup_Show InCombatLockdown C_Timer
 -- luacheck: read globals OKAY CANCEL YES NO GameTooltip SettingsPanel SmartNavigation
--- luacheck: read globals SmartNavigation_MarkFrameIgnored SmartNavigation_ClearIgnoreStatus
+-- luacheck: read globals SmartNavigation_MarkFrameIgnored SmartNavigation_ClearIgnoreStatus ScrollUtil
 
 -- The Profiles page in the game's options; /ff and /flyouts open it.
 local P = ns.Profiles
@@ -12,6 +12,9 @@ ns.ProfileUI = UI
 
 local TITLE = "Fallen's Flyouts"
 local EDGE, GAP, LINE = 16, 8, 22
+-- the scroll bar: the room kept for it at the page's right, how far it stands from what scrolls and
+-- from the page's top and bottom; and how far a turn of the wheel goes where the game's bar is missing
+local BAR_ROOM, BAR_GAP, BAR_INSET, WHEEL = 24, 8, 4, 30
 -- floors: each grows to the text it holds
 local DROP_FLOOR, BUTTON_FLOOR, CHROME = 200, 70, 40
 
@@ -34,8 +37,6 @@ local TEXT = {
     sizeHead = "Flyout size",
     sizeNote = "100% is the size of the game's own flyouts.",
     percent = "%d%%",
-    keysHead = "Keys inside a flyout",
-    keysNote = "Icons take 1 to 6 by their place. Set Keys gives an icon a key of its own.",
 }
 -- the size slider: its ends and step in percent, its floor width and height
 local SIZE_LOW, SIZE_HIGH, SIZE_STEP, SLIDER_FLOOR, SLIDER_H = 50, 200, 5, 200, 17
@@ -208,6 +209,46 @@ function UI.Refresh()
     panel.syncing = nil
     panel.sizeText:SetText(TEXT.percent:format(percent))
     ns.Arrange.Refresh()
+    UI.Fit()
+end
+
+-- What the page holds is as tall as it is, down to its lowest control: the scroll goes that far.
+function UI.Fit()
+    local content, last = panel.content, panel.arrange and panel.arrange.plate
+    if not (content and last) then return end
+    local top, bottom = content:GetTop(), last:GetBottom()
+    if not (top and bottom) then return end
+    content:SetHeight(math.max(1, top - bottom + EDGE))
+    if panel.scroll.UpdateScrollChildRect then panel.scroll:UpdateScrollChildRect() end
+end
+
+-- The page scrolls inside the game's window: what it holds can be taller than the window, and nothing
+-- of it is drawn outside. The game's own slim scroll bar, there only when there is somewhere to scroll
+-- to; a controller's cursor scrolls the frame by itself.
+local function Scroller()
+    local scroll = CreateFrame("ScrollFrame", nil, panel)
+    scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -BAR_ROOM, 0)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(math.max(1, scroll:GetWidth() or 1), 1)
+    scroll:SetScrollChild(content)
+    scroll:SetScript("OnSizeChanged", function(_, width) content:SetWidth(math.max(1, width or 1)) end)
+    if ScrollUtil and ScrollUtil.InitScrollFrameWithScrollBar then
+        local bar = CreateFrame("EventFrame", nil, panel, "MinimalScrollBar")
+        bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", BAR_GAP, -BAR_INSET)
+        bar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", BAR_GAP, BAR_INSET)
+        ScrollUtil.InitScrollFrameWithScrollBar(scroll, bar)
+        bar:SetHideIfUnscrollable(true)
+        panel.bar = bar
+    else
+        scroll:EnableMouseWheel(true)
+        scroll:SetScript("OnMouseWheel", function(self, turn)
+            local to = self:GetVerticalScroll() - turn * WHEEL
+            self:SetVerticalScroll(math.max(0, math.min(self:GetVerticalScrollRange(), to)))
+        end)
+    end
+    panel.scroll, panel.content = scroll, content
+    return content
 end
 
 -- a size from the slider or its two buttons, in percent
@@ -221,40 +262,39 @@ end
 
 local function Step(by) UI.SetSize(math.floor(ns.Flyouts.Size() * 100 + 0.5) + by) end
 
--- under the profiles: the size and the keys
+-- under the profiles: the size
 local MORE = {
     { key = "smaller", label = "Smaller", tip = "Makes flyouts smaller.", run = function() Step(-SIZE_STEP) end },
     { key = "larger", label = "Larger", tip = "Makes flyouts larger.", run = function() Step(SIZE_STEP) end },
 }
-local KEYS = { key = "keys", label = "Set Keys",
-    tip = "Then hover an icon in an open flyout and press a key. The game's Quick Keybind Mode does the same.",
-    run = function() ns.Keys.Start() end }
 
 function UI.Build()
     if panel.built then return end
     ns.Start()
-    local head = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    head:SetPoint("TOPLEFT", panel, "TOPLEFT", EDGE, -EDGE)
+    -- everything the page holds hangs on this, and scrolls with it
+    local content = Scroller()
+    local head = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    head:SetPoint("TOPLEFT", content, "TOPLEFT", EDGE, -EDGE)
     head:SetText(TEXT.head)
-    local intro = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    local intro = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     intro:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -GAP)
     intro:SetText(TEXT.intro)
     panel.measure = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     panel.measure:Hide()
 
-    local dropdown = CreateFrame("DropdownButton", nil, panel, "WowStyle1DropdownTemplate")
+    local dropdown = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
     dropdown:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -GAP * 2)
     dropdown:SetWidth(DropWidth())
     dropdown:SetupMenu(UI.Fill)
     panel.dropdown = dropdown
 
-    local users = panel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    local users = content:CreateFontString(nil, "ARTWORK", "GameFontDisable")
     users:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -GAP)
     users:SetJustifyH("LEFT")
     panel.users = users
 
     local function Make(spec)
-        local button = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        local button = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
         button:SetText(spec.label)
         button:SetSize(math.max(BUTTON_FLOOR, (button:GetTextWidth() or 0) + CHROME / 2), LINE)
         button.label, button.tip = spec.label, spec.tip
@@ -275,14 +315,14 @@ function UI.Build()
         last = button
     end
 
-    local sizeHead = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    local sizeHead = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     sizeHead:SetPoint("TOPLEFT", panel.new, "BOTTOMLEFT", 0, -GAP * 3)
     sizeHead:SetText(TEXT.sizeHead)
-    local sizeNote = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    local sizeNote = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     sizeNote:SetPoint("TOPLEFT", sizeHead, "BOTTOMLEFT", 0, -GAP)
     sizeNote:SetText(TEXT.sizeNote)
     -- the game's own slider; the two buttons are for a controller's cursor
-    local slider = CreateFrame("Slider", nil, panel, "UISliderTemplate")
+    local slider = CreateFrame("Slider", nil, content, "UISliderTemplate")
     slider:SetPoint("TOPLEFT", sizeNote, "BOTTOMLEFT", 0, -GAP * 2)
     slider:SetSize(SLIDER_FLOOR, SLIDER_H)
     slider:SetMinMaxValues(SIZE_LOW, SIZE_HIGH)
@@ -290,21 +330,13 @@ function UI.Build()
     slider:SetObeyStepOnDrag(true)
     slider:SetScript("OnValueChanged", function(_, value) UI.SetSize(value) end)
     panel.slider = slider
-    panel.sizeText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    panel.sizeText = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     panel.sizeText:SetPoint("LEFT", slider, "RIGHT", GAP, 0)
     local smaller, larger = Make(MORE[1]), Make(MORE[2])
     smaller:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -GAP * 2)
     larger:SetPoint("LEFT", smaller, "RIGHT", GAP / 2, 0)
-
-    local keysHead = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    keysHead:SetPoint("TOPLEFT", smaller, "BOTTOMLEFT", 0, -GAP * 3)
-    keysHead:SetText(TEXT.keysHead)
-    local keysNote = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)
-    keysNote:SetText(TEXT.keysNote)
-    Make(KEYS):SetPoint("TOPLEFT", keysNote, "BOTTOMLEFT", 0, -GAP * 2)
     -- under it: arranging a flyout without a drag (Options/Arrange.lua)
-    ns.Arrange.Build(panel, panel.keys)
+    ns.Arrange.Build(panel, smaller, content)
     panel.built = true
     P.OnChange(UI.Refresh)
 end
@@ -357,6 +389,8 @@ function ns.OptionsPageHidden() Hush(false) end
 panel:SetScript("OnShow", function()
     UI.Build()
     UI.Refresh()
+    -- measured again once the game has placed the page in its window
+    C_Timer.After(0, UI.Fit)
     ns.OptionsPageShown(panel)
 end)
 panel:SetScript("OnHide", ns.OptionsPageHidden)

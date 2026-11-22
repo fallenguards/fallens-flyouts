@@ -1,20 +1,15 @@
 local _, ns = ...
--- luacheck: globals StaticPopupDialogs
--- luacheck: read globals UIParent CreateFrame InCombatLockdown KeybindFrames_InQuickKeybindMode GameTooltip
+-- luacheck: read globals InCombatLockdown KeybindFrames_InQuickKeybindMode GameTooltip
 -- luacheck: read globals CreateKeyChordStringUsingMetaKeyState IsKeyPressIgnoredForBinding QuickKeybindFrame
--- luacheck: read globals IsAltKeyDown IsControlKeyDown IsShiftKeyDown StaticPopup_Show StaticPopup_Hide DONE GetTime
+-- luacheck: read globals IsAltKeyDown IsControlKeyDown IsShiftKeyDown
 
--- An icon's own key inside its flyout: hover the icon and press the key.
--- On in the game's Quick Keybind Mode and from the settings. Nothing here
--- touches the game's key bindings: a flyout's keys count only while it is open.
+-- An icon's own key inside its flyout: in the game's Quick Keybind Mode, hover the icon and press the
+-- key. Nothing here touches the game's key bindings: a flyout's keys count only while it is open.
 local K = {}
 ns.Keys = K
 local F = ns.Flyouts
 
-local POPUP = "FALLENSFLYOUTS_KEYS"
 local TEXT = {
-    popup = "Open a flyout, hover an icon and press the key to pick it with. "
-        .. "Backspace over an icon gives it its own key back.",
     press = "Press a key to pick this with.",
     reset = "Backspace gives it its own key back.",
 }
@@ -23,12 +18,9 @@ local ALONE = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT =
     RMETA = true, UNKNOWN = true }
 -- these give an icon its place's key and pad button back
 local RESET = { BACKSPACE = true, DELETE = true }
--- typed characters whose key has another name
-local NAMED = { [" "] = "SPACE" }
 
-local own, hooked = false, false
-local catcher, hovered
-local keyAt = 0
+local hooked = false
+local hovered
 
 local function Quick()
     return KeybindFrames_InQuickKeybindMode ~= nil and KeybindFrames_InQuickKeybindMode() == true
@@ -37,7 +29,7 @@ end
 -- whether a hover and a press set a key right now
 function K.On()
     if InCombatLockdown() then return false end
-    return own or Quick()
+    return Quick()
 end
 
 -- the key with the modifiers held, in the game's own order
@@ -54,13 +46,7 @@ local function Tip(frame)
     GameTooltip:Show()
 end
 
-function K.Leave()
-    hovered = nil
-    if catcher then
-        catcher:ClearFocus()
-        catcher:Hide()
-    end
-end
+function K.Leave() hovered = nil end
 
 -- a key or pad button pressed over the hovered icon
 function K.Pressed(key, pad)
@@ -92,77 +78,13 @@ local function HookQuick()
     QuickKeybindFrame:HookScript("OnGamePadButtonDown", Seen)
 end
 
--- From the settings there is no such window: keys are read from a typing
--- box that holds the focus while an icon is hovered, and drops it on hiding.
-local function Catcher()
-    if catcher then return catcher end
-    catcher = CreateFrame("EditBox", nil, UIParent)
-    catcher:Hide()
-    catcher:SetAutoFocus(false)
-    catcher:SetFontObject("GameFontNormal")
-    catcher:SetSize(1, 1)
-    catcher:SetAlpha(0)
-    catcher:SetPoint("TOPLEFT", UIParent, "TOPLEFT")
-    catcher:SetScript("OnKeyDown", function(self, key)
-        keyAt = GetTime()
-        self:SetText("")
-        if key ~= "ESCAPE" then K.Pressed(key, false) end
-    end)
-    -- a client that gives the box only what was typed: the character names the key
-    catcher:SetScript("OnChar", function(self, char)
-        self:SetText("")
-        if GetTime() ~= keyAt then K.Pressed(NAMED[char] or char:upper(), false) end
-    end)
-    catcher:SetScript("OnEscapePressed", function() K.Leave() end)
-    catcher:SetScript("OnEditFocusLost", function(self) self:Hide() end)
-    -- not every client has a pad
-    if catcher.EnableGamePadButton then
-        catcher:EnableGamePadButton(true)
-        catcher:SetScript("OnGamePadButtonDown", function(_, button) K.Pressed(button, true) end)
-    end
-    return catcher
-end
-
 -- the mouse came onto a flyout icon; true when this mode took it
 function K.Enter(frame)
     if not K.On() then return false end
     hovered = frame
-    if Quick() then
-        HookQuick()
-    else
-        local box = Catcher()
-        box:Show()
-        box:SetFocus()
-    end
-    ns.Log(("keys: waiting over %s, %s"):format(tostring(frame:GetName()),
-        Quick() and ("the game's mode, its window hooked: " .. tostring(hooked)) or "our own mode"))
+    HookQuick()
+    ns.Log(("keys: waiting over %s, the game's mode, its window hooked: %s"):format(tostring(frame:GetName()),
+        tostring(hooked)))
     Tip(frame)
     return true
 end
-
-function K.Start()
-    if InCombatLockdown() then return ns.Warn(F.TEXT.fight) end
-    StaticPopup_Show(POPUP)
-end
-
-StaticPopupDialogs[POPUP] = {
-    text = TEXT.popup,
-    button1 = DONE,
-    timeout = 0,
-    whileDead = 1,
-    hideOnEscape = 1,
-    preferredIndex = 3,
-    OnShow = function() own = true end,
-    OnHide = function()
-        own = false
-        K.Leave()
-    end,
-}
-
--- a fight ends the mode: nothing in a flyout changes in one
-local events = CreateFrame("Frame")
-events:RegisterEvent("PLAYER_REGEN_DISABLED")
-events:SetScript("OnEvent", function()
-    K.Leave()
-    if own then StaticPopup_Hide(POPUP) end
-end)

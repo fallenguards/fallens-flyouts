@@ -85,6 +85,19 @@ function Frame:GetAlpha() return self.alpha or 1 end
 function Frame:GetLeft() return self.rect and self.rect[1] end
 function Frame:GetRight() return self.rect and self.rect[2] end
 function Frame:GetTop() return self.rect and self.rect[3] end
+-- a scroll frame: what scrolls in it, how far it can go (its child's height over its own), where it is
+function Frame:SetScrollChild(child) self.scrollChild = child end
+function Frame:GetScrollChild() return self.scrollChild end
+function Frame:UpdateScrollChildRect() end
+function Frame:EnableMouseWheel() end
+function Frame:GetVerticalScrollRange()
+    local child = self.scrollChild
+    return math.max(0, (child and child.h or 0) - (self.h or 0))
+end
+function Frame:GetVerticalScroll() return self.scrolled or 0 end
+function Frame:SetVerticalScroll(v) self.scrolled = v end
+-- the game's scroll bar
+function Frame:SetHideIfUnscrollable(v) self.hideIfUnscrollable = v end
 function Frame:GetBottom() return self.rect and self.rect[4] end
 -- the layer a frame is drawn on: its own when given one, else that of its parent
 function Frame:SetFrameStrata(strata) self.strata = strata end
@@ -287,7 +300,7 @@ end
 function CreateFrame(otype, name, parent, template)
     local protected = template ~= nil and template:find("Secure") ~= nil
     local f = setmetatable({ name = name, scripts = {}, attrs = {}, shown = true, otype = otype, parent = parent,
-        protected = protected }, Frame)
+        protected = protected, template = template }, Frame)
     if template == "IconSelectorPopupFrameTemplate" then iconWindow(f) end
     -- the game's icon button of its selector lists: an icon and a mark for the one picked
     if template == "SelectorButtonTemplate" then
@@ -311,6 +324,8 @@ DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) W.chat[#W.chat + 1] = msg e
 UIErrorsFrame = { AddMessage = function(_, msg) W.errors[#W.errors + 1] = msg end }
 function GetTime() return W.clock end
 function InCombatLockdown() return W.combat end
+-- the game's own tie between a scroll frame and its bar (ScrollUtil.lua)
+ScrollUtil = { InitScrollFrameWithScrollBar = function(scroll, bar) scroll.bar, bar.scrolls = bar, scroll end }
 C_Timer = {
     After = function(_, fn) W.queue[#W.queue + 1] = fn end,
     NewTicker = function(_, fn) W.ticker = fn end,

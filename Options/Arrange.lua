@@ -41,7 +41,8 @@ local TEXT = {
 }
 A.TEXT = TEXT
 
-local panel
+-- the page, and the part of it that scrolls: what is built here hangs on that
+local panel, holder
 local at, held = 1, nil
 
 -- the flyouts on the bars, in the order they are laid
@@ -130,7 +131,7 @@ end
 local function HideTip() GameTooltip:Hide() end
 
 local function Button(label, tip, run)
-    local button = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    local button = CreateFrame("Button", nil, holder, "UIPanelButtonTemplate")
     button:SetText(label)
     button:SetSize(math.max(BUTTON_FLOOR, (button:GetTextWidth() or 0) + CHROME), LINE)
     button.tip = tip
@@ -142,7 +143,7 @@ end
 
 -- an icon dressed as a flyout's own, pressed to pick it or its place
 local function Icon(i)
-    local button = CreateFrame("Button", nil, panel)
+    local button = CreateFrame("Button", nil, holder)
     button:SetSize(Art.ICON, Art.ICON)
     button.back = button:CreateTexture(nil, "BACKGROUND", nil, -1)
     button.back:SetAtlas(Art.NAMES.back)
@@ -210,14 +211,14 @@ function A.Plate(on)
     A.Refresh()
 end
 
-function A.Build(page, above)
+function A.Build(page, above, scrolled)
     if page.arrange then return end
-    panel = page
+    panel, holder = page, scrolled or page
     local w = {}
-    local head = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    local head = holder:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     head:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -GAP * 3)
     head:SetText(TEXT.head)
-    w.status = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    w.status = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     w.status:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -GAP)
     w.status:SetJustifyH("LEFT")
     w.prev = Button(TEXT.prev, TEXT.prevTip, function() A.Step(-1) end)
@@ -227,7 +228,7 @@ function A.Build(page, above)
     -- for those with no mouse to pull a flyout's grip
     w.turn = Button(TEXT.turn, TEXT.turnTip, A.Turn)
     w.turn:SetPoint("LEFT", w.next, "RIGHT", GAP / 2, 0)
-    w.which = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    w.which = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     w.which:SetPoint("LEFT", w.turn, "RIGHT", GAP, 0)
     w.icons = {}
     for i = 1, F.MAX do
@@ -243,7 +244,7 @@ function A.Build(page, above)
     w.off:SetPoint("TOPLEFT", w.icons[1], "BOTTOMLEFT", -GAP / 2, -GAP * 2)
     -- the game's own check boxes, beside it: both for every flyout of the profile
     local function Check(text, tip, run, after, under)
-        local box = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+        local box = CreateFrame("CheckButton", nil, holder, "UICheckButtonTemplate")
         if under then
             box:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -GAP / 2)
         else
