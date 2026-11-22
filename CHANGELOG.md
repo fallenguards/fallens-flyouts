@@ -18,7 +18,6 @@
 - The settings page says, over Arrange a flyout, that none of it is needed with a mouse: a flyout is made by dragging a spell, item or macro onto a bar button, where the + appears. That section is for a controller.
 
 ### Removed
-- The chat lines that told what had just been done are gone: an icon taken off a flyout, a flyout removed with its button, an ability added to a flyout in gamepad mode.
 - Set Keys is gone from the settings page. A key for an icon inside a flyout is set the game's own ways: in its Keybindings options, or by hovering the icon in Quick Keybind Mode and pressing the key.
 
 ## [1.1.2] - 2026-11-21
