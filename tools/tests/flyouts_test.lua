@@ -1532,7 +1532,8 @@ do
     -- As the game's: while it is up the bar itself is put away, and the dialog shows copies
     -- of the bar's buttons, each of the same slot as the button it stands for.
     local console = W.frames.MainActionBar
-    for i = 1, 9 do actionButton("GamepadActionBarEditFrameTestActionButton" .. i, i, dialog) end
+    -- (the dialog reads a copy's slot off its ID: "storage slots as their IDs", in its own words)
+    for i = 1, 9 do actionButton("GamepadActionBarEditFrameTestActionButton" .. i, i, dialog).id = i end
     dialog.scripts.OnShow = function() console:Hide() end
     dialog.scripts.OnHide = function() console:Show() end
     function dialog:StartListeningForButtons()
@@ -1746,6 +1747,9 @@ do
         check(Pad.Picked() == nil and not up(), "a button with no flyout picked up: nothing is offered")
         dialog:TransitionToSelectActionToPickup()
         W.placed[5] = 701
+        -- a taken spot and an empty one beside it, for what follows
+        W.placed[4] = 704
+        W.placed[6] = false
         fire("ACTIONBAR_SLOT_CHANGED", 5)
         flushAll()
         pickUp(7)
@@ -1768,19 +1772,53 @@ do
         local words = Pad.Panel()
         check(words ~= nil and words:IsShown() and words:GetFrameStrata() == "TOOLTIP" and words.title.text == "Edit Flyout"
             and words.lines[1].text:find("to leave Edit Action Bar", 1, true) ~= nil and words.lines[2].text == "The flyout editor opens then."
-            and words.lines[3].text:find("still places the ability", 1, true) ~= nil,
-            "the box says so in the top layer, and warns of every other button: " .. tostring(words.lines[3].text))
+            and words.lines[3].text == "The D-pad moves the icons there. Pressed here it changes nothing.",
+            "the box says so in the top layer, and where the D-pad does its work: " .. tostring(words.lines[3].text))
         check(box.BindInstructionText.alpha == 0 and box.ActionName.alpha == 0 and box.TitleBox.TitleText.alpha == 0,
             "the game's words about binding the ability are out of sight meanwhile")
-        -- he presses a bar button after all: the dialog places what it holds, and no editor opens for it
+        -- What he did (2026-11-21): the D-pad pressed there, to move an icon. The dialog sets the ability it
+        -- thinks it holds down on that spot and takes hold of what was there: "replaced my ... d pad up bind".
+        -- Now each such press is undone at once, on a taken spot and on an empty one, time after time.
+        local function bars() return table.concat({ tostring(W.placed[4]), tostring(W.placed[5]), tostring(W.placed[6]),
+            tostring(W.placed[7]) }, " ") end
+        local before = bars()
         press("PADDUP", 4)
-        check(Pad.Armed() == nil and W.placed[4] == 771 and box.BindInstructionText.alpha == 1,
-            "a D-pad press there is the game's: it places the ability, the box has its words back, and no editor will open")
+        check(bars() == before and W.placed[4] == 704, "D-pad up pressed there, on a taken spot: the spot holds what it held: " .. bars())
+        check(Pad.Armed() ~= nil and words:IsShown() and prompts.back.label == "Open Flyout Editor" and Pad.Offer() == nil
+            and not dialog.ActionTooltip.shown,
+            "and the box still says how to go on; nothing else is offered over it")
+        press("PADDRIGHT", 5)
+        press("PADDUP", 4)
+        check(bars() == before, "pressed again and again, on other taken spots: every one as it was: " .. bars())
+        press("PADDDOWN", 7)
+        check(bars() == before and NS.Flyouts.At("ActionButton7") == target and ids() == "771 772 773",
+            "pressed for the flyout's own button: its ability stays and the flyout is whole")
+        press("PADDLEFT", 6)
+        check(bars() == before and W.placed[6] == false, "pressed for an empty spot: the spot is empty again: " .. bars())
+        check(Pad.Armed() ~= nil and prompts.back.shown and prompts.back.label == "Open Flyout Editor" and not words:IsShown()
+            and box.BindInstructionText.alpha == 1,
+            "the dialog, holding nothing now, is back at its first step: our bar still names the button that opens the editor")
+        -- another ability picked up there: the edit asked for is off
+        pickUp(5)
+        check(Pad.Armed() == nil and not up(), "another ability picked up instead: no editor is waiting any more")
+        dialog:TransitionToSelectActionToPickup()
+        W.placed[5] = 701
+        W.placed[4] = nil
+        fire("ACTIONBAR_SLOT_CHANGED", 5)
         dialog:ExitEditMode()
         flushAll()
         check(Edit.Editing() == nil and not bound("PADDUP"), "the dialog left after that, nothing opens")
-        W.placed[4] = nil
-        fire("ACTIONBAR_SLOT_CHANGED", 4)
+
+        -- a flyout that lies along its button as a strip has no editor of this kind: nothing is offered
+        NS.Flyouts.SetAround(false)
+        dialog:EnterEditMode()
+        pickUp(7)
+        check(Pad.Picked() == nil and not up(), "a flyout that does not stand around its button: Edit Flyout is not offered")
+        dialog:TransitionToSelectActionToPickup()
+        W.placed[7] = 771
+        fire("ACTIONBAR_SLOT_CHANGED", 7)
+        dialog:ExitEditMode()
+        NS.Flyouts.SetAround(true)
         flushAll()
 
         -- the way meant: pick up, A, B
@@ -1809,7 +1847,8 @@ do
         tap("PADDDOWN")
         check(ids() == "773 771 772" and Edit.Editing().mark == 3, "D-pad down: it changes places with the one below: " .. ids())
         tap("PADDLEFT")
-        check(ids() == "773 771 772" and Edit.Editing().mark == 3, "D-pad left, where no icon is: nothing moves")
+        check(ids() == "773 771 772" and Edit.Editing().mark == 3 and NS.PadEdit.Hint():find("No icon is on that side", 1, true) ~= nil,
+            "D-pad left, where no icon is: nothing moves, and the line over the bar says why")
         tap("PAD4")
         check(NS.Flyouts.Faces(target) == true and prompts.edit.label == "Use D-Pad" and Pad.View().tokens[1].pad == "PAD4",
             "Y: this flyout picks with the face buttons, the picture with it")
@@ -1824,6 +1863,24 @@ do
         tap("PAD2")
         check(Edit.Editing() == nil and not bound("PADDUP") and not bound("PAD2") and not up() and NS.Flyouts.At("ActionButton7") == target,
             "B: done. The pad's buttons are the game's again and the flyout stays as edited")
+        -- its button out of view for a while (the pad put down, another page of the bar): it ends by itself
+        Edit.Open(target)
+        local editor = W.frames.FallensFlyoutsPadEditor
+        check(editor:IsShown() and NS.PadEdit.Hint():find("is selected", 1, true) ~= nil, "opened again, the line over the bar says what is selected")
+        editor.scripts.OnUpdate(editor, 0.3)
+        check(Edit.Editing() ~= nil, "its button in view, it stays up")
+        W.frames.ActionButton7:Hide()
+        for _ = 1, 6 do editor.scripts.OnUpdate(editor, 0.3) end
+        check(Edit.Editing() == nil and not bound("PADDUP") and not editor:IsShown(),
+            "its button gone from view for over a second: it ends and the pad's buttons are the game's again")
+        W.frames.ActionButton7:Show()
+        -- the game's dialog coming up ends it as well
+        Edit.Open(target)
+        dialog:EnterEditMode()
+        editor.scripts.OnUpdate(editor, 0.3)
+        check(Edit.Editing() == nil and not bound("PADDUP"), "the game's dialog coming up ends it")
+        dialog:ExitEditMode()
+        flushAll()
         -- a fight ends it too
         Edit.Open(target)
         check(Edit.Editing() ~= nil and bound("PADDUP"), "opened again")

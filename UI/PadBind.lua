@@ -4,7 +4,7 @@ local _, ns = ...
 -- luacheck: read globals C_Spell C_Item PickupMacro GetMacroInfo GAMEPAD_FACE_LEFT GAMEPAD_FACE_TOP GAMEPAD_FACE_RIGHT
 -- luacheck: read globals GAMEPAD_PROMPT_DIVIDER_SLASH FRAME_ACTION_EDIT_ACTION_BAR FRAME_ACTION_CANCEL
 -- luacheck: read globals GAMEPAD_FACE_BOTTOM GetTime C_Timer FRAME_ACTION_UNBIND
--- luacheck: read globals SetOverrideBindingClick ClearOverrideBindings
+-- luacheck: read globals SetOverrideBindingClick ClearOverrideBindings HasAction PickupAction
 
 -- The game's gamepad mode, binding an ability or moving one about (Edit
 -- Action Bar). Put onto a button that holds an ability, the new one takes its
@@ -47,8 +47,9 @@ local TEXT = {
     openEditor = "Open Flyout Editor",
     note1 = "Press %s to leave Edit Action Bar.",
     note2 = "The flyout editor opens then.",
-    note3 = "Until then any other button still places the ability the game is holding.",
+    note3 = "The D-pad moves the icons there. Pressed here it changes nothing.",
     editHint = "Editing: %s is selected. The D-pad moves it to that side of the button.",
+    noSide = "No icon is on that side to change places with.",
 }
 G.TEXT, G.KEY = TEXT, KEY_ADD
 
@@ -71,6 +72,8 @@ local NOTE_Y, NOTE_STEP, NOTE_GLYPH, NOTE_WIDTH = 56, 28, 18, 430
 -- The editor: the pad button that shows or hides the plate, what the names of its bound buttons begin
 -- with, the room between its picture, its bar and its hint, and the sides a ring has.
 local KEY_PLATE, EDIT_BUTTON, EDIT_GAP, RING_SIDES = "PADRSHOULDER", "FallensFlyoutsPadEdit", 8, 4
+-- how often the open editor looks at its button, and how long the button may be out of view
+local EDIT_LOOK, EDIT_UNSEEN = 0.2, 1
 -- a prompt for the hint bar, made by the game's own maker once the bar is
 local MakePrompt
 -- between the dialog's opening for a bind and its shutting; else abilities are being moved
@@ -337,12 +340,13 @@ end
 -- While our notice stands in the box, the game's words there (about binding the ability it holds) are
 -- made unseen, not changed, and seen again after.
 local function Cover(frame, on)
+    -- the dialog puts its tooltip up afresh at every ability it takes hold of
+    local tip = on and frame.ActionTooltip
+    if type(tip) == "table" and tip.Hide then tip:Hide() end
     if on == (covered ~= nil) then return end
     if on then
         covered = Theirs(frame)
         for _, region in ipairs(covered) do region:SetAlpha(0) end
-        local tip = frame.ActionTooltip
-        if type(tip) == "table" and tip.Hide then tip:Hide() end
     else
         for _, region in ipairs(covered) do region:SetAlpha(1) end
         covered = nil
@@ -404,8 +408,11 @@ local function ShowPicked(frame)
     prompts.back:SetPromptText(armed and TEXT.openEditor or (FRAME_ACTION_CANCEL or TEXT.cancel))
     if prompts.plate then prompts.plate:Hide() end
     Up(frame, bar)
-    Cover(frame, armed ~= nil)
-    if armed then Notice(frame) end
+    -- the notice stands in the box that speaks of the held ability; with that box away the bar says it
+    local box = frame.BindingInfoFrame
+    local holding = armed ~= nil and type(box) == "table" and box:IsShown()
+    Cover(frame, holding)
+    if holding then Notice(frame) end
 end
 
 local function Hide()
@@ -427,11 +434,51 @@ function G.Plate()
     return true
 end
 
+-- Armed, the dialog still believes it holds an ability, and sets it down at whichever bar button is
+-- pressed (his D-pad up, 2026-11-21). Each such press is undone at once: the slot gets back what it
+-- held when the edit was asked for, or is emptied when it was empty. What the dialog took off a slot
+-- it then holds, and its own record of that says how to put back what we know no way to pick up.
+local OTHER = "other"
+local function Heal(frame, slot, possess)
+    local was = armed.bars[slot]
+    if possess or InCombatLockdown() or type(slot) ~= "number" or was == nil then
+        return ns.Log(("pad bind: a press for slot %s while waiting to edit; no slot this can undo"):format(
+            tostring(slot)))
+    end
+    ClearCursor()
+    if was == false then
+        if HasAction(slot) then PickupAction(slot) end
+    elseif was == OTHER then
+        local fn, params = frame.pickupFunc, frame.pickupParams
+        if type(fn) == "function" and type(params) == "table" and not Entry(fn, params) then
+            fn(unpack(params))
+            if GetCursorInfo() then PlaceAction(slot) end
+        end
+    elseif not F.Same(Bars.ActionAt(slot), was) then
+        F.Pickup(was)
+        if GetCursorInfo() then PlaceAction(slot) end
+    end
+    ClearCursor()
+    local now = Bars.ActionAt(slot)
+    local back
+    if was == false then
+        back = not HasAction(slot)
+    elseif was == OTHER then
+        back = HasAction(slot) and now == nil
+    else
+        back = F.Same(now, was)
+    end
+    ns.Log(("pad bind: a press for slot %d while waiting to edit was undone: %s"):format(slot,
+        back and "the slot is as it was" or "THE SLOT IS NOT AS IT WAS"))
+    if not back then ns.Warn(TEXT.refused) end
+    ShowPicked(frame)
+end
+
 -- Edit Action Bar took a flyout's ability off its button and the bottom button was pressed. The
--- ability goes back on its button at once. Nothing more is done in the game's dialog: while it is up
--- it places the ability it thinks it holds at every D-pad press, and no addon may take those presses
--- from it (his D-pad up, 2026-11-21, put the ability on his D-pad up spot). The editor opens when the
--- dialog is left.
+-- ability goes back on its button at once. Nothing is edited in the game's dialog: while it is up it
+-- sets down the ability it thinks it holds at every D-pad press (his D-pad up, 2026-11-21, put the
+-- ability on his D-pad up spot). The editor opens when the dialog is left; until then Heal undoes
+-- whatever the dialog sets down.
 function G.Edit()
     local p = picked
     if not p or InCombatLockdown() then return false end
@@ -445,7 +492,10 @@ function G.Edit()
         Clear()
         return false
     end
-    picked, armed = nil, { flyout = p.flyout, slot = p.slot }
+    -- every slot the dialog can set an ability down on, as it stands now
+    local bars = {}
+    for slot in pairs(Bars.Copies()) do bars[slot] = Bars.ActionAt(slot) or (HasAction(slot) and OTHER) or false end
+    picked, armed = nil, { flyout = p.flyout, slot = p.slot, bars = bars }
     F.Apply()
     ns.Log(("pad bind: the flyout on %s is to be edited once the dialog is left"):format(tostring(p.flyout.host)))
     if watched then ShowPicked(watched) end
@@ -467,16 +517,41 @@ local EDIT_KEYS = {
     { key = KEY_PLATE, act = "plate" }, { key = KEY_BACK, act = "done" }, { key = "ESCAPE", act = "done" },
 }
 local editor, editing
+E.KEYS = EDIT_KEYS
 
 function E.Editing() return editing end
+function E.Hint() return editor and editor.hint:IsShown() and editor.hint:GetText() or "" end
 
+-- The pad's buttons go back to the game before anything else. (A fight's beginning is still time
+-- enough; should one ever be on already, it is done when the fight ends.)
 function E.Close()
     if editor and not InCombatLockdown() then ClearOverrideBindings(editor) end
-    if editing then ns.Log("pad edit: closed") end
+    if not editing then return true end
+    ns.Log("pad edit: closed")
     editing = nil
-    if editor and editor.hint then editor.hint:Hide() end
+    editor.hint:Hide()
+    editor:Hide()
     Hide()
     return true
+end
+
+-- While it is up: it ends when its button is gone from view for a while (the pad put down, another
+-- bar page), when the game's dialog comes up, or in a fight; and it is drawn anew when the button is
+-- resized (a group of the pad's bar zoomed).
+local function Watch(self, elapsed)
+    self.since = (self.since or 0) + elapsed
+    if self.since < EDIT_LOOK then return end
+    local e, waited = editing, self.since
+    self.since = 0
+    local unit = e and F.UnitOf(e.flyout)
+    if not unit or InCombatLockdown() or (watched and watched:IsShown()) then return E.Close() end
+    e.unseen = unit.host:IsVisible() and 0 or (e.unseen or 0) + waited
+    if e.unseen > EDIT_UNSEEN then return E.Close() end
+    local width = unit.host:GetWidth()
+    if width ~= e.width then
+        e.width = width
+        E.Draw()
+    end
 end
 
 -- the picture around the flyout's own button, the selected icon marked, and the bar saying what each
@@ -508,7 +583,9 @@ function E.Draw()
     editor.hint:ClearAllPoints()
     editor.hint:SetPoint("BOTTOM", bar, "TOP", 0, EDIT_GAP)
     local entry = flyout.entries[e.mark]
-    editor.hint:SetText(TEXT.editHint:format(entry and F.Name(entry) or ""))
+    local hint = TEXT.editHint:format(entry and F.Name(entry) or "")
+    if e.note then hint = hint .. "\n" .. e.note end
+    editor.hint:SetText(hint)
     editor.hint:Show()
     holder:Show()
     return true
@@ -521,11 +598,16 @@ function E.Do(bind)
     if InCombatLockdown() or bind.act == "done" then return E.Close() end
     local flyout = e.flyout
     local count = #flyout.entries
+    e.note = nil
     if bind.act == "side" then
         -- to that side of the button; pressed for the side it is on already, to the outer ring there
         local to = bind.side
         if to == e.mark then to = to + RING_SIDES end
-        if to <= count and to ~= e.mark and F.Swap(flyout, e.mark, to) then e.mark = to end
+        if to <= count and to ~= e.mark and F.Swap(flyout, e.mark, to) then
+            e.mark = to
+        else
+            e.note = TEXT.noSide
+        end
     elseif bind.act == "next" then
         e.mark = e.mark % count + 1
     elseif bind.act == "off" then
@@ -549,6 +631,8 @@ function E.Open(flyout)
     F.Shut()
     if not editor then
         editor = CreateFrame("Frame", "FallensFlyoutsPadEditor", UIParent)
+        editor:Hide()
+        editor:SetScript("OnUpdate", Watch)
         for _, bind in ipairs(EDIT_KEYS) do
             local button = CreateFrame("Button", EDIT_BUTTON .. bind.key, editor)
             button:RegisterForClicks("AnyDown")
@@ -560,7 +644,9 @@ function E.Open(flyout)
         end
         editor.hint = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     end
-    editing = { flyout = flyout, mark = 1 }
+    editing = { flyout = flyout, mark = 1, width = F.UnitOf(flyout).host:GetWidth() }
+    editor.since = 0
+    editor:Show()
     for _, bind in ipairs(EDIT_KEYS) do SetOverrideBindingClick(editor, true, bind.key, EDIT_BUTTON .. bind.key) end
     ns.Log(("pad edit: open for the flyout on %s"):format(tostring(flyout.host)))
     return E.Draw()
@@ -619,11 +705,9 @@ end
 -- The dialog just took a press and placed what it held; `slot` is the button's.
 local function Placed(frame, slot, possess)
     placedAt = GetTime()
-    -- the held ability was set down after all: there is no editor to open for it
-    if armed then
-        ns.Log("pad bind: the ability was placed by the dialog; the editor will not open")
-        armed = nil
-    end
+    if armed then return Heal(frame, slot, possess) end
+    -- set down, the picked up ability is the game's to move: Edit Flyout is no longer offered for it
+    picked = nil
     if possess then return Skip("a pet bar button") end
     if InCombatLockdown() then return Skip("in a fight") end
     if type(slot) ~= "number" then return Skip("no slot given") end
@@ -665,15 +749,21 @@ end
 -- Edit Action Bar picked an ability up off a button. Where that button has a flyout, the bar offers
 -- to edit the flyout.
 local function Picked(frame, slot, possess)
+    -- another ability picked up: an edit asked for before is off
+    if armed then
+        armed = nil
+        Clear()
+    end
     if possess or InCombatLockdown() or type(slot) ~= "number" then return end
     local fn, params = frame.pickupFunc, frame.pickupParams
     local lead = Entry(fn, params)
     local flyout = lead and F.Of(lead)
     if not flyout or flyout.auto then return end
+    -- the editor moves icons around the button: only a flyout that stands around its button has one
+    if flyout.side or not F.Around() then return end
     local host = Bars.Named(flyout.host)
     if not host or not (Bars.Slot(host) == slot or (Bars.Pad(host) and host:GetID() == slot)) then return end
     Clear()
-    armed = nil
     picked = { slot = slot, flyout = flyout, lead = lead, fn = fn, params = { unpack(params) } }
     ns.Log(("pad bind: the button of a flyout was picked up (slot %d, %s): Edit Flyout is offered"):format(slot,
         tostring(flyout.host)))
@@ -715,7 +805,11 @@ function G.Install(frame)
         Gone()
     end))
     -- moving abilities: the held one was set down, let go or put back, or the mode left
-    hooksecurefunc(frame, "TransitionToSelectActionToPickup", Guard(Clear))
+    hooksecurefunc(frame, "TransitionToSelectActionToPickup", Guard(function(self)
+        Clear()
+        -- still waiting to be left for the editor: the bar goes on saying which button does it
+        if armed then ShowPicked(self) end
+    end))
     -- an ability picked up off a button, where this client's dialog has that step
     if type(frame.SelectActionToPickupCapturedInputHandler) == "function" then
         hooksecurefunc(frame, "SelectActionToPickupCapturedInputHandler", Guard(Picked))
@@ -737,8 +831,11 @@ ns.OnStart(function() G.Install(GamepadActionBarEditFrame) end)
 -- nothing on the bars changes in a fight
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
-events:SetScript("OnEvent", function()
+events:RegisterEvent("PLAYER_REGEN_ENABLED")
+events:SetScript("OnEvent", function(_, event)
+    -- first of all the pad's buttons go back to the game: in a fight they could not
+    E.Close()
+    if event == "PLAYER_REGEN_ENABLED" then return end
     armed = nil
     Clear()
-    E.Close()
 end)

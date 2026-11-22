@@ -506,6 +506,21 @@ function PlaceAction(slot)
     -- the cursor left empty, the bars' empty slots hide again
     if not W.cursor then fire("ACTIONBAR_HIDEGRID") end
 end
+-- what a slot holds comes onto the cursor and the slot is left empty
+function PickupAction(slot)
+    local kind, had = GetActionInfo(slot)
+    if not kind then return end
+    local name = GetActionText(slot)
+    local was = W.placed and W.placed[slot]
+    W.placed = W.placed or {}
+    W.placed[slot] = false
+    if kind == "macro" then
+        W.cursor = { "macro", name, own = type(was) == "table" and was.own or nil }
+    else
+        W.cursor = { "spell", 7, "spell", had, had }
+    end
+    fire("ACTIONBAR_SLOT_CHANGED", slot)
+end
 -- a call runs after another's, as the client lets an addon listen in
 function hooksecurefunc(holder, name, after)
     local first = holder[name]
