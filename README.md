@@ -10,7 +10,7 @@ That is all. It works in combat, with the default action bars and with action ba
 
 Shift-drag an icon to move it inside its flyout, or drag it out to take it off. Right-click an icon takes it off too. Right-click the button to give the flyout its own icon and a name, or to put one of its abilities on the button itself. With the mouse on an open flyout a grip shows at its far end: drag it to turn the flyout, so that it opens from any side of its button, as a column or as a row, or centered on the button. A flyout follows its button when the button is moved, and goes with it when the button is dragged off the bar and dropped.
 
-Automatic flyouts fill themselves from your bags: Food, Drink, Potions, Elixirs, Flasks, Scrolls and Bandages, each dragged onto a bar from the Automatic Flyouts page of the settings.
+Automatic flyouts fill themselves from your bags: Food, Drink, Potions, Elixirs, Flasks, Scrolls and Bandages, each dragged onto a bar from the Automatic Flyouts page of the settings. On the same page several of those kinds can be ticked and made into one flyout of your own (Food and Drink together, say).
 
 `/ff` opens the settings: profiles, flyout size, and an Arrange section for moving icons without a drag. The game's Keybindings options have a Fallen's Flyouts section with a row for each of the twelve spots of every flyout. A key for one icon of one flyout is set by hovering the icon in Quick Keybind Mode.
 

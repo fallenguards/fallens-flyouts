@@ -1,9 +1,10 @@
 local _, ns = ...
 -- luacheck: globals SlashCmdList
--- luacheck: read globals CreateFrame Settings GameTooltip
+-- luacheck: read globals CreateFrame Settings GameTooltip StaticPopup_Show C_Timer
 
 -- The settings page of the flyouts that fill themselves: an icon for each
--- kind, picked up here and dropped on an action bar.
+-- kind, picked up here and dropped on an action bar. Under them, the player's
+-- own: several kinds ticked in a list make one flyout that holds them all.
 local UI = {}
 ns.AutoUI = UI
 local Auto, Art = ns.Auto, ns.Art
@@ -11,6 +12,9 @@ local Auto, Art = ns.Auto, ns.Art
 local EDGE, GAP = 16, 8
 -- how far apart the icons stand, in icons, so that their names fit under them
 local APART = 1.9
+-- the list of kinds to tick and the button beside it: the list's width, the button's height, its least
+-- width and the room about its word; and the room a name takes under an icon
+local DROP_W, LINE, BUTTON_FLOOR, CHROME, NAME_H = 220, 22, 70, 20, 16
 local TEXT = {
     title = "Automatic Flyouts",
     intro = "Each of these fills itself with what is in your bags, the best first, and keeps up as your bags change.",
@@ -19,10 +23,23 @@ local TEXT = {
     slash = "The same from chat: /ff food, /ff drink and so on.",
     tip = "A flyout of the %s in your bags.",
     macro = "It sits on your bar as a macro named %s.",
+    ownHead = "Make Your Own",
+    ownIntro = "Tick the kinds one flyout should hold, then press Create. Yours appear in the row below.",
+    kinds = "Kinds",
+    ticked = "In this order: %s",
+    noneTicked = "Nothing is ticked yet.",
+    create = "Create",
+    createTip = "Makes a flyout that holds every ticked kind, in the order ticked, each kind's best first.",
+    ownTip = "A flyout of your own: %s.",
+    delete = "Right-click to delete it.",
+    askDelete = "Delete your flyout %s? Its macro goes with it.",
+    ownNote = "Each of yours uses one of your general macros. Right-click it on a bar to change its name or icon.",
 }
 UI.TEXT = TEXT
 
 local panel
+-- the kinds ticked for a flyout of the player's own, in the order they were ticked
+local order = {}
 
 -- picks a kind's macro up, to be dropped on a bar
 function UI.Pick(id)
@@ -31,26 +48,56 @@ function UI.Pick(id)
     return ok
 end
 
+-- the names of kinds, in the order given
+local function PartNames(ids)
+    local names = {}
+    for _, id in ipairs(ids) do
+        local part = Auto.Part(id)
+        names[#names + 1] = part and part.name or id
+    end
+    return table.concat(names, ", ")
+end
+
 local function ShowTip(self)
+    local kind = self.kind
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText(self.kind.name)
-    GameTooltip:AddLine(TEXT.tip:format(self.kind.name:lower()), 1, 1, 1, true)
-    GameTooltip:AddLine(TEXT.macro:format(Auto.Macro(self.kind.id) or self.kind.name), 1, 1, 1, true)
+    GameTooltip:SetText(kind.name)
+    if kind.own then
+        GameTooltip:AddLine(TEXT.ownTip:format(PartNames(kind.parts)), 1, 1, 1, true)
+    else
+        GameTooltip:AddLine(TEXT.tip:format(kind.name:lower()), 1, 1, 1, true)
+    end
+    GameTooltip:AddLine(TEXT.macro:format(Auto.Macro(kind.id) or kind.name), 1, 1, 1, true)
+    if kind.own then GameTooltip:AddLine(TEXT.delete, 0.6, 0.6, 0.6, true) end
     GameTooltip:Show()
 end
 local function HideTip() GameTooltip:Hide() end
+
+-- one of the player's own done away with, once it is said again that it is meant
+function UI.AskDelete(kind)
+    StaticPopup_Show("FALLENSFLYOUTS_CONFIRM", TEXT.askDelete:format(kind.name), nil, function()
+        local ok, why = Auto.Unmix(kind.id)
+        UI.Refresh()
+        return ok, why
+    end)
+end
+
+-- the icon and the name a button shows are its kind's
+function UI.Dress(button, kind)
+    button.kind = kind
+    button.icon:SetTexture(kind.icon)
+    button.label:SetText(kind.name)
+end
 
 -- an icon dressed as a flyout's own, with the kind's name under it; on the page, or on `parent`
 function UI.Icon(kind, parent)
     local button = CreateFrame("Button", nil, parent or panel)
     button:SetSize(Art.ICON, Art.ICON)
-    button.kind = kind
     button.back = button:CreateTexture(nil, "BACKGROUND", nil, -1)
     button.back:SetAtlas(Art.NAMES.back)
     button.back:SetAllPoints()
     button.icon = button:CreateTexture(nil, "BACKGROUND")
     button.icon:SetAllPoints()
-    button.icon:SetTexture(kind.icon)
     Art.Dress(button, button.icon)
     button:SetNormalAtlas(Art.NAMES.frame)
     button:SetHighlightAtlas(Art.NAMES.frameOver)
@@ -63,26 +110,103 @@ function UI.Icon(kind, parent)
     over:SetSize(Art.FRAME, Art.FRAME)
     button.label = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     button.label:SetPoint("TOP", button, "BOTTOM", 0, -GAP / 2)
-    button.label:SetText(kind.name)
+    UI.Dress(button, kind)
     button:RegisterForDrag("LeftButton")
-    button:SetScript("OnDragStart", function() UI.Pick(kind.id) end)
-    button:SetScript("OnClick", function() UI.Pick(kind.id) end)
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    button:SetScript("OnDragStart", function(self) UI.Pick(self.kind.id) end)
+    -- any is picked up with the left button; one of the player's own is deleted with the right
+    button:SetScript("OnClick", function(self, which)
+        if which == "RightButton" then
+            if self.kind.own then UI.AskDelete(self.kind) end
+            return
+        end
+        UI.Pick(self.kind.id)
+    end)
     button:SetScript("OnEnter", ShowTip)
     button:SetScript("OnLeave", HideTip)
     return button
 end
 
+local function IsTicked(id)
+    for _, have in ipairs(order) do
+        if have == id then return true end
+    end
+    return false
+end
+
+-- a kind ticked, or its tick taken off
+function UI.Tick(id)
+    for i, have in ipairs(order) do
+        if have == id then
+            table.remove(order, i)
+            return UI.Refresh()
+        end
+    end
+    order[#order + 1] = id
+    UI.Refresh()
+end
+function UI.Ticked() return order end
+
+-- the list: every kind a flyout of the player's own can hold, each with a box to tick
+function UI.Fill(_, root)
+    for _, part in ipairs(Auto.Parts()) do
+        root:CreateCheckbox(part.name, IsTicked, UI.Tick, part.id)
+    end
+end
+
+-- the ticked kinds become a flyout of the player's own, and the ticks are taken off
+function UI.Create()
+    local kind, why = Auto.Mix(order)
+    if not kind then
+        if why then ns.Warn(why) end
+        return nil
+    end
+    order = {}
+    if panel.drop.GenerateMenu then panel.drop:GenerateMenu() end
+    UI.Refresh()
+    return kind
+end
+
+-- what the page holds is as tall as it is, down to its last line: the scroll goes that far
+function UI.Fit()
+    if panel.built then ns.OptionsFit(panel, panel.note) end
+end
+
+function UI.Refresh()
+    if not panel.built then return end
+    panel.ticked:SetText(#order > 0 and TEXT.ticked:format(PartNames(order)) or TEXT.noneTicked)
+    panel.create:SetEnabled(#order > 0)
+    local own = Auto.Mixes()
+    for i, kind in ipairs(own) do
+        local button = panel.own[i]
+        if not button then
+            button = UI.Icon(kind, panel.content)
+            if i == 1 then
+                button:SetPoint("TOPLEFT", panel.ticked, "BOTTOMLEFT", GAP, -GAP * 2)
+            else
+                button:SetPoint("LEFT", panel.own[i - 1], "LEFT", Art.ICON * APART, 0)
+            end
+            panel.own[i] = button
+        end
+        UI.Dress(button, kind)
+        button:Show()
+    end
+    for i = #own + 1, #panel.own do panel.own[i]:Hide() end
+end
+
 function UI.Build()
     if panel.built then return end
     ns.Start()
+    -- the page scrolls inside the game's window, as the addon's first page does: nothing is drawn outside
+    local content = ns.OptionsScroller(panel)
     local function Line(text, font, above, gap)
-        local line = panel:CreateFontString(nil, "ARTWORK", font)
+        local line = content:CreateFontString(nil, "ARTWORK", font)
         if above then
             line:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -gap)
         else
-            line:SetPoint("TOPLEFT", panel, "TOPLEFT", EDGE, -EDGE)
+            line:SetPoint("TOPLEFT", content, "TOPLEFT", EDGE, -EDGE)
         end
-        line:SetPoint("RIGHT", panel, "RIGHT", -EDGE, 0)
+        line:SetPoint("RIGHT", content, "RIGHT", -EDGE, 0)
         line:SetJustifyH("LEFT")
         line:SetText(text)
         return line
@@ -92,7 +216,7 @@ function UI.Build()
     local how = Line(TEXT.how, "GameFontHighlight", intro, GAP)
     panel.icons = {}
     for i, kind in ipairs(Auto.KINDS) do
-        local button = UI.Icon(kind, panel)
+        local button = UI.Icon(kind, content)
         if i == 1 then
             button:SetPoint("TOPLEFT", how, "BOTTOMLEFT", GAP, -GAP * 3)
         else
@@ -100,13 +224,45 @@ function UI.Build()
         end
         panel.icons[i] = button
     end
-    local fight = panel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    local fight = content:CreateFontString(nil, "ARTWORK", "GameFontDisable")
     fight:SetPoint("TOPLEFT", panel.icons[1], "BOTTOMLEFT", -GAP, -GAP * 5)
-    fight:SetPoint("RIGHT", panel, "RIGHT", -EDGE, 0)
+    fight:SetPoint("RIGHT", content, "RIGHT", -EDGE, 0)
     fight:SetJustifyH("LEFT")
     fight:SetText(TEXT.fight)
-    Line(TEXT.slash, "GameFontDisable", fight, GAP)
+    local slash = Line(TEXT.slash, "GameFontDisable", fight, GAP)
+
+    -- the player's own: a list of kinds to tick, a button that makes a flyout of them, and their row
+    local ownHead = Line(TEXT.ownHead, "GameFontNormalLarge", slash, GAP * 3)
+    local ownIntro = Line(TEXT.ownIntro, "GameFontHighlight", ownHead, GAP)
+    local drop = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
+    drop:SetPoint("TOPLEFT", ownIntro, "BOTTOMLEFT", 0, -GAP * 2)
+    drop:SetWidth(DROP_W)
+    if drop.SetDefaultText then drop:SetDefaultText(TEXT.kinds) end
+    drop:SetupMenu(UI.Fill)
+    panel.drop = drop
+    local create = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    create:SetText(TEXT.create)
+    create:SetSize(math.max(BUTTON_FLOOR, (create:GetTextWidth() or 0) + CHROME), LINE)
+    create:SetPoint("LEFT", drop, "RIGHT", GAP, 0)
+    create:SetScript("OnClick", UI.Create)
+    create:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(TEXT.createTip, 1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    create:SetScript("OnLeave", HideTip)
+    panel.create = create
+    panel.ticked = Line("", "GameFontHighlight", drop, GAP)
+    panel.own = {}
+    -- under the row, whether or not it holds any yet
+    local note = content:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    note:SetPoint("TOPLEFT", panel.ticked, "BOTTOMLEFT", 0, -(GAP * 2 + Art.ICON + NAME_H + GAP * 2))
+    note:SetPoint("RIGHT", content, "RIGHT", -EDGE, 0)
+    note:SetJustifyH("LEFT")
+    note:SetText(TEXT.ownNote)
+    panel.note = note
     panel.built = true
+    UI.Refresh()
 end
 
 panel = CreateFrame("Frame")
@@ -114,6 +270,9 @@ panel:Hide()
 panel.name = TEXT.title
 panel:SetScript("OnShow", function()
     UI.Build()
+    UI.Refresh()
+    -- measured once the game has placed the page in its window
+    C_Timer.After(0, UI.Fit)
     if ns.OptionsPageShown then ns.OptionsPageShown(panel) end
 end)
 panel:SetScript("OnHide", function()

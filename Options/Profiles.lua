@@ -212,34 +212,36 @@ function UI.Refresh()
     UI.Fit()
 end
 
--- What the page holds is as tall as it is, down to its lowest control: the scroll goes that far.
-function UI.Fit()
-    local content, last = panel.content, panel.arrange and panel.arrange.plate
+-- What a page holds is as tall as it is, down to its lowest control: the scroll goes that far.
+local function Fit(page, last)
+    local content = page.content
     if not (content and last) then return end
     local top, bottom = content:GetTop(), last:GetBottom()
     if not (top and bottom) then return end
     content:SetHeight(math.max(1, top - bottom + EDGE))
-    if panel.scroll.UpdateScrollChildRect then panel.scroll:UpdateScrollChildRect() end
+    if page.scroll.UpdateScrollChildRect then page.scroll:UpdateScrollChildRect() end
 end
+ns.OptionsFit = Fit
+function UI.Fit() Fit(panel, panel.arrange and panel.arrange.plate) end
 
--- The page scrolls inside the game's window: what it holds can be taller than the window, and nothing
--- of it is drawn outside. The game's own slim scroll bar, there only when there is somewhere to scroll
--- to; a controller's cursor scrolls the frame by itself.
-local function Scroller()
-    local scroll = CreateFrame("ScrollFrame", nil, panel)
-    scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
-    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -BAR_ROOM, 0)
+-- A page scrolls inside the game's window (this one, and any other of the addon's): what it holds can
+-- be taller than the window, and nothing of it is drawn outside. The game's own slim scroll bar, there
+-- only when there is somewhere to scroll to; a controller's cursor scrolls the frame by itself.
+local function Scroller(page)
+    local scroll = CreateFrame("ScrollFrame", nil, page)
+    scroll:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+    scroll:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -BAR_ROOM, 0)
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(math.max(1, scroll:GetWidth() or 1), 1)
     scroll:SetScrollChild(content)
     scroll:SetScript("OnSizeChanged", function(_, width) content:SetWidth(math.max(1, width or 1)) end)
     if ScrollUtil and ScrollUtil.InitScrollFrameWithScrollBar then
-        local bar = CreateFrame("EventFrame", nil, panel, "MinimalScrollBar")
+        local bar = CreateFrame("EventFrame", nil, page, "MinimalScrollBar")
         bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", BAR_GAP, -BAR_INSET)
         bar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", BAR_GAP, BAR_INSET)
         ScrollUtil.InitScrollFrameWithScrollBar(scroll, bar)
         bar:SetHideIfUnscrollable(true)
-        panel.bar = bar
+        page.bar = bar
     else
         scroll:EnableMouseWheel(true)
         scroll:SetScript("OnMouseWheel", function(self, turn)
@@ -247,9 +249,10 @@ local function Scroller()
             self:SetVerticalScroll(math.max(0, math.min(self:GetVerticalScrollRange(), to)))
         end)
     end
-    panel.scroll, panel.content = scroll, content
+    page.scroll, page.content = scroll, content
     return content
 end
+ns.OptionsScroller = Scroller
 
 -- a size from the slider or its two buttons, in percent
 function UI.SetSize(percent)
@@ -272,7 +275,7 @@ function UI.Build()
     if panel.built then return end
     ns.Start()
     -- everything the page holds hangs on this, and scrolls with it
-    local content = Scroller()
+    local content = Scroller(panel)
     local head = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     head:SetPoint("TOPLEFT", content, "TOPLEFT", EDGE, -EDGE)
     head:SetText(TEXT.head)

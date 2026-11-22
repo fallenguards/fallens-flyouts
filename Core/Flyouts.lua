@@ -2052,6 +2052,8 @@ local function Forget(flyout)
     end
     run[flyout] = nil
 end
+-- for a flyout whose kind is done away with (one of the player's own that fills itself)
+F.Forget = Forget
 
 -- A button done away with by hand takes its flyout with it. His words (2026-11-22): "if someone
 -- explicitly destroys a flyout by dragging off/erasing, it shouldnt auto pop back onto that spell next

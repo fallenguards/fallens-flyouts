@@ -2366,6 +2366,191 @@ fire("PLAYER_REGEN_ENABLED")
 flushAll()
 unplaced = false
 
+print("flyouts of the player's own: several kinds ticked make one that holds them all")
+do
+    -- His words (2026-11-22): "how do we allow users to make custom auto-populated flyouts like our shipped
+    -- ones? ... put all said categories into a dropdown, and people can select one or more to combine too? so
+    -- for ex could put food and drink into one."
+    login("Player-1-0000000S")
+    local Auto, Page, F9 = NS.Auto, NS.AutoUI, NS.Flyouts
+    W.placed = W.placed or {}
+    W.macros, W.level = {}, 10
+    -- sub 8 is the game's "Other"; nouse: filed there by the game, with nothing to use
+    W.items = {
+        [4540] = { sub = 5, level = 5 }, [4541] = { sub = 5, level = 15, needs = 5 },
+        [4542] = { sub = 5, level = 25, needs = 15 },
+        [159] = { sub = 5, drink = true, level = 5 }, [1179] = { sub = 5, drink = true, level = 15, needs = 5 },
+        [118] = { sub = 1, level = 5 }, [5997] = { sub = 2, level = 5 },
+        [9001] = { sub = 8, level = 7 }, [9002] = { sub = 8, level = 9, nouse = true },
+    }
+    local function ids(entries)
+        local out = {}
+        for i, held in ipairs(entries or {}) do out[i] = tostring(held.id) end
+        return table.concat(out, " ")
+    end
+    local function bags(list)
+        W.bags = list
+        fire("BAG_UPDATE_DELAYED")
+        flushAll()
+    end
+    bags({ 4540, 159, 4541, 118, 4542, 1179, 5997, 9001, 9002 })
+    local names = {}
+    for i, part in ipairs(Auto.Parts()) do names[i] = part.name end
+    check(table.concat(names, "|") == "Food|Drink|Potions|Elixirs|Flasks|Scrolls|Bandages|Explosives and Devices|Other",
+        "the kinds to tick: the ready-made ones, then the game's other kinds of consumable under the game's names, none of "
+            .. "them twice and none the game keeps only for old items: " .. table.concat(names, "|"))
+
+    -- the page: a list of boxes to tick, Create, and a row of the player's own
+    local page = Page.panel
+    Page.Build()
+    local function row(label)
+        for _, r in ipairs(page.drop.rows) do
+            if r.label == label then return r end
+        end
+    end
+    check(#page.drop.rows == #Auto.Parts() and row("Food").box == true and page.drop.Text.text == "Kinds",
+        "the page's list has every kind, each with a box to tick")
+    check(not page.create:IsEnabled() and page.ticked.text == "Nothing is ticked yet." and #Auto.Mixes() == 0 and #page.own == 0,
+        "with nothing ticked there is nothing to create")
+    local errorsBefore = #W.errors
+    check(Page.Create() == nil and #Auto.Mixes() == 0 and W.errors[#W.errors] == Auto.TEXT.none and #W.errors == errorsBefore + 1,
+        "Create with nothing ticked makes nothing and says why in the red text")
+    row("Drink").pick()
+    row("Food").pick()
+    check(page.ticked.text == "In this order: Drink, Food" and page.create:IsEnabled() and row("Drink").on() and not row("Potions").on(),
+        "ticked, the page says which and in what order, and Create is lit")
+    row("Drink").pick()
+    row("Drink").pick()
+    check(page.ticked.text == "In this order: Food, Drink", "a tick taken off and put back goes to the end")
+    page.create.scripts.OnClick(page.create)
+    local kind = Auto.Mixes()[1]
+    check(kind ~= nil and kind.id == "mix1" and kind.name == "Food/Drink" and kind.icon == 133952 and kind.own == true,
+        "Create: a kind of the player's own, named for its two kinds, under the first kind's icon")
+    local saved = FallensFlyoutsDB.mixes.list[1]
+    check(saved ~= nil and saved.id == "mix1" and table.concat(saved.parts, " ") == "food drink", "kept with the saved data of the whole account")
+    check(#page.own == 1 and page.own[1]:IsShown() and page.own[1].label.text == "Food/Drink" and page.own[1].icon.texture == 133952
+        and page.ticked.text == "Nothing is ticked yet." and not page.create:IsEnabled() and page.drop.Text.text == "Kinds",
+        "it is in the row under the list, and the ticks are off again")
+    check(ids((Auto.Entries("mix1"))) == "4541 4540 1179 159", "it holds the food this character can eat, the best first, then the drinks: "
+        .. ids((Auto.Entries("mix1"))))
+    Page.Tick("food")
+    Page.Tick("drink")
+    check(Page.Create() == kind and #Auto.Mixes() == 1, "the same kinds ticked again give the one there is, not a second")
+
+    -- from the page onto a bar
+    W.cursor = nil
+    page.own[1].scripts.OnClick(page.own[1], "LeftButton")
+    local macro = W.macros["Food/Drink"]
+    check(W.cursor ~= nil and W.cursor[2] == "Food/Drink" and macro ~= nil and macro[1] == 133952 and macro[2] == "#fallensflyouts mix1",
+        "a click on it picks its macro up: named as the kind, under its icon, marked as the addon's")
+    PlaceAction(9)
+    flushAll()
+    local flyout, unit = F9.At("ActionButton9")
+    check(flyout ~= nil and flyout.auto == "mix1" and ids(flyout.entries) == "4541 4540 1179 159", "dropped on a bar button, its flyout is there")
+    local before = #W.casts
+    mouse(W.frames.ActionButton9)
+    check(unit ~= nil and unit.menu:IsShown() and #W.casts == before, "a press on the button opens it")
+    mouse(entry(unit.index, 3))
+    check(W.casts[#W.casts] == "item:item:1179" and not unit.menu:IsShown(), "a pick of its third icon drinks the best drink and shuts it")
+    bags({ 4540, 159 })
+    check(ids(F9.At("ActionButton9").entries) == "4540 159", "it keeps up with the bags as the ready-made ones do")
+    -- more than a flyout holds: no kind is crowded out by one before it
+    for id = 4550, 4563 do W.items[id] = { sub = 5, level = id - 4500 } end
+    bags({ 4540, 4550, 4551, 4552, 4553, 4554, 4555, 4556, 4557, 4558, 4559, 4560, 4561, 4562, 4563, 159, 1179 })
+    check(ids(F9.At("ActionButton9").entries) == "4563 4562 4561 4560 4559 4558 4557 4556 4555 4554 1179 159",
+        "fifteen kinds of food and two drinks: both drinks are in, with the ten best foods: " .. ids(F9.At("ActionButton9").entries))
+    bags({ 4540, 159, 118, 5997, 9001, 9002 })
+
+    -- a kind of the game's own naming, alone: what can be used of it, under the icon of its best
+    Page.Tick("sub8")
+    local other = Page.Create()
+    check(other ~= nil and other.id == "mix2" and other.name == "Other" and ids((Auto.Entries("mix2"))) == "9001",
+        "a kind the game names: only what can be used of it goes in")
+    check(other ~= nil and other.icon == 9001 and FallensFlyoutsDB.mixes.list[2].icon == 9001 and page.own[2].icon.texture == 9001,
+        "with no icon of its own it takes the icon of the best the bags hold of it")
+    local three = Auto.Mix({ "potions", "elixirs", "food", "potions" })
+    check(three ~= nil and three.name == "Potions +2" and ids((Auto.Entries(three.id))) == "118 5997 4540",
+        "three kinds: named for the first and how many more, each kind in the order ticked, none twice")
+    local long, longer, alone = Auto.Mix({ "bandages", "scrolls" }), Auto.Mix({ "sub0", "bandages" }), Auto.Mix({ "sub0" })
+    check(long.name == "Bandages/Scrolls" and longer.name == "Explosives an +1" and alone.name == "Explosives and D",
+        ("a name never passes the sixteen letters a macro's takes: %s | %s | %s"):format(long.name, longer.name, alone.name))
+    Auto.Mix({ "potions" })
+    local eighth, whyMost = Auto.Mix({ "flasks" })
+    Page.Refresh()
+    local shown = 0
+    for _, button in ipairs(page.own) do shown = shown + (button:IsShown() and 1 or 0) end
+    check(#Auto.Mixes() == Auto.MIX_MOST and eighth == nil and whyMost == Auto.TEXT.most and shown == Auto.MIX_MOST,
+        "one row of them and no more: the next is refused, with the reason")
+    -- a macro of a kind whose number only begins the same is not this kind's
+    macro[2] = "#fallensflyouts mix10"
+    check(Auto.Macro("mix1") == nil, "the macro of mix10 is not taken for the macro of mix1")
+    macro[2] = "#fallensflyouts mix1"
+    check(Auto.Macro("mix1") == "Food/Drink", "its own is")
+    -- nothing of it in a fight
+    W.combat = true
+    local made, whyFight = Auto.Mix({ "flasks", "scrolls" })
+    check(made == nil and whyFight == Auto.TEXT.fight and Auto.Unmix("mix1") == false and Auto.Kind("mix1") ~= nil,
+        "in a fight none is made and none deleted")
+    W.combat = false
+
+    -- deleted from the page: asked first; then its macro, its flyout and the kind are gone
+    W.popup = nil
+    page.icons[1].scripts.OnClick(page.icons[1], "RightButton")
+    check(W.popup == nil and W.cursor == nil and Auto.Unmix("food") == false and Auto.Kind("food") ~= nil,
+        "a ready-made kind is not deleted: the right button does nothing on it")
+    page.own[1].scripts.OnClick(page.own[1], "RightButton")
+    check(W.popup ~= nil and W.popup.which == "FALLENSFLYOUTS_CONFIRM" and W.popup.text:find("Food/Drink", 1, true) ~= nil
+        and Auto.Kind("mix1") ~= nil, "the right button on one of the player's own asks first")
+    StaticPopupDialogs.FALLENSFLYOUTS_CONFIRM.OnAccept(nil, W.popup.data)
+    flushAll()
+    local left = 0
+    for _, own in ipairs(F9.List()) do left = left + (own.auto == "mix1" and 1 or 0) end
+    check(Auto.Kind("mix1") == nil and W.macros["Food/Drink"] == nil and FallensFlyoutsDB.mixes.list[1].id == "mix2",
+        "Yes: the kind is gone, its macro with it, and it is out of the saved data")
+    check(F9.At("ActionButton9") == nil and left == 0 and GetActionInfo(9) == nil,
+        "its flyout is gone from the bar, and the button is empty as the game leaves it")
+    shown = 0
+    for _, button in ipairs(page.own) do shown = shown + (button:IsShown() and 1 or 0) end
+    check(shown == Auto.MIX_MOST - 1 and page.own[1].label.text == "Other" and page.own[1].kind.id == "mix2",
+        "the row closes up")
+    local again = Auto.Mix({ "food", "drink" })
+    check(again ~= nil and again.id ~= "mix1" and again.name == "Food/Drink", "made again it is a new one, never the old one's number: "
+        .. tostring(again and again.id))
+
+    -- the page scrolls inside the game's window, down to its last line
+    local scroll, content = page.scroll, page.content
+    check(scroll ~= nil and content ~= nil and scroll.parent == page and scroll.scrollChild == content
+        and page.drop.parent == content and page.create.parent == content and page.icons[1].parent == content
+        and page.own[1].parent == content, "everything on the page is inside a scroll frame that fills it")
+    content.rect, page.note.rect = { 0, 500, 1000, 999 }, { 0, 20, 300, 280 }
+    scroll.h = 500
+    Page.Fit()
+    check(content.h == 1000 - 280 + 16 and scroll:GetVerticalScrollRange() == content.h - 500,
+        "and it scrolls as far as its last line: " .. tostring(content.h))
+    content.rect, page.note.rect = nil, nil
+
+    -- the next login: they are read from the saved data
+    local keptMacros = W.macros
+    login("Player-1-0000000S")
+    W.macros = keptMacros
+    local Next = NS.Auto
+    check(Next ~= Auto and #Next.Mixes() == Auto.MIX_MOST and Next.Kind("mix2") ~= nil and Next.Kind("mix2").name == "Other"
+        and Next.Kind("mix2").icon == 9001 and Next.Kind("mix1") == nil,
+        "at the next login the player's own are there again, as they were")
+    NS.AutoUI.Build()
+    check(#NS.AutoUI.panel.own == Auto.MIX_MOST and NS.AutoUI.panel.own[1].label.text == "Other", "and in the page's row")
+    -- the saved data and the bars as they were
+    FallensFlyoutsDB.mixes = nil
+    local all = NS.Flyouts.List()
+    for i = #all, 1, -1 do
+        if all[i].auto then table.remove(all, i) end
+    end
+    W.macros, W.items, W.bags, W.level, W.macroCount, W.popup = nil, nil, nil, nil, nil, nil
+    NS.Flyouts.Apply()
+    flushAll()
+    check(#NS.Auto.Mixes() == 0, "none left behind for what follows")
+end
+
 print("bars that send their keys through a helper child")
 barWorld = function() return "helper" end
 login("Player-1-0000000H")

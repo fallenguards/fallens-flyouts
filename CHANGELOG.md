@@ -3,6 +3,7 @@
 ## [1.1.4] - 2026-11-22
 
 ### Added
+- Automatic flyouts of your own. On the Automatic Flyouts page of the settings, tick the kinds one flyout should hold (Food and Drink together, say) and press Create: it joins a row of yours on that page, is dragged onto a bar like the ready-made ones, and keeps itself filled the same way, each kind's best first. Besides the seven ready-made kinds the list has the game's other kinds of consumable. Right-click one of yours on that page to delete it.
 - A flyout can be given a name, as a macro can. Right-click the flyout's bar button: the icon window has a name box, sixteen letters as for a macro, and the name is written on the button where a macro's name stands. The window's search has a box of its own now, beside Choose an Icon.
 
 ### Changed

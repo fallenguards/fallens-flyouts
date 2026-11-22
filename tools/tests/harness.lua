@@ -187,11 +187,21 @@ function Frame:SetupMenu(fill) self.fill = fill; self:GenerateMenu() end
 function Frame:GenerateMenu()
     local drop = self
     drop.rows, drop.Text = {}, drop.Text or region()
+    local boxes, ticked = false, {}
     drop.fill(drop, { CreateRadio = function(_, label, isOn, pick, data)
         drop.rows[#drop.rows + 1] = { label = label, pick = function() pick(data) end }
         if isOn(data) then drop.Text:SetText(label) end
+    end,
+    -- a box to tick: any number may be ticked, and the drop down reads what is, or its own words
+    CreateCheckbox = function(_, label, isOn, pick, data)
+        boxes = true
+        drop.rows[#drop.rows + 1] = { label = label, box = true, on = function() return isOn(data) == true end,
+            pick = function() pick(data) end }
+        if isOn(data) then ticked[#ticked + 1] = label end
     end })
+    if boxes then drop.Text:SetText(#ticked > 0 and table.concat(ticked, ", ") or drop.defaultText or "") end
 end
+function Frame:SetDefaultText(text) self.defaultText = text end
 function Frame:GetScript(k) return self.scripts[k] end
 function Frame:IsMouseOver() return self.over == true end
 for _, m in ipairs({ "CreateMaskTexture", "CreateAnimationGroup", "CreateAnimation" }) do
@@ -652,6 +662,15 @@ function DeleteMacro(x)
             end
         end
     end
+    -- as the game: a deleted macro is off every bar button that held it
+    for slot, held in pairs(W.placed or {}) do
+        local same = type(held) == "table" and held[1] == "macro"
+            and (held.own == m.own or (held.own == nil and held[2] == m.name))
+        if same then
+            W.placed[slot] = false
+            fire("ACTIONBAR_SLOT_CHANGED", slot)
+        end
+    end
     fire("UPDATE_MACROS")
 end
 function UnitLevel() return W.level or 10 end
@@ -730,11 +749,20 @@ C_Item = {
     GetItemSpell = function(id)
         local item = W.items and W.items[id]
         if not item or item.unknown then return nil end
+        -- one that cannot be used casts nothing
+        if item.nouse then return nil end
         if item.sub ~= 5 then return "Use", 9000 end
         if item.drink then return "Drink", 430 end
         return "Food", 433
     end,
     IsUsableItem = function() return true, false end,
+    -- the game's names for its kinds of consumable; one it keeps only for old items says so
+    GetItemSubClassInfo = function(class, sub)
+        local names = { [0] = "Explosives and Devices", [1] = "Potions", [2] = "Elixirs", [3] = "Flasks", [4] = "Scrolls",
+            [5] = "Food & Drink", [6] = "Item Enhancements (OBSOLETE)", [7] = "Bandages", [8] = "Other" }
+        if class ~= 0 or not names[sub] then return nil end
+        return names[sub], false
+    end,
 }
 -- the game's controller cursor and its Options window, as far as the page leans on them
 SettingsPanel = { Container = { SettingsList = {} } }
@@ -823,8 +851,8 @@ end
 function SetOverrideBindingClick(owner, priority, key, name, button) owner:SetBindingClick(priority, key, name, button) end
 function ClearOverrideBindings(owner) W.overrides[owner] = {} end
 StaticPopupDialogs = {}
-function StaticPopup_Show(which, text)
-    W.popup = { which = which, text = text }
+function StaticPopup_Show(which, text, _, data)
+    W.popup = { which = which, text = text, data = data }
     local dialog = StaticPopupDialogs[which]
     if dialog and dialog.OnShow then dialog.OnShow(region(), nil) end
 end
