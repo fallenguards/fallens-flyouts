@@ -2753,6 +2753,81 @@ do
     W.placed[9], W.placed[10], W.placed[11] = nil, nil, nil
 end
 
+print("the game's Mouseover Cast and focus cast are obeyed by a flyout's icons, as by the bar's own buttons")
+do
+    -- His words (2026-11-21): "flyouts not respecting mouseover." His settings: Mouseover Cast on with no
+    -- key to hold, focus cast on Shift. A bar button then casts a heal on the friend under the mouse; an
+    -- icon picked in a flyout cast it on the target.
+    login("Player-1-0000000O")
+    local F4 = NS.Flyouts
+    W.helpful, W.harmful = { [951] = true }, { [952] = true }
+    flushAll()
+    stack("ActionButton1", 951)
+    stack("ActionButton1", 952)
+    local flyout, unit = F4.At("ActionButton1")
+    check(flyout ~= nil and #flyout.entries == 3 and flyout.entries[1].id == 101,
+        "a flyout of an ability for anyone, a heal and a harmful spell")
+    -- an icon picked by its key, the flyout opened by its button's key first
+    local function pick(i)
+        tap("1")
+        local before = #W.casts
+        tap(tostring(i))
+        return #W.casts > before and W.casts[#W.casts] or "nothing"
+    end
+    check(pick(2) == "spell:951", "nobody under the mouse: the heal is cast as ever: " .. tostring(W.casts[#W.casts]))
+    W.mouseover = "friend"
+    check(pick(2) == "spell:951@mouseover", "a friend under the mouse: the heal picked from the flyout goes to them: " .. tostring(W.casts[#W.casts]))
+    check(pick(3) == "spell:952", "the harmful spell does not: it is cast as ever: " .. tostring(W.casts[#W.casts]))
+    check(pick(1) == "spell:101@mouseover", "an ability that is for anyone goes to them too: " .. tostring(W.casts[#W.casts]))
+    W.mouseover = "foe"
+    check(pick(3) == "spell:952@mouseover" and pick(2) == "spell:951", "a foe under the mouse: the harmful spell goes to it, the heal does not")
+    -- in a fight, where nothing can be set from outside: the icon is told at the click
+    W.mouseover = "friend"
+    W.combat = true
+    fire("PLAYER_REGEN_DISABLED")
+    check(pick(2) == "spell:951@mouseover", "in a fight too: " .. tostring(W.casts[#W.casts]))
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    flushAll()
+    -- clicked with the mouse, the mouse is on the icon: nobody is under it
+    W.mouseover = nil
+    tap("1")
+    local icon = entry(unit.index, 2)
+    local casts = #W.casts
+    click(icon, true)
+    click(icon, false)
+    check(#W.casts == casts + 1 and W.casts[#W.casts] == "spell:951", "an icon clicked with the mouse is cast as ever: " .. tostring(W.casts[#W.casts]))
+    -- the setting off
+    W.mouseover = "friend"
+    W.cvars = { enableMouseoverCast = "0" }
+    fire("CVAR_UPDATE", "enableMouseoverCast", "0")
+    check(pick(2) == "spell:951", "Mouseover Cast turned off in the game's options: cast as ever, at once")
+    W.cvars = nil
+    fire("CVAR_UPDATE", "enableMouseoverCast", "1")
+    -- a key set for it: only while that key is held
+    W.modKeys = { MOUSEOVERCAST = "ALT" }
+    fire("UPDATE_BINDINGS")
+    flushAll()
+    check(pick(2) == "spell:951", "a key set for Mouseover Cast and not held: cast as ever")
+    W.modHeld = { MOUSEOVERCAST = true }
+    check(pick(2) == "spell:951@mouseover", "that key held: to the friend under the mouse")
+    W.modKeys, W.modHeld = nil, nil
+    fire("UPDATE_BINDINGS")
+    flushAll()
+    -- the focus cast key, as on a bar button
+    W.mouseover = nil
+    W.modHeld = { FOCUSCAST = true }
+    check(pick(2) == "spell:951@focus", "the focus cast key held: the heal goes to the focus: " .. tostring(W.casts[#W.casts]))
+    W.modHeld = nil
+    -- a macro says for itself whom it is for
+    W.mouseover = "friend"
+    check(entry(unit.index, 1):GetAttribute("fhelp") == true and entry(unit.index, 2):GetAttribute("fharm") == nil
+        and entry(unit.index, 3):GetAttribute("fhelp") == nil and entry(unit.index, 3):GetAttribute("fharm") == true,
+        "each icon knows what its ability is for")
+    W.mouseover, W.helpful, W.harmful = nil, nil, nil
+    NS.Flyouts.Shut()
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")

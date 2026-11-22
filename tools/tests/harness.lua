@@ -607,6 +607,9 @@ C_Container = {
 }
 C_Spell = {
     PickupSpell = function(id) W.cursor = { "spell", 7, "spell", id, id } end,
+    -- W.helpful, W.harmful: the spells that are for friends, for foes; one in neither is for anyone
+    IsSpellHelpful = function(id) return W.helpful ~= nil and W.helpful[id] == true end,
+    IsSpellHarmful = function(id) return W.harmful ~= nil and W.harmful[id] == true end,
     GetSpellTexture = function(id) return id end,
     -- W.ranks: spells that are ranks of one spell, id to its name and rank
     GetSpellName = function(id)
@@ -633,6 +636,8 @@ function C_Spell.GetSpellCooldownDuration(id)
     return { start = info.startTime, duration = info.duration, active = true }
 end
 C_Item = {
+    IsHelpfulItem = function(id) return W.helpful ~= nil and W.helpful[id] == true end,
+    IsHarmfulItem = function(id) return W.harmful ~= nil and W.harmful[id] == true end,
     GetItemIconByID = function(id) return id end,
     GetItemNameByID = function(id) return "Item " .. id end,
     GetItemCooldown = function() return 0, 0, 1 end,
@@ -673,8 +678,18 @@ function SmartNavigation_MarkFrameIgnored(frame) frame.smartNavigationIgnored = 
 function SmartNavigation_ClearIgnoreStatus(frame) frame.smartNavigationIgnored = nil end
 -- picking up: the bars' lock, the pick up key, and what lands on the cursor
 Settings = { GetValue = function(name) return name == "lockActionBars" and W.locked == true end }
-function IsModifiedClick(what) return what == "PICKUPACTION" and W.shift == true end
-function GetModifiedClick() return "SHIFT" end
+-- the unit under the mouse, where a test puts one there
+function UnitExists(unit) return unit == "player" or (unit == "mouseover" and W.mouseover ~= nil) end
+-- the keys the game's modified clicks want: Mouseover Cast wants none unless a test sets one
+function IsModifiedClick(what)
+    if what == "PICKUPACTION" then return W.shift == true end
+    return W.modHeld ~= nil and W.modHeld[what] == true
+end
+function GetModifiedClick(what)
+    if W.modKeys and W.modKeys[what] then return W.modKeys[what] end
+    if what == "MOUSEOVERCAST" then return "NONE" end
+    return "SHIFT"
+end
 function C_Spell.PickupSpell(id)
     W.cursor = { "spell", 0, "spell", id, id }
     fire("ACTIONBAR_SHOWGRID")
@@ -688,7 +703,10 @@ function PickupMacro(x)
     W.cursor = { "macro", m and m.name or x, own = m and m.own or nil }
     fire("ACTIONBAR_SHOWGRID")
 end
-C_CVar = { GetCVar = function() return "1" end }
+C_CVar = { GetCVar = function(name)
+    if W.cvars and W.cvars[name] ~= nil then return W.cvars[name] end
+    return "1"
+end }
 Enum = { SpellBookSpellBank = { Player = 0 }, SpellBookItemType = { Spell = 1 } }
 function IsKeyDown(key) return W.keyDown[key] or false end
 function IsMouseButtonDown() return W.mouseDown == true end
@@ -828,8 +846,17 @@ local function boot(alone)
         end
     end
     -- one snippet world per session, as the client keeps per header
+    -- what the game lets a secure snippet ask: the unit under the mouse (W.mouseover: "friend", "foe" or
+    -- "other"), whether the player can help or attack it, and whether a modified click's key is held
+    local asks = {
+        UnitExists = function(unit) return unit == "mouseover" and W.mouseover ~= nil end,
+        PlayerCanAssist = function(unit) return unit == "mouseover" and W.mouseover == "friend" end,
+        PlayerCanAttack = function(unit) return unit == "mouseover" and W.mouseover == "foe" end,
+        IsModifiedClick = function(what) return IsModifiedClick(what) end,
+    }
     W.env = setmetatable({}, { __index = function(t, k)
         if k == "armed" or k == "held" or k == "picked" then return rawget(t, k) end
+        if asks[k] then return asks[k] end
         error("snippet read of a missing global: " .. tostring(k))
     end })
     NS = {}
@@ -857,7 +884,12 @@ local function click(frame, down, button)
     -- as the client's secure button: it acts on the press, or on the release when told not to
     local onPress = frame.attrs.useOnKeyDown ~= false
     local cast = verdict ~= false and frame.attrs.type and down == onPress
-    if cast then W.casts[#W.casts + 1] = frame.attrs.type .. ":" .. tostring(frame.attrs[frame.attrs.type]) end
+    if cast then
+        -- as the game's secure button picks its unit: the one it was told, else the focus when that key is held
+        local unit = frame.attrs.unit
+        if not unit and frame.attrs.checkfocuscast and IsModifiedClick("FOCUSCAST") then unit = "focus" end
+        W.casts[#W.casts + 1] = frame.attrs.type .. ":" .. tostring(frame.attrs[frame.attrs.type]) .. (unit and ("@" .. unit) or "")
+    end
     if frame.scripts.PostClick then frame.scripts.PostClick(frame, button, down) end
     if cast then fire("UNIT_SPELLCAST_SENT", "player", "", "", 1) end
 end

@@ -159,8 +159,25 @@ local HOST_WRAP = [[
 -- what is being dragged away. The two are told apart by the click's name:
 -- pick keys click as "Key". The right button casts nothing: it takes the
 -- icon off.
+-- The game's Mouseover Cast, which its own bar buttons obey: with it on, and its key held where one is
+-- set, a helpful ability goes to the friend under the mouse and a harmful one to the foe there; one
+-- that is neither goes to whoever is there. The game's own code for this asks a bar button for its
+-- slot, which an icon of ours has none of, so the icon is told its unit here, at each click.
+local MOUSECAST = [[
+    local unit
+    if owner:GetAttribute("mousecast") and UnitExists("mouseover")
+        and (owner:GetAttribute("mousefree") or IsModifiedClick("MOUSEOVERCAST")) then
+        local help, harm = self:GetAttribute("fhelp"), self:GetAttribute("fharm")
+        if (help and harm) or (help and PlayerCanAssist("mouseover")) or (harm and PlayerCanAttack("mouseover")) then
+            unit = "mouseover"
+        end
+    end
+    self:SetAttribute("unit", unit)
+]]
+
 local ENTRY_WRAP = [[
     if button == "RightButton" then return false end
+]] .. MOUSECAST .. [[
     if button == "LeftButton" then
         if down then
             self:SetAttribute("useOnKeyDown", false)
@@ -480,13 +497,45 @@ local function State(unit)
     end
 end
 
+-- Whether an ability is one for friends, one for foes, or neither (a spell that is neither counts as
+-- both, as the game counts it for Mouseover Cast). A macro says for itself whom it is for.
+local function Leaning(entry)
+    if not entry or entry.kind == "macro" then return nil, nil end
+    local help, harm
+    if entry.kind == "spell" then
+        if not (C_Spell.IsSpellHelpful and C_Spell.IsSpellHarmful) then return nil, nil end
+        help, harm = C_Spell.IsSpellHelpful(entry.id), C_Spell.IsSpellHarmful(entry.id)
+        if Hidden(help) or Hidden(harm) then return nil, nil end
+        if not help and not harm then return true, true end
+    else
+        if not (C_Item.IsHelpfulItem and C_Item.IsHarmfulItem) then return nil, nil end
+        help, harm = C_Item.IsHelpfulItem(entry.id), C_Item.IsHarmfulItem(entry.id)
+        if Hidden(help) or Hidden(harm) then return nil, nil end
+    end
+    if help ~= true then help = nil end
+    if harm ~= true then harm = nil end
+    return help, harm
+end
+
+-- The game's Mouseover Cast setting and whether it wants a key held, kept where a click can read them.
+local function CastSettings()
+    if not root or InCombatLockdown() then return end
+    local on = C_CVar.GetCVar("enableMouseoverCast") == "1"
+    local free = on and GetModifiedClick("MOUSEOVERCAST") == "NONE"
+    if on then root:SetAttribute("mousecast", true) else root:SetAttribute("mousecast", nil) end
+    if free then root:SetAttribute("mousefree", true) else root:SetAttribute("mousefree", nil) end
+end
+F.CastSettings = CastSettings
+
 local function EntryButton(unit, i)
     local name = ENTRY .. unit.index .. "_" .. i
     local entry = CreateFrame("Button", name, unit.menu, "SecureActionButtonTemplate")
     entry:SetSize(Art.ICON, Art.ICON)
     entry:RegisterForClicks("AnyDown", "AnyUp")
     entry:SetAttribute("useOnKeyDown", true)
+    -- the game's self cast and focus cast keys, as on its own bar buttons
     entry:SetAttribute("checkselfcast", true)
+    entry:SetAttribute("checkfocuscast", true)
     root:WrapScript(entry, "OnClick", ENTRY_WRAP)
     entry:SetScript("PostClick", function(_, button, down)
         Tell("pick", unit, i, button, down)
@@ -1167,6 +1216,9 @@ local function Lay(unit)
             frame:SetAttribute(entry.kind, casts)
             frame.icon:SetTexture(F.Icon(entry))
         end
+        local help, harm = Leaning(entry)
+        frame:SetAttribute("fhelp", help)
+        frame:SetAttribute("fharm", harm)
         frame:SetShown(entry ~= nil)
     end
     Face(unit)
@@ -1452,6 +1504,7 @@ function F.Apply()
     -- the macro list is read afresh for every laying out
     Macros.Changed()
     Build()
+    CastSettings()
     for _, unit in ipairs(units) do unit.menu:Hide() end
     root:SetAttribute("open", nil)
     -- no key counts as held or pressed across a layout
@@ -2186,6 +2239,7 @@ events:RegisterEvent("UPDATE_MACROS")
 pcall(events.RegisterEvent, events, "ACTIONBAR_SHOWGRID")
 pcall(events.RegisterEvent, events, "ACTIONBAR_HIDEGRID")
 pcall(events.RegisterEvent, events, "CURSOR_CHANGED")
+pcall(events.RegisterEvent, events, "CVAR_UPDATE")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -2206,15 +2260,19 @@ events:SetScript("OnEvent", function(_, event, on)
             moved = true
             C_Timer.After(0.1, Sync)
         end
+    elseif event == "CVAR_UPDATE" then
+        if on == "enableMouseoverCast" then CastSettings() end
     elseif event == "CURSOR_CHANGED" then
         if next(inHand) then C_Timer.After(LET_GO, LetGo) end
     elseif event == "PLAYER_REGEN_ENABLED" then
         if pending then F.Settle() end
+        CastSettings()
         -- what was let go of in the fight is settled now
         if next(inHand) then C_Timer.After(LET_GO, LetGo) end
     elseif event == "PLAYER_REGEN_DISABLED" then
         -- the last moment it can be set: nothing is placed in a fight
         if root then root:SetAttribute("carrying", nil) end
+        CastSettings()
         -- and the last moment a flyout can be laid for where its bar is now
         F.Follow()
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -2232,6 +2290,8 @@ events:SetScript("OnEvent", function(_, event, on)
         -- what is saved is the whole of each flyout
         Whole(list)
     elseif event == "UPDATE_BINDINGS" then
+        -- the key Mouseover Cast wants held is saved with the bindings
+        CastSettings()
         if ready and used > 0 then
             if GetTime() >= quiet then rekey = true else late = true end
         end

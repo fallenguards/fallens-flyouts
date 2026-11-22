@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.2] - 2026-11-21
+
+### Fixed
+- The game's mouseover casting was ignored by a flyout's icons: a heal picked from a flyout went to the target, not to the friend under the mouse as it does from a bar button. A flyout's icons now obey it as the bar's own buttons do, with its key where one is set, and the focus cast key as well.
+
 ## [1.1.1] - 2026-11-21
 
 ### Added
