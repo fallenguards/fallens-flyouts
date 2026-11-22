@@ -341,7 +341,7 @@ local function Pickup(entry)
     end
 end
 
-F.Name, F.TakeOff = Name, TakeOff
+F.Name, F.TakeOff, F.Pickup = Name, TakeOff, Pickup
 
 -- dragged out as off a bar: off the flyout and onto the cursor
 function F.CarryOff(unit, i)

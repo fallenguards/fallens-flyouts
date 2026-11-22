@@ -535,14 +535,59 @@ drag(entry(one, 3))
 W.mouseDown = true
 W.mouseX, W.mouseY = 5000, 5000
 Move.Tick(0.02)
+check(W.cursor ~= nil and W.cursor[4] == 502 and Move.Moving() == nil, "off the flyout it is on the cursor at once")
+check(count(one) == 3 and entry(one, 3).shown ~= false and menu:IsShown() and entry(one, 3).alpha == 0,
+    "while the mouse is held its frame stays as it is, unseen: the game's drag lives only while that frame is shown")
 W.mouseDown = false
+Move.Tick(0.02)
+Move.Tick(0.02)
 check(count(one) == 2 and W.cursor ~= nil and W.cursor[4] == 502 and menu:IsShown() and Move.Moving() == nil,
-    "off the flyout and onto the cursor, the flyout still open")
+    "the mouse let go, it is off the flyout and still on the cursor, the flyout still open")
 check(entry(one, 1).alpha == 1 and entry(one, 2).alpha == 1 and along(entry(one, 2)) == slot(2), "the icons left close up, seen")
 check(lastChat("Spell 502 taken off the flyout") ~= nil, "chat says what was taken off")
 plus().scripts.OnReceiveDrag(plus())
 check(count(one) == 3 and entry(one, 3).attrs.spell == 502 and W.cursor == nil,
     "dropped on the plus it is back in the flyout")
+do
+    -- His report (2026-11-22): a spell pulled out of a flyout had to be clicked onto a spot, where the game
+    -- places a dragged spell on the let-go. The game, as it is taken to be: a drag lives while the frame it
+    -- began on is shown, and a let-go over a bar button then places what the cursor holds; with that frame
+    -- hidden under the drag, the let-go places nothing.
+    local function letGoOver(origin, slot)
+        W.mouseDown = false
+        if origin.shown ~= false and menu:IsShown() then PlaceAction(slot) end
+        origin.scripts.OnDragStop(origin)
+        Move.Tick(0.02)
+        Move.Tick(0.02)
+        flushAll()
+    end
+    show()
+    local origin = entry(one, 3)
+    drag(origin)
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    letGoOver(origin, 5)
+    check(W.placed[5] == 502 and W.cursor == nil and count(one) == 2,
+        "let go over a bar spot, the spell lands there by the let-go alone, and is off the flyout")
+    W.placed[5] = nil
+    fire("ACTIONBAR_SLOT_CHANGED", 5)
+    stack("ActionButton1", 502)
+    -- dragged out and let go on the plus of its own button: it stays where it was
+    show()
+    drag(entry(one, 3))
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    plus().scripts.OnReceiveDrag(plus())
+    W.mouseDown = false
+    Move.Tick(0.02)
+    Move.Tick(0.02)
+    flushAll()
+    check(count(one) == 3 and order() == "101 501 502" and W.cursor == nil and entry(one, 3).alpha == 1,
+        "let go on its own button's plus, it stays in its flyout, seen again")
+    show()
+end
 W.shift, W.locked = false, false
 show()
 drag(entry(one, 3))

@@ -1,6 +1,6 @@
 local _, ns = ...
 -- luacheck: read globals UIParent CreateFrame InCombatLockdown GetCursorPosition IsMouseButtonDown IsModifiedClick
--- luacheck: read globals GameTooltip
+-- luacheck: read globals GameTooltip GetCursorInfo
 
 -- An icon moved inside its flyout, as icons move on a phone's home screen:
 -- held, it lifts and grows; the others slide out of its way; it lands in the gap.
@@ -17,6 +17,11 @@ local NEAR = 0.25
 
 local moving, landing
 local lift, driver
+local Driver
+-- An icon dragged out of its flyout: on the cursor at once, off the flyout when the mouse lets go.
+-- Till then its frame stays as it is, unseen. The game's drag lives only while the frame it began on is
+-- shown, and with it gone a let-go over a bar button placed nothing: the spot had to be clicked.
+local carried
 
 -- the held icon's own picture: the game's small button, with its highlight
 local function Lift()
@@ -122,7 +127,7 @@ local function Finish()
     if was then Still(was.unit) end
 end
 
--- lets go without moving anything
+-- lets go without moving anything; an icon on its way out stays in its flyout
 function M.Cancel()
     local was = moving
     moving = nil
@@ -130,11 +135,45 @@ function M.Cancel()
         if lift then lift:Hide() end
         Still(was.unit)
     end
+    if carried then
+        was, carried = carried, nil
+        Still(was.unit)
+    end
     if landing then Finish() end
 end
 
 function M.Moving() return moving end
 function M.Landing() return landing end
+function M.Carried() return carried end
+
+-- The mouse let go of an icon dragged out: the game has placed it by now, or not, and it comes off its
+-- flyout.
+local function EndCarry()
+    local was = carried
+    carried = nil
+    if not was then return end
+    local unit, at = F.UnitOf(was.flyout), nil
+    for i, entry in ipairs(was.flyout.entries) do
+        if entry == was.entry then at = i end
+    end
+    ns.Log(("move: %s the mouse let go of the icon dragged out; the cursor holds %s"):format(tostring(was.flyout.host),
+        tostring((GetCursorInfo()) or "nothing")))
+    if unit and at and not InCombatLockdown() then
+        F.TakeOff(unit, at)
+    else
+        Still(was.unit)
+    end
+end
+
+-- Dropped back on the plus of its own flyout's button while on its way out: it stays where it was.
+function M.PutBack(flyout)
+    local was = carried
+    if not (was and was.flyout == flyout) then return false end
+    carried = nil
+    Still(was.unit)
+    ns.Log(("move: %s the icon dragged out was put back on its own button"):format(tostring(flyout.host)))
+    return true
+end
 
 -- let go: the icon lands in the gap, the rest stay where they slid to
 function M.Drop()
@@ -178,7 +217,16 @@ function M.Aim(place)
     end
     M.Cancel()
     ns.Log(("move: %s place %d dragged out"):format(tostring(was.flyout.host), was.from))
-    F.CarryOff(was.unit, was.from)
+    local entry = was.flyout.entries[was.from]
+    -- a move run by code, and a flyout that gives nothing up: off at once, or refused, as ever
+    if was.driven or was.flyout.auto or not entry then
+        F.CarryOff(was.unit, was.from)
+        return
+    end
+    F.Pickup(entry)
+    carried = { unit = was.unit, flyout = was.flyout, entry = entry }
+    was.unit.entries[was.from]:SetAlpha(0)
+    Driver():Show()
 end
 
 -- the held icon is at that screen point now
@@ -204,12 +252,12 @@ function M.Step(elapsed)
         if x then x, y = l.x + (x - l.x) * done, l.y + (y - l.y) * done else x, y = l.x, l.y end
         Hold(l, x, y, 1 + (GROW - 1) * l.grown * (1 - done))
         if done >= 1 and not busy then Finish() end
-    elseif driver then
+    elseif driver and not carried then
         driver:Hide()
     end
 end
 
-local function Driver()
+function Driver()
     if driver then return driver end
     driver = CreateFrame("Frame", nil, UIParent)
     driver:Hide()
@@ -221,6 +269,14 @@ end
 function M.Tick(elapsed)
     if moving and not moving.driven then
         if IsMouseButtonDown("LeftButton") then M.At(GetCursorPosition()) else M.Drop() end
+    end
+    if carried then
+        -- the frame after the let-go: the game's own drop has been dealt with by then
+        if carried.let then
+            EndCarry()
+        elseif not IsMouseButtonDown("LeftButton") then
+            carried.let = true
+        end
     end
     M.Step(elapsed)
 end
@@ -256,6 +312,7 @@ end
 -- the mouse let go of a drag
 function M.Released()
     if moving and not moving.driven then M.Drop() end
+    if carried then carried.let = true end
 end
 
 -- a flyout shut under a move ends it where it stands

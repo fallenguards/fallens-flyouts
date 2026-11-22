@@ -45,6 +45,9 @@ end
 
 local function TakeDrop(tab)
     if not GetCursorInfo() then return end
+    -- an icon dragged out of this button's own flyout and let go on its plus: it stays in
+    local own = F.At(tab.button:GetName())
+    if own and ns.Move and ns.Move.PutBack(own) then return ClearCursor() end
     local entry = D.Carried()
     if not entry then return ns.Warn(TEXT.kind) end
     local flyout, why = F.Stack(tab.button, entry)
