@@ -6,6 +6,7 @@
 - The settings page was taller than the game's Options window, so its last check boxes hung out under it. The page now scrolls inside the window, with the game's own scroll bar, and a controller's cursor scrolls it too.
 
 ### Removed
+- Arrange a flyout is gone from the settings page. A flyout is arranged on the flyout itself: drag an icon to move it, right-click it to take it off, pull the grip to turn the flyout, and in gamepad mode use Edit Flyout. The check boxes that stood beside it stay, under Flyout options.
 - Set Keys is gone from the settings page. A key for an icon inside a flyout is set the game's own ways: in its Keybindings options, or by hovering the icon in Quick Keybind Mode and pressing the key.
 
 ## [1.1.2] - 2026-11-21

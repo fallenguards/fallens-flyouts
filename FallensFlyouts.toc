@@ -25,5 +25,5 @@ UI\Keys.lua
 UI\KeyMenu.lua
 UI\PadBind.lua
 Options\Profiles.lua
-Options\Arrange.lua
+Options\Checks.lua
 Options\Auto.lua

@@ -285,7 +285,7 @@ function M.Start(frame, driven)
     local unit, i = frame.flyoutUnit, frame.entryIndex
     local flyout = unit and unit.flyout
     if moving or not (flyout and flyout.entries[i]) then return false end
-    -- icons around their button have no line to slide along: they are arranged in the settings
+    -- icons around their button have no line to slide along: gamepad mode's Edit Flyout places them
     if unit.radial then return false end
     if not driven and F.BarsLocked() and not IsModifiedClick("PICKUPACTION") then return false end
     if InCombatLockdown() then
