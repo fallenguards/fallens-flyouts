@@ -145,19 +145,27 @@ function B.Pad(button)
     return type(name) == "string" and name:find(PAD_BARS) ~= nil
 end
 
--- every named action button there is
+-- every named action button there is, read now
+local function Scan()
+    local found = {}
+    local frame = EnumerateFrames()
+    while frame do
+        if not frame:IsForbidden() and IsButton(frame) then found[#found + 1] = frame end
+        frame = EnumerateFrames(frame)
+    end
+    table.sort(found, function(a, b) return a:GetName() < b:GetName() end)
+    return found
+end
+-- the same, as last read if that was a moment ago
 function B.All(fresh)
     local now = GetTime()
     if not fresh and inventory and now - inventoryAt < 5 then return inventory end
-    inventory, inventoryAt = {}, now
-    local frame = EnumerateFrames()
-    while frame do
-        if not frame:IsForbidden() and IsButton(frame) then inventory[#inventory + 1] = frame end
-        frame = EnumerateFrames(frame)
-    end
-    table.sort(inventory, function(a, b) return a:GetName() < b:GetName() end)
+    inventory, inventoryAt = Scan(), now
     return inventory
 end
+-- what B.All last read, with no new reading; and a reading of the caller's own, which B.All does not keep
+function B.Known() return inventory end
+B.Scan = Scan
 
 -- a saved name back to its button, if it still is one
 function B.Named(name)

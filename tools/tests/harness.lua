@@ -262,7 +262,24 @@ function Frame:HookScript(k, fn)
 end
 function Frame:CreateTexture() return region() end
 function Frame:CreateFontString() return region() end
-function Frame:WrapScript(frame, _, body) frame.wrap, frame.header = body, self end
+-- a click's wrap is run by click(); any other script's is kept under the script's name, with the body
+-- the client runs after its own handler
+function Frame:WrapScript(frame, script, body, after)
+    if script == "OnClick" then
+        frame.wrap, frame.header = body, self
+        return
+    end
+    frame.wraps = frame.wraps or {}
+    frame.wraps[script] = { before = body, after = after, header = self }
+end
+-- secure code calls a function of the addon's: that one runs as addon code does
+function Frame:CallMethod(name, ...)
+    local was = W.secure
+    W.secure = false
+    local ok, err = pcall(self[name], self, ...)
+    W.secure = was
+    if not ok then error(err, 0) end
+end
 
 -- override bindings: priority ones win, then the latest set
 local function setOverride(owner, priority, key, action)
@@ -950,6 +967,10 @@ local function boot(alone)
         PlayerCanAttack = function(unit) return unit == "mouseover" and W.mouseover == "foe" end,
         IsModifiedClick = function(what) return IsModifiedClick(what) end,
         strmatch = string.match,
+        tostring = tostring,
+        -- what a slot holds, and whether the player is in a fight
+        GetActionInfo = function(slot) return GetActionInfo(slot) end,
+        PlayerInCombat = function() return W.combat == true end,
     }
     W.env = setmetatable({}, { __index = function(t, k)
         if k == "armed" or k == "held" or k == "picked" or k == "own" then return rawget(t, k) end
@@ -967,6 +988,41 @@ local function boot(alone)
     fire("PLAYER_LOGIN")
 end
 
+-- W.guard (a test's to set): in a fight the client refuses addon code whatever changes a protected frame,
+-- a bar button or one made from a secure template. Secure code (W.secure: a wrap's body being run) may.
+for _, m in ipairs({ "SetAttribute", "SetPoint", "ClearAllPoints", "SetParent", "Show", "Hide", "SetScale" }) do
+    local plain = Frame[m]
+    Frame[m] = function(self, ...)
+        if W and W.guard and W.combat and not W.secure then
+            local protected = self.action ~= nil
+                or (type(self.template) == "string" and self.template:find("Secure", 1, true) ~= nil)
+            if protected then error(("blocked in a fight: %s on %s"):format(m, tostring(self.name)), 2) end
+        end
+        return plain(self, ...)
+    end
+end
+-- A drag let go over a bar button, as the client runs it: the wrap's body before (which may answer
+-- "message"), the game's own placing of what is carried, then the wrap's body after.
+function DropOn(frame)
+    local wrapped, message = frame.wraps and frame.wraps.OnReceiveDrag, nil
+    local function run(body, signature, ...)
+        local fn = assert(load("local " .. signature .. " = ...; " .. body, frame.name, "t", W.env))
+        W.secure = true
+        local ok, a, b = pcall(fn, ...)
+        W.secure = false
+        if not ok then error(a, 0) end
+        return a, b
+    end
+    if wrapped and wrapped.before then
+        local kind, value = run(wrapped.before, "self, button, owner", frame, "LeftButton", wrapped.header)
+        if kind == false then return end
+        if kind == "message" then message = value end
+    end
+    PlaceAction(frame.action)
+    if wrapped and wrapped.after and message ~= nil then
+        run(wrapped.after, "self, message, button, owner", frame, message, "LeftButton", wrapped.header)
+    end
+end
 local function click(frame, down, button)
     button = button or "LeftButton"
     if not frame.wrap then
@@ -979,7 +1035,10 @@ local function click(frame, down, button)
         return
     end
     local fn = assert(load("local self, button, down, owner = ...; " .. frame.wrap, frame.name, "t", W.env))
-    local verdict = fn(frame, button, down, frame.header)
+    W.secure = true
+    local ran, verdict = pcall(fn, frame, button, down, frame.header)
+    W.secure = false
+    if not ran then error(verdict, 0) end
     -- as the client's secure button: it acts on the press, or on the release when told not to
     local onPress = frame.attrs.useOnKeyDown ~= false
     local cast = verdict ~= false and frame.attrs.type and down == onPress

@@ -3,7 +3,7 @@ local _, ns = ...
 -- luacheck: read globals SetOverrideBindingClick ClearOverrideBindings GameTooltip C_GamePad GetBindingText
 -- luacheck: read globals issecretvalue C_CVar C_Container GetMacroSpell GetMacroItem IsUsableItem geterrorhandler
 -- luacheck: read globals Settings IsModifiedClick GetModifiedClick PickupSpell PickupItem PickupMacro IsMouseButtonDown
--- luacheck: read globals PlaceAction ClearCursor GetCursorInfo
+-- luacheck: read globals PlaceAction ClearCursor GetCursorInfo GetActionInfo
 -- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding ACTIONBAR_HOTKEY_FONT_COLOR
 
 -- Flyouts on bar buttons. One secure root owns every key.
@@ -45,6 +45,8 @@ local ROOT, OPENER = "FallensFlyoutsRoot", "FallensFlyoutsOpener"
 local MENU, ENTRY = "FallensFlyoutsMenu", "FallensFlyoutsEntry"
 -- the game's arrow: 18 by 7, 4 out when shut, 2 when open
 local ARROW_W, ARROW_H, ARROW_OUT, ARROW_OPEN, GRIP_W, GRIP_H, GRIP_OUT = 18, 7, 4, 2, 30, 14, 3
+-- how many levels over its bar button the grip stands
+local GRIP_OVER = 10
 -- flyout size against the game's own, as a setting
 local SIZE_MIN, SIZE_MAX = 0.5, 2
 local TEXT = {
@@ -173,6 +175,102 @@ local HOST_WRAP = [[
 ]] .. BIND .. [[
     return false
 ]]
+-- A flyout's bar button dragged to another slot in a fight. His words (2026-11-22): "we need to fix not
+-- being able to move flyouts in a fight. it's extremely annoying." In a fight the game lets no addon
+-- code touch a bar button or a frame hung on one, so until now the flyout stayed behind until the
+-- fight was over. Secure code may, when the game runs it: this runs on a drop on any bar button (READ
+-- in the client's Blizzard_RestrictedAddOnEnvironment: OnReceiveDrag can be wrapped, a body before
+-- that answers "message" lets the game place what is carried and then runs the body after; in it
+-- GetActionInfo says what a slot holds). In a fight only: out of one the addon's own code follows.
+-- The button dropped on: if it now holds the ability of a flyout whose own button no longer does,
+-- the flyout, its grip and its keys go to this button, hung as they hung on the old one. A flyout
+-- this button had, its ability carried off, waits with no key for the fight's end.
+-- A drop by a click (what a swap leaves on the cursor) runs none of this: that one waits too.
+local DROP_BEFORE = [[
+    return "message", "drop"
+]]
+local DROP_AFTER = [[
+    if not PlayerInCombat() then return end
+    local name = self:GetName()
+    local slot = owner:GetAttribute("slot-" .. name)
+    local kind, id
+    if slot then kind, id = GetActionInfo(slot) end
+    local mine = kind and id and owner:GetAttribute("main-" .. kind .. ":" .. tostring(id))
+    local had = owner:GetAttribute("host-" .. name)
+    if mine == had then return end
+    local off, on
+    if had then
+        off = had
+        owner:SetAttribute("host-" .. name, nil)
+        owner:SetAttribute("hostof" .. had, nil)
+        owner:SetAttribute("okeys" .. had, 0)
+        owner:GetFrameRef("grip" .. had):Hide()
+    end
+    if mine then
+        local was = owner:GetAttribute("hostof" .. mine)
+        -- a second one of the ability set down while the first is still on its button: the flyout stays
+        local still
+        if was then
+            local at = owner:GetAttribute("slot-" .. was)
+            local k, i
+            if at then k, i = GetActionInfo(at) end
+            still = k == kind and i == id
+        end
+        if not still then
+            on = mine
+            if was then owner:SetAttribute("host-" .. was, nil) end
+            owner:SetAttribute("host-" .. name, mine)
+            owner:SetAttribute("hostof" .. mine, name)
+            local grip, menu = owner:GetFrameRef("grip" .. mine), owner:GetFrameRef("menu" .. mine)
+            grip:SetParent(self)
+            grip:SetFrameLevel(self:GetFrameLevel() + owner:GetAttribute("gover"))
+            grip:ClearAllPoints()
+            grip:SetPoint(owner:GetAttribute("gp" .. mine), self, owner:GetAttribute("grp" .. mine),
+                owner:GetAttribute("gx" .. mine), owner:GetAttribute("gy" .. mine))
+            grip:Show()
+            menu:ClearAllPoints()
+            menu:SetPoint(owner:GetAttribute("mp" .. mine), self, owner:GetAttribute("mrp" .. mine),
+                owner:GetAttribute("mx" .. mine), owner:GetAttribute("my" .. mine))
+            -- its keys are this button's. Under a modifier of one of them the picks are listed too, as
+            -- the addon's own code lists them.
+            local keys = owner:GetAttribute("bkeys-" .. name) or 0
+            local picks = owner:GetAttribute("pkeys" .. mine) or 0
+            for i = 1, keys do
+                local mod = strmatch(owner:GetAttribute("bkey-" .. name .. "_" .. i), "^(.*%-).")
+                for p = 1, mod and picks or 0 do
+                    local base = owner:GetAttribute("pkey" .. mine .. "_" .. p)
+                    if not strmatch(base, "%-") then
+                        local under, have = mod .. base, nil
+                        for q = 1, owner:GetAttribute("pkeys" .. mine) do
+                            if owner:GetAttribute("pkey" .. mine .. "_" .. q) == under then have = true end
+                        end
+                        if not have then
+                            local last = owner:GetAttribute("pkeys" .. mine) + 1
+                            owner:SetAttribute("pkey" .. mine .. "_" .. last, under)
+                            owner:SetAttribute("pentry" .. mine .. "_" .. last,
+                                owner:GetAttribute("pentry" .. mine .. "_" .. p))
+                            owner:SetAttribute("pkeys" .. mine, last)
+                        end
+                    end
+                end
+            end
+            -- a key that is one of the flyout's picks while open says so in its click's name
+            for i = 1, keys do
+                local key, how = owner:GetAttribute("bkey-" .. name .. "_" .. i), "LeftButton"
+                for p = 1, owner:GetAttribute("pkeys" .. mine) or 0 do
+                    if owner:GetAttribute("pkey" .. mine .. "_" .. p) == key then how = "own" .. i end
+                end
+                owner:SetAttribute("okey" .. mine .. "_" .. i, key)
+                owner:SetAttribute("obtn" .. mine .. "_" .. i, how)
+            end
+            owner:SetAttribute("okeys" .. mine, keys)
+        end
+    end
+    if not (off or on) then return end
+    armed, held, picked, own = nil, nil, nil, nil
+]] .. SHUT .. BIND .. [[
+    owner:CallMethod("Rehomed", on or 0, name, off or 0)
+]]
 -- A pick key acts on its press and shuts on its release, unless the
 -- flyout's key is still held. The mouse acts on its release, as on the
 -- game's own flyouts: its press may be the start of a move, and a press
@@ -228,7 +326,7 @@ local watchers = {}
 -- each says when the bars are put away for a moment: no flyout looks for a button then
 local stills = {}
 -- bar buttons whose click we wrapped, and the ones with a flyout now
-local wrapped, hosted = {}, {}
+local wrapped, hosted, mains = {}, {}, {}
 -- what the game last said of the pad being the input in use; nil: nothing yet
 local padMode
 -- a game command bound to a key and a pad button both, and whether one was sought
@@ -675,6 +773,7 @@ local function Unit(f)
     root:SetAttribute("opener" .. f, OPENER .. f)
     opener:SetScript("PostClick", function(_, button, down) Tell("opener", unit, button, down) end)
     unit.opener = opener
+    root:SetFrameRef("grip" .. f, opener)
     -- the game's flyout arrow, and its glow around the button
     unit.arrow = opener:CreateTexture(nil, "OVERLAY")
     -- in the arrow's place for a flyout that opens around its button
@@ -1257,6 +1356,23 @@ local function Layers()
     for f = 1, used do Layer(units[f]) end
 end
 
+-- Where a flyout and its grip hang on their button: kept for the secure code that hangs them on
+-- another button in a fight (it cannot ask a frame for this in a fight).
+local function Hung(unit)
+    local f = unit.index
+    root:SetAttribute("gover", GRIP_OVER)
+    local point, _, to, x, y = unit.opener:GetPoint(1)
+    root:SetAttribute("gp" .. f, point)
+    root:SetAttribute("grp" .. f, to or point)
+    root:SetAttribute("gx" .. f, x or 0)
+    root:SetAttribute("gy" .. f, y or 0)
+    point, _, to, x, y = unit.menu:GetPoint(1)
+    root:SetAttribute("mp" .. f, point)
+    root:SetAttribute("mrp" .. f, to or point)
+    root:SetAttribute("mx" .. f, x or 0)
+    root:SetAttribute("my" .. f, y or 0)
+end
+
 local function Lay(unit)
     local flyout, host = unit.flyout, unit.host
     local way, runs = Bars.Way(host)
@@ -1280,7 +1396,7 @@ local function Lay(unit)
     opener:SetScale(Bars.Size(host))
     unit.grown = 1
     opener:SetFrameStrata(host:GetFrameStrata())
-    opener:SetFrameLevel(host:GetFrameLevel() + 10)
+    opener:SetFrameLevel(host:GetFrameLevel() + GRIP_OVER)
     opener:ClearAllPoints()
     opener:SetSize(edge and GRIP_W or GRIP_H, edge and GRIP_H or GRIP_W)
     opener:SetPoint("CENTER", host, side.to, side.x * GRIP_OUT, side.y * GRIP_OUT)
@@ -1363,6 +1479,7 @@ local function Lay(unit)
     root:SetAttribute("count" .. unit.index, count)
     unit.placed = Bars.Placed(host)
     if ready then Laid()[flyout.host] = { way = way, scale = scale } end
+    Hung(unit)
 end
 
 -- Before 1.1.4 each flyout on the bars had a heading in the game's key menu with a row for each of six
@@ -1395,6 +1512,63 @@ local function OpenKeys(unit)
     end
     return keys
 end
+
+-- What the secure code has to know of every bar button, should a flyout's ability be dropped on it
+-- in a fight: its slot, and its keys. Written only where it changed, and the keys read only when the
+-- key map did. Each button's drop is wrapped once. None of it during the login: the buttons are looked
+-- for once the bars have settled, and after that a button new to the bars is taken up when the list of
+-- them is next read for something else.
+local reached, dropWrapped, reachedKeys = {}, {}, nil
+local reachList, reachSeen
+local Rehomed
+local function Reach()
+    if not ready then return end
+    local read = Bars.Known()
+    if reachList == nil then
+        reachList = Bars.Scan()
+    elseif read and read ~= reachSeen then
+        reachList = read
+    end
+    reachSeen = read
+    local parts = {}
+    for action, keys in pairs(Bars.KeyMap()) do parts[#parts + 1] = action .. "=" .. table.concat(keys, ",") end
+    for key in pairs(HoldKeys()) do parts[#parts + 1] = "hold=" .. key end
+    table.sort(parts)
+    local now = table.concat(parts, ";")
+    local same = now == reachedKeys
+    reachedKeys = now
+    if not root.Rehomed then
+        root.Rehomed = function(_, ...) xpcall(Rehomed, geterrorhandler(), ...) end
+    end
+    for _, button in ipairs(reachList) do
+        local name = button:GetName()
+        if name then
+            local known = reached[name]
+            if not known then
+                known = {}
+                reached[name] = known
+            end
+            local slot = Bars.Slot(button)
+            if known.slot ~= slot then
+                known.slot = slot
+                root:SetAttribute("slot-" .. name, slot)
+            end
+            if not same or known.keys == nil then
+                local keys = OpenKeys({ host = button })
+                local text = table.concat(keys, " ")
+                if known.keys ~= text then
+                    known.keys = text
+                    for i, key in ipairs(keys) do root:SetAttribute("bkey-" .. name .. "_" .. i, key) end
+                    root:SetAttribute("bkeys-" .. name, #keys)
+                end
+            end
+            if dropWrapped[name] == nil then
+                dropWrapped[name] = pcall(root.WrapScript, root, button, "OnReceiveDrag", DROP_BEFORE, DROP_AFTER)
+            end
+        end
+    end
+end
+F.DropWrapped = function(name) return dropWrapped[name] == true end
 
 -- Each button's keys click its opener, read fresh. Each flyout's picks are
 -- listed for the snippet, also under the modifiers of a key that can be held.
@@ -1448,6 +1622,7 @@ local function Rebind()
         root:SetAttribute("okeys" .. f, #unit.keys)
         Labels(unit)
     end
+    Reach()
     menuKeys = Binds.State()
     quiet = math.max(quiet, GetTime() + 0.5)
 end
@@ -1609,7 +1784,7 @@ function F.Apply()
     root:SetAttribute("open", nil)
     -- no key counts as held or pressed across a layout
     root:Execute("armed, held, picked = nil, nil, nil")
-    local taken = {}
+    local taken, leads = {}, {}
     used = 0
     local ranked, hiding = F.Ranked(), F.Hiding()
     for _, flyout in ipairs(list or {}) do
@@ -1649,12 +1824,27 @@ function F.Apply()
                 end
             end
             root:SetAttribute("host-" .. name, used)
+            root:SetAttribute("hostof" .. used, name)
+            -- what the game says the button holds: by this the secure code knows the flyout's
+            -- ability on another button, should it be dragged there in a fight
+            local slot = Bars.Slot(host)
+            local kind, id
+            if slot then kind, id = GetActionInfo(slot) end
+            if type(kind) == "string" and (type(id) == "number" or type(id) == "string") then
+                local lead = kind .. ":" .. tostring(id)
+                leads[lead] = true
+                root:SetAttribute("main-" .. lead, used)
+            end
         end
     end
     for name in pairs(hosted) do
         if not taken[name] then root:SetAttribute("host-" .. name, nil) end
     end
     hosted = taken
+    for lead in pairs(mains) do
+        if not leads[lead] then root:SetAttribute("main-" .. lead, nil) end
+    end
+    mains = leads
     -- remembered layouts of buttons that no longer have a flyout go
     if ready then
         local laid = Laid()
@@ -1674,6 +1864,7 @@ function F.Apply()
         root:SetAttribute("okeys" .. f, 0)
         root:SetAttribute("pkeys" .. f, 0)
         root:SetAttribute("count" .. f, 0)
+        root:SetAttribute("hostof" .. f, nil)
     end
     root:SetAttribute("units", used)
     Carry()
@@ -1728,6 +1919,45 @@ function F.Follow()
 end
 
 -- flyouts from saved data show only where their action is
+-- The secure code moved a flyout to another button in a fight, or took one off its button: what addon
+-- code may still do then. Where the flyout sits is saved, and the marks on the button follow, which
+-- are drawings and no frames. All of it is laid afresh when the fight is over.
+Rehomed = function(f, name, off)
+    if not InCombatLockdown() then return F.Settle() end
+    pending = true
+    local gone = units[off]
+    if gone and gone.flyout then
+        -- off its button: its marks went with its grip; what was drawn on the button itself goes too
+        gone.host = nil
+        Face(gone)
+        Named(gone)
+    end
+    local unit, host = units[f], Bars.Named(name)
+    if not (unit and unit.flyout and host) then return end
+    local flyout = unit.flyout
+    local laid, old = Laid(), flyout.host
+    laid[name], laid[old] = laid[old] or laid[name], nil
+    flyout.host, unit.host = name, host
+    hosted[name] = true
+    unit.keys = OpenKeys(unit)
+    local side = Art.SIDES[unit.side]
+    if side then
+        unit.arrow:ClearAllPoints()
+        unit.arrow:SetPoint(side.to, host, side.to, side.x * ARROW_OUT, side.y * ARROW_OUT)
+    end
+    unit.glow:ClearAllPoints()
+    unit.glow:SetPoint("TOPLEFT", host, "TOPLEFT", -Art.GLOW, Art.GLOW)
+    unit.glow:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", Art.GLOW, -Art.GLOW)
+    unit.ring:ClearAllPoints()
+    unit.ring:SetPoint("TOPLEFT", host, "TOPLEFT")
+    Art.LayDots(unit.dots, host, unit.radial)
+    Face(unit)
+    Named(unit)
+    State(unit)
+    ns.Log(("in a fight %s was dropped on %s: its flyout went along"):format(Name(flyout.main), name))
+    Tell("moved", unit)
+end
+
 function F.Settle()
     if InCombatLockdown() then
         pending = true

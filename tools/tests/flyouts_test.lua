@@ -2551,6 +2551,136 @@ do
     check(#NS.Auto.Mixes() == 0, "none left behind for what follows")
 end
 
+print("a flyout's bar button dragged to another slot in a fight takes its flyout along")
+do
+    -- His words (2026-11-22): "we need to fix not being able to move flyouts in a fight. it's extremely annoying."
+    login("Player-1-0000000T")
+    local F10 = NS.Flyouts
+    W.placed = W.placed or {}
+    -- button 5 is empty and has keys of its own; button 1 gets a flyout
+    W.placed[5] = false
+    fire("ACTIONBAR_SLOT_CHANGED", 5)
+    W.base["5"], W.base["SHIFT-F"] = "ACTIONBUTTON5", "ACTIONBUTTON5"
+    stack("ActionButton1", 501)
+    stack("ActionButton1", 502)
+    rebound()
+    flushAll()
+    local flyout, unit = F10.At("ActionButton1")
+    local f = unit.index
+    local one, two, five, six = W.frames.ActionButton1, W.frames.ActionButton2, W.frames.ActionButton5, W.frames.ActionButton6
+    local r = root()
+    check(opener("1") == f and opener("E") == f and not opens("5") and F10.DropWrapped("ActionButton5")
+        and F10.DropWrapped("ActionButton1") and r.attrs["slot-ActionButton5"] == 5 and r.attrs["bkeys-ActionButton5"] == 2,
+        "before a fight the secure code is told every bar button's slot and keys, and is run at a drop on any of them")
+    check(five.wrap == nil and not F10.Wrapped("ActionButton5"), "a button with no flyout has only its drop watched: its click is the game's own")
+    -- out of a fight the drop code leaves everything to the addon's own code, as it always was
+    PickupAction(1)
+    for _ = 1, 4 do flushAll() end
+    DropOn(five)
+    for _ = 1, 4 do flushAll() end
+    check(F10.At("ActionButton5") == flyout and opens("5") and not opens("1"), "out of a fight a drag is followed as it always was")
+    PickupAction(5)
+    for _ = 1, 4 do flushAll() end
+    DropOn(one)
+    for _ = 1, 4 do flushAll() end
+    flyout, unit = F10.At("ActionButton1")
+    f = unit and unit.index
+    check(flyout ~= nil and opener("1") == f and not opens("5"), "and back")
+
+    -- in a fight: nothing of the addon's own code may touch a bar button or a frame hung on one
+    -- (the fight's first event comes while addon code still may: the lock falls after it)
+    W.guard = true
+    fire("PLAYER_REGEN_DISABLED")
+    W.combat = true
+    flushAll()
+    PickupAction(1)
+    flushAll()
+    DropOn(five)
+    flushAll()
+    check(r.attrs["host-ActionButton5"] == f and r.attrs["host-ActionButton1"] == nil and r.attrs["hostof" .. f] == "ActionButton5",
+        "in a fight, its button dragged onto another: the secure code has the flyout on that button at the drop")
+    check(unit.menu.point ~= nil and unit.menu.point[2] == five and unit.opener.parent == five and unit.opener.point[2] == five
+        and unit.opener.shown, "the flyout and its grip hang on the new button")
+    check(opener("5") == f and opener("SHIFT-F") == f and not opens("1") and not opens("E")
+        and GetBindingAction("1", true) == "ACTIONBUTTON1", "the new button's keys open it, and the old button's keys are the old button's again")
+    check(flyout.host == "ActionButton5" and unit.host == five and unit.arrow.point ~= nil and unit.arrow.point[2] == five,
+        "where it sits is saved, and its arrow is drawn on the new button")
+    tap("5")
+    check(unit.menu:IsShown(), "the new button's key opens it, in the fight")
+    local before = #W.casts
+    tap("1")
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:" .. tostring(entry(f, 1).attrs.spell) and not unit.menu:IsShown(),
+        "and its first key picks its first icon, which casts and shuts it: " .. tostring(W.casts[#W.casts]))
+    press("SHIFT-F")
+    check(unit.menu:IsShown() and GetBindingAction("SHIFT-1", true) == "CLICK FallensFlyoutsEntry" .. f .. "_1:Key",
+        "opened by a key with a modifier and held: the picks are under that modifier too, as on any button")
+    release("SHIFT-F")
+    if unit.menu:IsShown() then tap("5") end
+    check(not unit.menu:IsShown(), "shut again")
+    -- a second one of its ability dropped elsewhere, the first still on its button: the flyout stays
+    local lead = select(2, GetActionInfo(5))
+    C_Spell.PickupSpell(lead)
+    DropOn(six)
+    flushAll()
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    check(r.attrs["host-ActionButton5"] == f and r.attrs["host-ActionButton6"] == nil and opener("5") == f,
+        "a second one of its ability set down elsewhere leaves the flyout on the button that still has the first")
+    -- the fight over: laid there as on any button
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    for _ = 1, 4 do flushAll() end
+    local after, afterUnit = F10.At("ActionButton5")
+    check(after == flyout and afterUnit ~= nil and F10.Wrapped("ActionButton5") and opener("5") == afterUnit.index and not opens("1"),
+        "the fight over: it is laid on the new button as on any, and that button's own click opens it")
+    mouse(five)
+    check(afterUnit ~= nil and afterUnit.menu:IsShown(), "a click on the button opens it")
+    mouse(five)
+
+    -- dropped on the button of another flyout, in a fight: that one waits for the fight's end
+    W.placed[6] = nil
+    fire("ACTIONBAR_SLOT_CHANGED", 6)
+    stack("ActionButton2", 601)
+    for _ = 1, 4 do flushAll() end
+    local other, otherUnit = F10.At("ActionButton2")
+    flyout, unit = F10.At("ActionButton5")
+    f = unit.index
+    local g = otherUnit.index
+    check(other ~= nil and other ~= flyout and opener("2") == g and opener("5") == f, "two flyouts, each on its button")
+    fire("PLAYER_REGEN_DISABLED")
+    W.combat = true
+    flushAll()
+    PickupAction(5)
+    flushAll()
+    DropOn(two)
+    flushAll()
+    check(r.attrs["host-ActionButton2"] == f and r.attrs["hostof" .. f] == "ActionButton2" and opener("2") == f and opener("Q") == f
+        and not opens("5"), "dropped on another flyout's button in a fight: the button is the dropped one's now, keys and all")
+    check(r.attrs["hostof" .. g] == nil and r.attrs["okeys" .. g] == 0 and not otherUnit.opener.shown,
+        "the flyout that button had waits, with no key and no grip, for its ability to be set down")
+    -- what the swap left on the cursor is set down by a click: that is seen when the fight is over
+    PlaceAction(5)
+    flushAll()
+    check(r.attrs["hostof" .. g] == nil and not opens("5"), "set down by a click in the fight, it still waits")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    for _ = 1, 6 do flushAll() end
+    local onTwo, onFive = F10.At("ActionButton2"), F10.At("ActionButton5")
+    check(onTwo == flyout and onFive == other and opens("2") and opens("5") and opener("2") ~= opener("5"),
+        "the fight over: each flyout is on the button its ability is on")
+    W.guard = nil
+    -- the bars as they were
+    local all = F10.List()
+    for i = #all, 1, -1 do table.remove(all, i) end
+    W.placed[1], W.placed[2], W.placed[5], W.placed[6] = nil, nil, nil, nil
+    W.base["5"], W.base["SHIFT-F"] = nil, nil
+    F10.Apply()
+    for _, slot in ipairs({ 1, 2, 5, 6 }) do fire("ACTIONBAR_SLOT_CHANGED", slot) end
+    rebound()
+    flushAll()
+    check(not opens("1") and not opens("2") and not opens("5"), "none left behind for what follows")
+end
+
 print("bars that send their keys through a helper child")
 barWorld = function() return "helper" end
 login("Player-1-0000000H")
