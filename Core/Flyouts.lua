@@ -82,6 +82,10 @@ local SHOW = [[
 -- its own snippets: open, units, opener<f>, okeys<f>, okey<f>_<i>,
 -- obtn<f>_<i>, pkeys<f>, pkey<f>_<i>, pentry<f>_<i>, ckeys, ckey<i>. Their
 -- names and meanings stay as they are (a tracked test holds them).
+-- Of that addon's root (frame ref "layers") this reads: layer and lkey<layer>_<KEY>, for the opener
+-- keys; and hdown_<KEY>, true from the press of a modifier key that is HELD until it is let go. A key
+-- held down so is that addon's: its release has to end the layer there. Up, and in every other state
+-- of a layer, an open flyout's keys are the flyout's (agreed with its chat, 2026-11-22).
 local BIND = [[
     owner:ClearBindings()
     local layers = owner:GetFrameRef("layers")
@@ -100,24 +104,40 @@ local BIND = [[
     if open then
         local name = owner:GetAttribute("opener" .. open)
         for i = 1, owner:GetAttribute("ckeys") or 0 do
-            owner:SetBindingClick(true, owner:GetAttribute("ckey" .. i), name, "tap")
+            local key = owner:GetAttribute("ckey" .. i)
+            if not (layers and layers:GetAttribute("hdown_" .. key)) then
+                owner:SetBindingClick(true, key, name, "tap")
+            end
         end
         for i = 1, owner:GetAttribute("pkeys" .. open) or 0 do
             local at = open .. "_" .. i
-            owner:SetBindingClick(true, owner:GetAttribute("pkey" .. at), owner:GetAttribute("pentry" .. at), "Key")
+            local key = owner:GetAttribute("pkey" .. at)
+            -- `own`: the key that is held down to keep this flyout open, when it is one of its picks too
+            if key ~= own and not (layers and layers:GetAttribute("hdown_" .. key)) then
+                owner:SetBindingClick(true, key, owner:GetAttribute("pentry" .. at), "Key")
+            end
         end
     end
 ]]
 -- A press opens its flyout or shuts the open one. Held, it stays open
--- through every pick and shuts on letting go; a "tap" key cannot be held.
+-- through every pick and shuts on letting go; a "tap" click cannot be held.
+-- A key that is one of its flyout's own picks can be held too (it used to be a tap: "holding a key to
+-- keep a flyout open so can spam button is not working. it still just closes the flyout after the
+-- first press of in-flyout key press", 2026-11-22). Its click is named "own<i>", i its place among the
+-- opener's keys: while it is down it stays the opener's, so that its release comes here whichever way
+-- the client sends a release, and it is its icon's key from the moment it is let go.
 local OPENER_WRAP = [[
     local mine = self:GetAttribute("ffindex")
     if not down then
         if held == mine then
             held = nil
+            local kept = own
+            own = nil
             if picked then
                 picked = nil
 ]] .. SHUT .. BIND .. [[
+            elseif kept then
+]] .. BIND .. [[
             end
         end
         return false
@@ -128,8 +148,10 @@ local OPENER_WRAP = [[
     if was ~= mine then
 ]] .. SHOW .. [[
         if button ~= "tap" then held = mine else held = nil end
+        local at = strmatch(button, "^own(%d+)$")
+        own = at and owner:GetAttribute("okey" .. mine .. "_" .. at) or nil
     else
-        held = nil
+        held, own = nil, nil
     end
 ]] .. BIND .. [[
     return false
@@ -142,7 +164,7 @@ local HOST_WRAP = [[
     if not mine or owner:GetAttribute("carrying") then return end
     if button == "RightButton" then return false end
     if down then return false end
-    armed, held, picked = nil, nil, nil
+    armed, held, picked, own = nil, nil, nil, nil
     local was = owner:GetAttribute("open")
 ]] .. SHUT .. [[
     if was ~= mine then
@@ -947,8 +969,11 @@ local function Picks(unit)
     local entries = unit.flyout.entries
     local pads = PadsOf(unit, #entries)
     local pool = F.Faces(unit.flyout) and PADS_ALL or PADS
-    -- a key that holds a layer is as good as taken
-    local picks, taken = {}, HoldKeys()
+    -- An open flyout's keys are the flyout's, a key that holds a layer of the key layers addon among
+    -- them. His words (2026-11-22): "we should always respect our in-flyout keys. if someone opened the
+    -- flyout, they want THOSE keys to take precedence. they can close the flyout if they want other
+    -- behavior." Shut, every key is whoever's it was.
+    local picks, taken = {}, {}
     for i, entry in ipairs(entries) do
         local key = type(entry.key) == "string" and entry.key or nil
         local pad = type(entry.pad) == "string" and entry.pad or nil
@@ -1151,13 +1176,25 @@ end
 -- over the bars is over the flyout too. (It used to be in the layer of the game's own flyout, over
 -- most windows, and showed through them.) The game lifts the bars for a spell on the cursor: the
 -- flyout goes with them.
+-- Over the buttons means over what they hold as well: the game keeps a button's key and count
+-- texts on a frame of their own, 500 levels up, and a flyout only just over the buttons had the key
+-- of the button under it showing through its icon (his snip, 2026-11-22: "keybinds from abilities
+-- under a flyout show through the flyout").
 local OVER_BARS = 20
 local function Layer(unit)
     local host, menu = unit.host, unit.menu
     if not (host and menu) or InCombatLockdown() then return end
     local strata, level = host:GetFrameStrata(), host:GetFrameLevel()
     for _, button in ipairs(Bars.All()) do
-        if button:GetFrameStrata() == strata then level = math.max(level, button:GetFrameLevel()) end
+        if button:GetFrameStrata() == strata then
+            level = math.max(level, button:GetFrameLevel())
+            -- frames that are not ours are asked through a plain frame's own calls
+            for _, held in ipairs({ UIParent.GetChildren(button) }) do
+                if UIParent.GetFrameStrata(held) == strata then
+                    level = math.max(level, UIParent.GetFrameLevel(held))
+                end
+            end
+        end
     end
     menu:SetFrameStrata(strata)
     menu:SetFrameLevel(level + OVER_BARS)
@@ -1383,8 +1420,9 @@ local function Rebind()
             end
         end
         for i, key in ipairs(unit.keys) do
-            -- a key that is a pick while open cannot be held: its release may go to the pick
-            local how = plain[key] and "tap" or "LeftButton"
+            -- a key that is a pick while open says so in its click's name: held, it is kept from its
+            -- icon until it is let go, so that its release comes to the opener
+            local how = plain[key] and ("own" .. i) or "LeftButton"
             root:SetAttribute("okey" .. f .. "_" .. i, key)
             root:SetAttribute("obtn" .. f .. "_" .. i, how)
             SetOverrideBindingClick(root, true, key, OPENER .. f, how)

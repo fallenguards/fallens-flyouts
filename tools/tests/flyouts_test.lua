@@ -333,7 +333,34 @@ release("CTRL-6")
 check(not menu:IsShown() and GetBindingAction("CTRL-2", true) == "", "let go, it shuts and Ctrl with a number is free again")
 press("1"); release("1")
 tap("2")
-check(not menu:IsShown(), "a key that is itself a pick cannot be held: a pick shuts it")
+check(not menu:IsShown(), "opened by a tap of a key that is itself a pick, a pick shuts it, as after any tap")
+-- His words (2026-11-22): "holding a key to keep a flyout open so can spam button is not working. it still
+-- just closes the flyout after the first press of in-flyout key press". The key that opened it was one of
+-- the flyout's own pick keys (1 opens this one and 1 is its first icon's key), and such a key was a tap.
+before = #W.casts
+press("1")
+check(menu:IsShown() and GetBindingAction("1", true) == "CLICK FallensFlyoutsOpener" .. one .. ":own1"
+    and GetBindingAction("2", true):find("FallensFlyoutsEntry") ~= nil,
+    "held, a key that is one of the flyout's own picks stays the opener's while it is down; the other picks are bound")
+tap("2"); tap("3"); tap("2")
+check(#W.casts == before + 3 and menu:IsShown(), "so every pick casts and the flyout stays open while that key is held")
+release("1")
+check(not menu:IsShown() and GetBindingAction("2", true) == "ACTIONBUTTON2", "let go, it shuts and the keys go back")
+-- held and let go with nothing picked: it stays open, and the key is its own icon's from then on
+press("1"); release("1")
+check(menu:IsShown() and GetBindingAction("1", true) == "CLICK FallensFlyoutsEntry" .. one .. "_1:Key",
+    "let go with nothing picked, it stays open and that key is its icon's key again")
+before = #W.casts
+tap("1")
+check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:101" and not menu:IsShown(),
+    "pressed again it casts its own icon and shuts the flyout: " .. tostring(W.casts[#W.casts]))
+-- in a fight too, where nothing can be bound from outside
+W.combat = true
+press("1"); tap("2"); tap("2")
+check(menu:IsShown(), "in a fight a held key of that kind keeps it open through its picks too")
+release("1")
+check(not menu:IsShown(), "and letting go shuts it")
+W.combat = false
 W.combat = true
 press("E"); tap("2"); tap("2")
 check(menu:IsShown(), "in a fight held picks keep it open too")
@@ -889,14 +916,25 @@ NS.KeyMenu.Hover(Binds.Command(1, 3))
 NS.KeyMenu.Hover(nil)
 check(not keyedUnit.ring.shown, "and so does leaving the rows")
 
-print("our key layers addon: its hold keys are left alone, and nothing is read off the bars while one is down")
+print("our key layers addon: its hold keys open nothing, an open flyout's keys are the flyout's, nothing is read off the bars while one is down")
 do
     local held = false
     FallensFlyouts_Layers({ Held = function() return held end, HoldKeys = function() return { "1" } end })
     check(opener("1") == nil and opener("E") == one, "a key that holds a layer is no opener key, though it is the bar button's own")
+    -- His words (2026-11-22), his flyouts having begun at 2 once key 1 held a layer: "why are all the
+    -- flyouts starting at 2 now instead of 1????" and "we should always respect our in-flyout keys. if
+    -- someone opened the flyout, they want THOSE keys to take precedence."
     tap("E")
-    check(menu:IsShown() and label(1) == "2" and label(2) == "3" and GetBindingAction("1", true) == "ACTIONBUTTON1",
-        "nor a pick key: the spots take the next free keys, and the hold key is left to its addon")
+    check(menu:IsShown() and label(1) == "1" and label(2) == "2"
+        and GetBindingAction("1", true) == "CLICK FallensFlyoutsEntry" .. one .. "_1:Key",
+        "open, the flyout's keys are the flyout's: its first icon is on 1 though 1 holds a layer")
+    local castsBefore = #W.casts
+    tap("1")
+    check(#W.casts == castsBefore + 1 and W.casts[#W.casts] == "spell:101" and not menu:IsShown(),
+        "pressed, 1 casts the first icon and shuts the flyout: " .. tostring(W.casts[#W.casts]))
+    check(GetBindingAction("1", true) == "ACTIONBUTTON1" and opener("1") == nil,
+        "shut, the key is whoever's it was, and it still opens nothing of ours")
+    tap("E")
     tap("E")
     local name, how = FallensFlyouts_KeyTarget("ActionButton1", "F7")
     check(name == "FallensFlyoutsOpener" .. one and how == "LeftButton" and FallensFlyouts_KeyTarget("ActionButton4", "F7") == nil,
@@ -940,6 +978,28 @@ do
     tap("1")
     tap("1")
     check(opener("E") == one, "the layer off, the key is ours again")
+    -- A modifier key that is held DOWN as the flyout opens is its addon's until it is let go: its
+    -- release has to end the layer there. (Its root says so: hdown_<KEY>.) Up, it is the flyout's.
+    FallensFlyouts_Layers({ Held = function() return held end, HoldKeys = function() return { "1" } end,
+        Root = function() return theirs end })
+    rebound()
+    local first, second = "CLICK FallensFlyoutsEntry" .. one .. "_1:Key", "CLICK FallensFlyoutsEntry" .. one .. "_2:Key"
+    theirs.attrs.hdown_1 = true
+    tap("E")
+    check(menu:IsShown() and GetBindingAction("1", true) == "ACTIONBUTTON1" and GetBindingAction("2", true) == second
+        and label(1) == "1", "opened with that key held down: it is left to its addon, the rest are the flyout's, the icons count from 1 all the same")
+    tap("E")
+    theirs.attrs.hdown_1 = nil
+    tap("E")
+    check(menu:IsShown() and GetBindingAction("1", true) == first, "opened with it up, as when its layer is tapped on: the key is the flyout's")
+    tap("E")
+    -- a layer on, none of whose keys is this flyout's opener key
+    theirs.attrs.lkey1_E = nil
+    theirs.attrs.layer = 1
+    tap("E")
+    check(menu:IsShown() and GetBindingAction("1", true) == first, "a layer on with its key up does not keep the key from the flyout")
+    tap("E")
+    theirs.attrs.layer = nil
     FallensFlyouts_Layers(nil)
     check(opener("1") == one, "with no such addon about, the key opens its flyout as before")
     tap("E")
@@ -2538,6 +2598,22 @@ do
     check(unit.menu:GetFrameStrata() == host:GetFrameStrata() and unit.menu:GetFrameStrata() == "MEDIUM"
         and unit.menu:GetFrameLevel() > top,
         "the flyout is in its bar's own layer, just over the bar's buttons: a window over the bars is over it too")
+    -- His snip and words (2026-11-22): the key text of a bar button lying under an open flyout stood on
+    -- top of the flyout's icon. "keybinds from abilities under a flyout show through the flyout." The game
+    -- keeps a button's key and count texts on a frame of the button's own, 500 levels up.
+    local texts = CreateFrame("Frame", nil, W.frames.ActionButton2)
+    texts:SetFrameLevel(500)
+    NS.Flyouts.Apply()
+    check(unit.menu:GetFrameStrata() == host:GetFrameStrata() and unit.menu:GetFrameLevel() > 500,
+        "and it is over what the bar's buttons hold, their key texts too: no key shows through an icon lying over a button: level "
+        .. tostring(unit.menu:GetFrameLevel()))
+    -- a frame a button holds in a higher layer of its own does not lift the flyout
+    local glow = CreateFrame("Frame", nil, W.frames.ActionButton3)
+    glow:SetFrameStrata("HIGH")
+    glow:SetFrameLevel(4000)
+    NS.Flyouts.Apply()
+    check(unit.menu:GetFrameLevel() > 500 and unit.menu:GetFrameLevel() < 4000, "a frame a button keeps in another layer is not counted")
+    texts.parent, glow.parent = nil, nil
     tap("1")
     unit.menu.over = true
     NS.Turn.Poll()

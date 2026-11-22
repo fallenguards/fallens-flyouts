@@ -123,6 +123,14 @@ function Frame:GetFrameStrata()
     return self.strata or (self.parent and self.parent:GetFrameStrata()) or "MEDIUM"
 end
 function Frame:SetFrameLevel(level) self.level = level end
+-- the frames a frame holds
+function Frame:GetChildren()
+    local out = {}
+    for _, f in ipairs(W.all) do
+        if f.parent == self then out[#out + 1] = f end
+    end
+    return table.unpack(out)
+end
 function Frame:GetFrameLevel() return self.level or 1 end
 function Frame:SetScale(v) self.scale = v end
 function Frame:GetScale() return self.scale or 1 end
@@ -895,9 +903,10 @@ local function boot(alone)
         PlayerCanAssist = function(unit) return unit == "mouseover" and W.mouseover == "friend" end,
         PlayerCanAttack = function(unit) return unit == "mouseover" and W.mouseover == "foe" end,
         IsModifiedClick = function(what) return IsModifiedClick(what) end,
+        strmatch = string.match,
     }
     W.env = setmetatable({}, { __index = function(t, k)
-        if k == "armed" or k == "held" or k == "picked" then return rawget(t, k) end
+        if k == "armed" or k == "held" or k == "picked" or k == "own" then return rawget(t, k) end
         if asks[k] then return asks[k] end
         error("snippet read of a missing global: " .. tostring(k))
     end })
