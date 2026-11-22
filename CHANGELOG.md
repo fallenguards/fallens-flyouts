@@ -3,9 +3,10 @@
 ## [1.1.1] - 2026-11-21
 
 ### Added
-- A flyout lying along a side of its button can be centered on the button. Drag its grip toward the middle and it snaps there; the Turn button under Arrange a flyout in the settings steps through the centered shapes too.
+- A flyout lying along a side of its button can be centered on the button. Drag its grip to the middle of that side of the button and it snaps there; the Turn button under Arrange a flyout in the settings steps through the centered shapes too.
 
 ### Changed
+- Turning a flyout by its grip is steadier: a shape takes over only when the mouse is clearly nearer to it and has stayed there a moment, so the flyout no longer jumps through every shape passed on the way.
 - Macros that cast ranks of one spell are kept in rank order in a flyout, Rank 1 first, as the spells themselves are.
 
 ### Fixed

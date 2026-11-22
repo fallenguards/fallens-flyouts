@@ -22,8 +22,12 @@ local ARROW_W, ARROW_H, GRIP_OUT = 18, 7, 2
 local GRIP = Art.ICON * 2 / 3
 -- how often the mouse is looked for, and how long the grip stays once it has left
 local LOOK, LINGER = 0.1, 0.4
--- a shape takes over once its end is this much nearer the mouse than the present one's
-local NEARER = 0.8
+-- A shape takes over once its mark is this much nearer the mouse than the present one's (of the
+-- distances squared: a good fifth nearer), and the mouse has stayed by it this long. Without the wait a
+-- pull across the button laid the flyout out at every shape passed on the way.
+local NEARER, LINGER_BY = 0.6, 0.08
+-- centered on its button a flyout runs one way only: a row to the right, a column down
+local CENTERED = { UP = "RIGHT", DOWN = "RIGHT", LEFT = "DOWN", RIGHT = "DOWN" }
 local TEXT = {
     tip = "Drag to turn this flyout.",
     fight = F.TEXT.fight,
@@ -45,8 +49,9 @@ local function OnScreen(frame)
     return x * scale, y * scale, frame:GetWidth() * scale / 2, scale
 end
 
--- Every shape a unit's flyout could take: where it would end (the middle of
--- its last icon) and whether all of it would be on the screen.
+-- Every shape a unit's flyout could take, its mark and whether all of it would be on the screen. The
+-- mark is where the mouse is pulled to for that shape: where the flyout would end (the middle of its
+-- last icon), and for one centered on its button the middle of that side of the button, right by it.
 function T.Shapes(unit)
     local out = {}
     local hx, hy, half = OnScreen(unit.host)
@@ -74,18 +79,20 @@ function T.Shapes(unit)
             local back = mid and long / 2 or half
             local cx, cy = hx + side.x * off - along.x * back, hy + side.y * off - along.y * back
             x, y = cx + along.x * last, cy + along.y * last
+            if mid then x, y = hx + side.x * off, hy + side.y * off end
             local ax, ay = math.abs(side.x) * wide / 2, math.abs(side.y) * wide / 2
             x1, y1 = cx - ax, cy - ay
             x2, y2 = cx + along.x * long + ax, cy + along.y * long + ay
         end
         local fits = math.min(x1, x2) >= 0 and math.max(x1, x2) <= right
             and math.min(y1, y2) >= 0 and math.max(y1, y2) <= top
-        out[#out + 1] = { side = sideName, run = runName, mid = mid == true, x = x, y = y, fits = fits }
+        out[#out + 1] = { side = sideName, run = runName, mid = mid == true, x = x, y = y, fits = fits,
+            key = sideName .. runName .. (mid and "mid" or "") }
     end
     for _, side in ipairs(SIDES) do
         Add(side, side)
         for _, across in ipairs(F.ACROSS[side]) do Add(side, across) end
-        for _, across in ipairs(F.ACROSS[side]) do Add(side, across, true) end
+        Add(side, CENTERED[side], true)
     end
     return out
 end
@@ -164,7 +171,8 @@ local function Driver()
     driver:SetScript("OnUpdate", function()
         if not turning then return driver:Hide() end
         if not IsMouseButtonDown("LeftButton") then return T.Stop() end
-        T.At(Mouse())
+        local x, y = Mouse()
+        T.At(x, y, true)
     end)
     return driver
 end
@@ -186,7 +194,9 @@ function T.Start(unit)
 end
 
 -- The mouse is at x, y: the shape whose end is nearest takes over, laid at once.
-function T.At(x, y)
+-- The mouse is there now: the flyout takes the shape whose mark is nearest. `lingering` (a real pull):
+-- only once the mouse has stayed by that mark a moment.
+function T.At(x, y, lingering)
     if not turning then return nil end
     local unit = turning.unit
     local best, bestD, nowD
@@ -195,9 +205,21 @@ function T.At(x, y)
         if Is(shape, unit) then nowD = d end
         if shape.fits and (not bestD or d < bestD) then best, bestD = shape, d end
     end
-    if not best or Is(best, unit) then return best end
+    if not best or Is(best, unit) then
+        turning.want = nil
+        return best
+    end
     -- not for a hair's breadth: the flyout would flicker between two
-    if nowD and bestD > nowD * NEARER then return nil end
+    if nowD and bestD > nowD * NEARER then
+        turning.want = nil
+        return nil
+    end
+    if lingering then
+        local now = GetTime()
+        if turning.want ~= best.key then turning.want, turning.since = best.key, now end
+        if now - turning.since < LINGER_BY then return nil end
+    end
+    turning.want = nil
     if Set(unit, best, true) then
         Place()
         ns.Log(("turn: now %s running %s%s"):format(best.side, best.run, best.mid and ", centered" or ""))

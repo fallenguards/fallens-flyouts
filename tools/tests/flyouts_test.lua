@@ -1304,8 +1304,8 @@ do
         local s = shape(side, run)
         Turn.At(s.x, s.y)
     end
-    check(unit.side == "UP" and unit.way == "UP" and flyout.side == nil and #Turn.Shapes(unit) == 20,
-        "left alone it opens straight out the bar's way; there are twenty shapes it could take")
+    check(unit.side == "UP" and unit.way == "UP" and flyout.side == nil and #Turn.Shapes(unit) == 16,
+        "left alone it opens straight out the bar's way; there are sixteen shapes it could take")
     local START, CAP = NS.Art.NAMES.first, NS.Art.NAMES.last
     local function cut(piece) return table.concat(piece.cut, " ") end
     local function turned(degrees) return table.concat(NS.Art.CUT[degrees], " ") end
@@ -1356,9 +1356,23 @@ do
         end
     end
     local mid, corner = centered("UP", "RIGHT"), shape("UP", "RIGHT")
-    check(mid ~= nil and corner ~= nil and not corner.mid and mid.x < corner.x and mid.y == corner.y,
-        "each lying shape has a twin centered on the button: its end is nearer the button's middle")
-    Turn.At(mid.x, mid.y)
+    local host = W.frames.ActionButton1
+    -- His report (2026-11-21): centering was hard to hit. Its mark was where the centered flyout would
+    -- end; it is the middle of that side of the button now, where he looked for it.
+    check(mid ~= nil and corner ~= nil and not corner.mid and centered("UP", "LEFT") == nil and mid.x == host.cx
+        and mid.y > host.cy and mid.y - host.cy < corner.x - host.cx,
+        "each side has one centered shape, and its mark is by the middle of that side of the button, nearer than any end")
+    -- a real pull is followed only once the mouse has stayed a moment: shapes passed on the way are not laid
+    Turn.At(mid.x, mid.y, true)
+    check(unit.mid ~= true and unit.way == "RIGHT" and unit.menu.point[1] == "BOTTOMLEFT",
+        "the mouse just arrived at a mark, nothing is laid out yet")
+    W.clock = W.clock + 0.05
+    Turn.At(corner.x, corner.y, true)
+    W.clock = W.clock + 0.05
+    Turn.At(mid.x, mid.y, true)
+    check(unit.mid ~= true, "passing over another mark on the way starts the wait again")
+    W.clock = W.clock + 0.1
+    Turn.At(mid.x + 3, mid.y - 2, true)
     check(unit.side == "UP" and unit.way == "RIGHT" and unit.mid == true and unit.menu.point[1] == "BOTTOM"
         and unit.menu.point[3] == "TOP" and unit.strip.capped == true,
         "pulled to that end it snaps centered: a row over the button, its middle over the button's middle")
@@ -1409,14 +1423,14 @@ do
     bar(500)
     NS.Arrange.Refresh()
     local seen = {}
-    for _ = 1, 20 do
+    for _ = 1, 16 do
         page.arrange.turn.scripts.OnClick(page.arrange.turn)
         seen[unit.side .. ">" .. unit.way .. (unit.mid and " centered" or "")] = true
     end
     local kinds = 0
     for _ in pairs(seen) do kinds = kinds + 1 end
-    check(kinds == 20 and seen["DOWN>RIGHT centered"] and flyout.side == nil,
-        "the Turn button under Arrange steps through all twenty, the centered ones among them, and comes round to the bar's own")
+    check(kinds == 16 and seen["DOWN>RIGHT centered"] and seen["LEFT>DOWN centered"] and flyout.side == nil,
+        "the Turn button under Arrange steps through all sixteen, the centered ones among them, and comes round to the bar's own")
     unit.menu.over = nil
     for i = 1, 12 do W.frames["ActionButton" .. i].cx, W.frames["ActionButton" .. i].cy = was[i][1], was[i][2] end
     NS.Flyouts.SetShape(flyout, nil)
