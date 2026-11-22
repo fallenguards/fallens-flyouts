@@ -573,6 +573,25 @@ do
     W.placed[5] = nil
     fire("ACTIONBAR_SLOT_CHANGED", 5)
     stack("ActionButton1", 502)
+    -- His report after that (2026-11-22): one taken from the middle left a gap. The frame kept unseen for the
+    -- drag showed the next icon once its own was off, still unseen.
+    show()
+    origin = entry(one, 2)
+    drag(origin)
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    letGoOver(origin, 5)
+    show()
+    check(count(one) == 2 and entry(one, 2).attrs.spell == 502 and entry(one, 1).alpha == 1 and entry(one, 2).alpha == 1
+        and along(entry(one, 2)) == slot(2),
+        "one taken from the middle: the next closes up into its place and is seen, no gap")
+    W.placed[5] = nil
+    fire("ACTIONBAR_SLOT_CHANGED", 5)
+    stack("ActionButton1", 501)
+    NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 3, 2)
+    flushAll()
+    check(order() == "101 501 502", "and the flyout is put back as it was for the checks that follow")
     -- dragged out and let go on the plus of its own button: it stays where it was
     show()
     drag(entry(one, 3))

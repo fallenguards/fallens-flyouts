@@ -158,11 +158,9 @@ local function EndCarry()
     end
     ns.Log(("move: %s the mouse let go of the icon dragged out; the cursor holds %s"):format(tostring(was.flyout.host),
         tostring((GetCursorInfo()) or "nothing")))
-    if unit and at and not InCombatLockdown() then
-        F.TakeOff(unit, at)
-    else
-        Still(was.unit)
-    end
+    -- every frame seen again first: the one kept unseen shows the next icon once this one is off
+    Still(was.unit)
+    if unit and at and not InCombatLockdown() then F.TakeOff(unit, at) end
 end
 
 -- Dropped back on the plus of its own flyout's button while on its way out: it stays where it was.
