@@ -109,6 +109,22 @@ local function IsButton(frame)
         and frame:GetAttribute("type") == "action" and B.Slot(frame) ~= nil
 end
 
+-- The copy of a slot's button that the game's bind dialog shows while it is up, when one is in view:
+-- the bar itself is put away then.
+function B.Copy(slot)
+    local frame = EnumerateFrames()
+    while frame do
+        if not frame:IsForbidden() and FrameIsType(frame, "CheckButton") then
+            local name = FrameName(frame)
+            if type(name) == "string" and name:find(DIALOG_COPIES) and frame:IsVisible()
+                and (B.Slot(frame) == slot or frame:GetID() == slot) then
+                return frame
+            end
+        end
+        frame = EnumerateFrames(frame)
+    end
+end
+
 -- whether a button is on the bars of the game's gamepad mode
 function B.Pad(button)
     local name = button and button:GetName()

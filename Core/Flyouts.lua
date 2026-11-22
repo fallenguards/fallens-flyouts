@@ -1882,6 +1882,22 @@ function F.Remove(flyout, i)
 end
 
 -- an entry to another place in its flyout; the rest close up around it
+-- two icons of a flyout change places
+function F.Swap(flyout, a, b)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local entries = flyout and flyout.entries
+    if not (list and entries and entries[a] and entries[b]) then return false end
+    if flyout.auto then return false, TEXT.auto end
+    if a == b then return true end
+    local shown = open ~= nil and open.flyout == flyout
+    entries[a], entries[b] = entries[b], entries[a]
+    Mirror(flyout)
+    F.Apply()
+    local unit = shown and Run(flyout).unit
+    if unit then F.Show(unit.index) end
+    return true
+end
+
 function F.Move(flyout, from, to)
     if InCombatLockdown() then return false, TEXT.fight end
     local entries = flyout and flyout.entries

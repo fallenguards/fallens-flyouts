@@ -47,6 +47,14 @@ for _, m in ipairs({ "ClearAllPoints", "RegisterForClicks", "EnableMouse",
     Frame[m] = noop
 end
 local function region() return setmetatable({ scripts = {}, attrs = {}, shown = true }, Frame) end
+-- a button listens for presses, releases or both: a plain button's click runs on the press only when it
+-- listens for presses
+function Frame:RegisterForClicks(...)
+    self.clicksOnPress = false
+    for _, what in ipairs({ ... }) do
+        if type(what) == "string" and what:find("Down", 1, true) then self.clicksOnPress = true end
+    end
+end
 function Frame:RegisterEvent(event)
     self.events = self.events or {}
     self.events[event] = true
@@ -820,6 +828,11 @@ end
 local function click(frame, down, button)
     button = button or "LeftButton"
     if not frame.wrap then
+        -- a plain button of an addon's runs its own click: on the press when it listens for presses
+        if frame.scripts.OnClick and not frame.attrs.type then
+            if down == (frame.clicksOnPress == true) then frame.scripts.OnClick(frame, button, down) end
+            return
+        end
         if down then W.casts[#W.casts + 1] = "bar:" .. frame.name end
         return
     end
