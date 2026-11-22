@@ -11,6 +11,7 @@
 
 ### Fixed
 - A flyout's bar button dragged to another bar slot in combat takes its flyout along at once, keys included. Until now the flyout stayed on the old button until combat ended. Until combat ends the flyout on its new button opens by its keys and by its arrow; a click on the button itself opens it again once combat is over. A flyout whose button was dropped on, its ability left on the cursor, is back on the button its ability lands on when combat ends.
+- An icon can be moved to another spot of its flyout in combat: drag it onto the icon whose spot it should take, and the icons between move up by one, each spot keeping its key. Until now nothing in a flyout could be moved until combat ended. Out of combat it lifts and slides as before. A flyout that fills itself, and one whose icons stand around its button, keep their order.
 
 ## [1.1.3] - 2026-11-22
 

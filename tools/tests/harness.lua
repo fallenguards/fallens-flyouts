@@ -973,7 +973,7 @@ local function boot(alone)
         PlayerInCombat = function() return W.combat == true end,
     }
     W.env = setmetatable({}, { __index = function(t, k)
-        if k == "armed" or k == "held" or k == "picked" or k == "own" then return rawget(t, k) end
+        if k == "armed" or k == "held" or k == "picked" or k == "own" or k == "lifted" then return rawget(t, k) end
         if asks[k] then return asks[k] end
         error("snippet read of a missing global: " .. tostring(k))
     end })
@@ -1001,26 +1001,64 @@ for _, m in ipairs({ "SetAttribute", "SetPoint", "ClearAllPoints", "SetParent", 
         return plain(self, ...)
     end
 end
--- A drag let go over a bar button, as the client runs it: the wrap's body before (which may answer
--- "message"), the game's own placing of what is carried, then the wrap's body after.
+-- What secure code may put on the cursor, as the client's own (PickupAny): an ability by its kind, or
+-- the cursor emptied.
+local function pickupAny(kind, value)
+    if kind == "clear" then
+        W.cursor = nil
+        fire("ACTIONBAR_HIDEGRID")
+    elseif kind == "macro" then
+        PickupMacro(value)
+    elseif kind == "spell" then
+        C_Spell.PickupSpell(value)
+    elseif kind then
+        W.cursor = { kind, value }
+    end
+end
+-- a wrap's body, run as secure code
+local function secureRun(frame, body, signature, ...)
+    local fn = assert(load("local " .. signature .. " = ...; " .. body, frame.name, "t", W.env))
+    W.secure = true
+    local ok, a, b = pcall(fn, ...)
+    W.secure = false
+    if not ok then error(a, 0) end
+    return a, b
+end
+-- A drag begun on a frame, as the client runs it: the wrap's body first, which may refuse it or put
+-- something on the cursor; else the frame's own handler.
+function DragOff(frame)
+    local wrapped = frame.wraps and frame.wraps.OnDragStart
+    if wrapped and wrapped.before then
+        local kind, value = secureRun(frame, wrapped.before, "self, button, kind, value, owner", frame, "LeftButton",
+            GetCursorInfo(), nil, wrapped.header)
+        if kind == false then return end
+        if kind and kind ~= "message" then return pickupAny(kind, value) end
+    end
+    if frame.scripts.OnDragStart then frame.scripts.OnDragStart(frame, "LeftButton") end
+end
+-- A drag let go over a frame, as the client runs it: the wrap's body before (which is told what the
+-- cursor holds, and may answer "message", a pickup, or false), the frame's own handler (a bar button
+-- places what is carried), then the wrap's body after.
 function DropOn(frame)
     local wrapped, message = frame.wraps and frame.wraps.OnReceiveDrag, nil
-    local function run(body, signature, ...)
-        local fn = assert(load("local " .. signature .. " = ...; " .. body, frame.name, "t", W.env))
-        W.secure = true
-        local ok, a, b = pcall(fn, ...)
-        W.secure = false
-        if not ok then error(a, 0) end
-        return a, b
-    end
     if wrapped and wrapped.before then
-        local kind, value = run(wrapped.before, "self, button, owner", frame, "LeftButton", wrapped.header)
+        local held = W.cursor
+        local kind, value = secureRun(frame, wrapped.before, "self, button, kind, value, owner", frame, "LeftButton",
+            held and held[1] or nil, held and held[2] or nil, wrapped.header)
         if kind == false then return end
-        if kind == "message" then message = value end
+        if kind == "message" then
+            message = value
+        elseif kind then
+            return pickupAny(kind, value)
+        end
     end
-    PlaceAction(frame.action)
+    if frame.action then
+        PlaceAction(frame.action)
+    elseif frame.scripts.OnReceiveDrag then
+        frame.scripts.OnReceiveDrag(frame)
+    end
     if wrapped and wrapped.after and message ~= nil then
-        run(wrapped.after, "self, message, button, owner", frame, message, "LeftButton", wrapped.header)
+        secureRun(frame, wrapped.after, "self, message, button, owner", frame, message, "LeftButton", wrapped.header)
     end
 end
 local function click(frame, down, button)

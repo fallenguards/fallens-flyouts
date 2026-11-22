@@ -2681,6 +2681,113 @@ do
     check(not opens("1") and not opens("2") and not opens("5"), "none left behind for what follows")
 end
 
+print("an icon moved to another spot of its flyout in a fight")
+do
+    -- His words (2026-11-22): "we need to fix not being able to move flyouts in a fight. it's extremely annoying."
+    -- Asked which move, he named the bar button dragged to another slot and the icon moved inside its flyout.
+    login("Player-1-0000000U")
+    local F11 = NS.Flyouts
+    for id = 501, 504 do stack("ActionButton1", id) end
+    local flyout, unit = F11.At("ActionButton1")
+    local f = unit.index
+    local r = root()
+    local function ids()
+        local out = {}
+        for i, held in ipairs(flyout.entries) do out[i] = tostring(held.id) end
+        return table.concat(out, " ")
+    end
+    local function stands(frame) return table.concat({ tostring(frame.point[1]), tostring(frame.point[4]), tostring(frame.point[5]) }, ",") end
+    check(ids() == "101 501 502 503 504" and r.attrs["at" .. f .. "_2"] == "FallensFlyoutsEntry" .. f .. "_2"
+        and entry(f, 2).attrs.ffspot == 2 and entry(f, 2).wraps ~= nil and entry(f, 2).wraps.OnDragStart ~= nil
+        and entry(f, 2).wraps.OnReceiveDrag ~= nil, "each icon's spot is told to the secure code, which is run at an icon's drag and at a drop on one")
+    -- out of a fight the secure code leaves the drag to the addon's own code
+    W.cvars = W.cvars or {}
+    local second, fourth = entry(f, 2), entry(f, 4)
+    local spots = {}
+    for i = 1, 5 do spots[i] = stands(entry(f, i)) end
+    tap("1")
+    check(unit.menu:IsShown(), "the flyout is open")
+    W.guard = true
+    fire("PLAYER_REGEN_DISABLED")
+    W.combat = true
+    flushAll()
+    local warned = #W.errors
+    DragOff(second)
+    check(W.cursor ~= nil and W.cursor[1] == "spell" and W.cursor[4] == 501 and #W.errors == warned,
+        "in a fight an icon's drag puts its ability on the cursor, with no word of refusal")
+    DropOn(fourth)
+    flushAll()
+    check(W.cursor == nil, "let go over another icon of the flyout, the cursor is empty again")
+    check(ids() == "101 502 503 501 504", "the icon has that spot and those between moved up by one, in what is saved: " .. ids())
+    check(stands(second) == spots[4] and stands(entry(f, 3)) == spots[2] and stands(fourth) == spots[3] and stands(entry(f, 5)) == spots[5],
+        "and on the screen: each icon stands on its new spot")
+    check(unit.entries[4] == second and unit.entries[2] == entry(f, 3) and unit.entries[3] == fourth and second.entryIndex == 4,
+        "the addon reads each icon with what it casts")
+    check(unit.menu:IsShown(), "the flyout stays open")
+    local before = #W.casts
+    tap("4")
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:501", "the fourth spot's key casts the icon that stands there now: "
+        .. tostring(W.casts[#W.casts]))
+    tap("1")
+    tap("2")
+    check(W.casts[#W.casts] == "spell:502", "and the second spot's key the one that moved up to it: " .. tostring(W.casts[#W.casts]))
+    -- the other way, to the first spot
+    tap("1")
+    DragOff(second)
+    DropOn(entry(f, 1))
+    flushAll()
+    check(ids() == "501 101 502 503 504" and stands(second) == spots[1] and stands(entry(f, 1)) == spots[2] and stands(fourth) == spots[4],
+        "moved the other way, to the first spot: those between move down by one: " .. ids())
+    -- let go on itself, or on a bar button: nothing in the flyout changes
+    DragOff(second)
+    DropOn(second)
+    check(W.cursor == nil and ids() == "501 101 502 503 504", "let go on itself, nothing changes and the cursor is empty")
+    DragOff(fourth)
+    W.placed = W.placed or {}
+    DropOn(W.frames.ActionButton7)
+    flushAll()
+    check(ids() == "501 101 502 503 504" and GetActionInfo(7) == "spell" and select(2, GetActionInfo(7)) == 503,
+        "let go over a bar button, the game puts the ability there and nothing in the flyout changes")
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    DropOn(entry(f, 1))
+    check(ids() == "501 101 502 503 504", "a drop on an icon with no icon lifted moves nothing")
+    -- with the bars locked, only with the game's key for picking an ability up
+    r.attrs.barslocked = true
+    W.modified = W.modified or {}
+    DragOff(entry(f, 5))
+    check(W.cursor == nil, "bars locked and no pickup key held: the icon is not lifted")
+    r.attrs.barslocked = nil
+    -- the fight over: laid afresh, each icon by its name again
+    if unit.menu:IsShown() then tap("1") end
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    for _ = 1, 4 do flushAll() end
+    local after, afterUnit = F11.At("ActionButton1")
+    local names, order = true, {}
+    for i = 1, 5 do
+        local frame = afterUnit.entries[i]
+        names = names and frame == entry(afterUnit.index, i) and frame.entryIndex == i and stands(frame) == spots[i]
+        order[i] = tostring(frame.attrs.spell)
+    end
+    check(after == flyout and names and table.concat(order, " ") == "501 101 502 503 504",
+        "the fight over: laid afresh in the saved order, each icon in its made place again: " .. table.concat(order, " "))
+    tap("1")
+    before = #W.casts
+    tap("3")
+    check(W.casts[#W.casts] == "spell:502" and #W.casts == before + 1, "and the keys go by the spots as ever")
+    -- a flyout that fills itself has no icon moved, in a fight as out of one
+    check(r.attrs["still" .. afterUnit.index] == nil, "a flyout made by hand is not held still")
+    W.guard = nil
+    local all = F11.List()
+    for i = #all, 1, -1 do table.remove(all, i) end
+    W.placed[7] = nil
+    F11.Apply()
+    fire("ACTIONBAR_SLOT_CHANGED", 7)
+    flushAll()
+    check(not opens("1"), "none left behind for what follows")
+end
+
 print("bars that send their keys through a helper child")
 barWorld = function() return "helper" end
 login("Player-1-0000000H")

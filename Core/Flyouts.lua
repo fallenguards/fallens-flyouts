@@ -191,6 +191,7 @@ local DROP_BEFORE = [[
 ]]
 local DROP_AFTER = [[
     if not PlayerInCombat() then return end
+    lifted = nil
     local name = self:GetName()
     local slot = owner:GetAttribute("slot-" .. name)
     local kind, id
@@ -249,6 +250,8 @@ local DROP_AFTER = [[
                             owner:SetAttribute("pkey" .. mine .. "_" .. last, under)
                             owner:SetAttribute("pentry" .. mine .. "_" .. last,
                                 owner:GetAttribute("pentry" .. mine .. "_" .. p))
+                            owner:SetAttribute("pspot" .. mine .. "_" .. last,
+                                owner:GetAttribute("pspot" .. mine .. "_" .. p))
                             owner:SetAttribute("pkeys" .. mine, last)
                         end
                     end
@@ -270,6 +273,63 @@ local DROP_AFTER = [[
     armed, held, picked, own = nil, nil, nil, nil
 ]] .. SHUT .. BIND .. [[
     owner:CallMethod("Rehomed", on or 0, name, off or 0)
+]]
+-- An icon moved to another spot of its flyout in a fight (asked which move he meant by the words above,
+-- he named this one too). Out of a fight the addon's own code moves it, sliding the others out of its
+-- way; in a fight that code may not touch an icon. This may: an icon's drag is wrapped, and a drop on
+-- one. In a fight the drag puts the icon's ability on the cursor (the game then runs a drop on what it
+-- is let go over) and remembers the icon. Let go over another icon of the flyout, the icon takes that
+-- spot and those between move up by one, as out of a fight; the keys of the spots stay with the spots.
+-- Let go anywhere else, the game does with what is on the cursor what it does with any ability, and
+-- nothing in the flyout changes. Not for a flyout that fills itself, nor one whose icons stand around
+-- its button; and with the bars locked, only with the game's key for picking an ability up.
+local LIFT = [[
+    if not PlayerInCombat() then return end
+    lifted = nil
+    local f = self:GetAttribute("fffly")
+    if not f or owner:GetAttribute("still" .. f) then return false end
+    if owner:GetAttribute("barslocked") and not IsModifiedClick("PICKUPACTION") then return false end
+    local kind = self:GetAttribute("type")
+    local what = kind and self:GetAttribute(kind)
+    if not what then return false end
+    lifted = self:GetName()
+    return kind, what
+]]
+local LAND = [[
+    if not (lifted and kind and PlayerInCombat()) then return end
+    local mover = owner:GetFrameRef(lifted)
+    lifted = nil
+    local f = self:GetAttribute("fffly")
+    if not (mover and f) or mover:GetAttribute("fffly") ~= f or mover:GetAttribute("type") ~= kind then return end
+    local from, to = mover:GetAttribute("ffspot"), self:GetAttribute("ffspot")
+    if from == to then return "clear" end
+    local menu = owner:GetFrameRef("menu" .. f)
+    local step, at = from < to and 1 or -1, from
+    while at ~= to do
+        -- the icon on the next spot takes this one, and the moved icon the next
+        local past = at + step
+        local a, b = f .. "_" .. at, f .. "_" .. past
+        local other = owner:GetFrameRef(owner:GetAttribute("at" .. b))
+        other:ClearAllPoints()
+        other:SetPoint(owner:GetAttribute("sp" .. a), menu, owner:GetAttribute("srp" .. a),
+            owner:GetAttribute("sx" .. a), owner:GetAttribute("sy" .. a))
+        other:SetAttribute("ffspot", at)
+        owner:SetAttribute("at" .. a, other:GetName())
+        mover:ClearAllPoints()
+        mover:SetPoint(owner:GetAttribute("sp" .. b), menu, owner:GetAttribute("srp" .. b),
+            owner:GetAttribute("sx" .. b), owner:GetAttribute("sy" .. b))
+        mover:SetAttribute("ffspot", past)
+        owner:SetAttribute("at" .. b, mover:GetName())
+        at = past
+    end
+    -- each key of a spot goes to the icon on that spot now
+    for k = 1, owner:GetAttribute("pkeys" .. f) or 0 do
+        local spot = owner:GetAttribute("pspot" .. f .. "_" .. k)
+        if spot then owner:SetAttribute("pentry" .. f .. "_" .. k, owner:GetAttribute("at" .. f .. "_" .. spot)) end
+    end
+]] .. BIND .. [[
+    owner:CallMethod("Shifted", f, from, to)
+    return "clear"
 ]]
 -- A pick key acts on its press and shuts on its release, unless the
 -- flyout's key is still held. The mouse acts on its release, as on the
@@ -527,10 +587,15 @@ end
 local function DragStart(self) ns.Move.Start(self) end
 local function DragStop() ns.Move.Released() end
 
+-- what the secure code calls when it has moved a flyout or an icon in a fight (written further down)
+local Rehomed, Shifted
+
 local function Build()
     if root then return end
     root = CreateFrame("Frame", ROOT, UIParent, "SecureHandlerBaseTemplate")
     root:Hide()
+    root.Rehomed = function(_, ...) xpcall(Rehomed, geterrorhandler(), ...) end
+    root.Shifted = function(_, ...) xpcall(Shifted, geterrorhandler(), ...) end
     for i, key in ipairs(CLOSE_KEYS) do root:SetAttribute("ckey" .. i, key) end
     root:SetAttribute("ckeys", #CLOSE_KEYS)
     root:SetAttribute("units", 0)
@@ -679,6 +744,8 @@ local function CastSettings()
     local free = on and GetModifiedClick("MOUSEOVERCAST") == "NONE"
     if on then root:SetAttribute("mousecast", true) else root:SetAttribute("mousecast", nil) end
     if free then root:SetAttribute("mousefree", true) else root:SetAttribute("mousefree", nil) end
+    -- with the bars locked an icon is lifted only with the game's key for it, in a fight as out of one
+    root:SetAttribute("barslocked", F.BarsLocked() or nil)
 end
 F.CastSettings = CastSettings
 
@@ -692,15 +759,22 @@ local function EntryButton(unit, i)
     entry:SetAttribute("checkselfcast", true)
     entry:SetAttribute("checkfocuscast", true)
     root:WrapScript(entry, "OnClick", ENTRY_WRAP)
-    entry:SetScript("PostClick", function(_, button, down)
-        Tell("pick", unit, i, button, down)
-        if button == "RightButton" and not down then TakeOff(unit, i) end
+    -- by the place it stands in now: in a fight the secure code may have moved it
+    entry:SetScript("PostClick", function(self, button, down)
+        Tell("pick", unit, self.entryIndex, button, down)
+        if button == "RightButton" and not down then TakeOff(unit, self.entryIndex) end
     end)
     -- never a field called unit: the client takes that for a unit name
     entry.flyoutUnit, entry.entryIndex = unit, i
     entry:RegisterForDrag("LeftButton")
     entry:HookScript("OnDragStart", DragStart)
     entry:HookScript("OnDragStop", DragStop)
+    -- in a fight the secure code moves an icon: it knows each by its name, and is run at an icon's drag
+    -- and at a drop on one
+    entry.made = i
+    root:SetFrameRef(name, entry)
+    root:WrapScript(entry, "OnDragStart", LIFT)
+    root:WrapScript(entry, "OnReceiveDrag", LAND)
     entry:HookScript("OnEnter", EntryTip)
     entry:HookScript("OnLeave", HideTip)
     -- the game's dark slot, seen at the icon's cut corners
@@ -1373,6 +1447,20 @@ local function Hung(unit)
     root:SetAttribute("my" .. f, y or 0)
 end
 
+-- Where each icon stands in its flyout, and which icon stands there: kept for the secure code that
+-- moves icons in a fight.
+local function Spotted(unit, frame, i)
+    local at = unit.index .. "_" .. i
+    local point, _, to, x, y = frame:GetPoint(1)
+    root:SetAttribute("sp" .. at, point)
+    root:SetAttribute("srp" .. at, to or point)
+    root:SetAttribute("sx" .. at, x or 0)
+    root:SetAttribute("sy" .. at, y or 0)
+    root:SetAttribute("at" .. at, frame:GetName())
+    frame:SetAttribute("fffly", unit.index)
+    frame:SetAttribute("ffspot", i)
+end
+
 local function Lay(unit)
     local flyout, host = unit.flyout, unit.host
     local way, runs = Bars.Way(host)
@@ -1454,6 +1542,7 @@ local function Lay(unit)
         local entry = flyout.entries[i]
         frame.entry, frame.flyout = entry, flyout
         F.Seat(unit, frame, i)
+        Spotted(unit, frame, i)
         frame:SetAttribute("type", entry and entry.kind or nil)
         frame:SetAttribute("spell", nil)
         frame:SetAttribute("item", nil)
@@ -1480,6 +1569,10 @@ local function Lay(unit)
     unit.placed = Bars.Placed(host)
     if ready then Laid()[flyout.host] = { way = way, scale = scale } end
     Hung(unit)
+    -- one that fills itself, or stands around its button, has no icon moved in a fight
+    local still
+    if unit.radial or flyout.auto then still = true end
+    root:SetAttribute("still" .. unit.index, still)
 end
 
 -- Before 1.1.4 each flyout on the bars had a heading in the game's key menu with a row for each of six
@@ -1520,7 +1613,6 @@ end
 -- them is next read for something else.
 local reached, dropWrapped, reachedKeys = {}, {}, nil
 local reachList, reachSeen
-local Rehomed
 local function Reach()
     if not ready then return end
     local read = Bars.Known()
@@ -1537,9 +1629,6 @@ local function Reach()
     local now = table.concat(parts, ";")
     local same = now == reachedKeys
     reachedKeys = now
-    if not root.Rehomed then
-        root.Rehomed = function(_, ...) xpcall(Rehomed, geterrorhandler(), ...) end
-    end
     for _, button in ipairs(reachList) do
         local name = button:GetName()
         if name then
@@ -1582,6 +1671,7 @@ local function Rebind()
             listed = listed + 1
             root:SetAttribute("pkey" .. f .. "_" .. listed, key)
             root:SetAttribute("pentry" .. f .. "_" .. listed, ENTRY .. f .. "_" .. i)
+            root:SetAttribute("pspot" .. f .. "_" .. listed, i)
         end
         unit.picks = Picks(unit)
         for i, pick in ipairs(unit.picks) do
@@ -1780,6 +1870,17 @@ function F.Apply()
     Macros.Changed()
     Build()
     CastSettings()
+    for _, unit in ipairs(units) do
+        if unit.shuffled then
+            -- moved by the secure code in a fight: in the order they were made in again, laid below
+            local frames = unit.entries
+            unit.entries, unit.shuffled = {}, nil
+            for _, frame in ipairs(frames) do
+                unit.entries[frame.made] = frame
+                frame.entryIndex = frame.made
+            end
+        end
+    end
     for _, unit in ipairs(units) do unit.menu:Hide() end
     root:SetAttribute("open", nil)
     -- no key counts as held or pressed across a layout
@@ -1955,6 +2056,26 @@ Rehomed = function(f, name, off)
     Named(unit)
     State(unit)
     ns.Log(("in a fight %s was dropped on %s: its flyout went along"):format(Name(flyout.main), name))
+    Tell("moved", unit)
+end
+
+-- The secure code moved an icon to another spot of its flyout in a fight: the saved order follows, and
+-- the addon's own list of the flyout's icons, so that each is still read with what it casts. They are
+-- put back in the order they were made in when the fight is over and all of it is laid afresh.
+Shifted = function(f, from, to)
+    local unit = units[f]
+    local flyout = unit and unit.flyout
+    if not (flyout and flyout.entries[from] and flyout.entries[to]) then return end
+    table.insert(flyout.entries, to, table.remove(flyout.entries, from))
+    Mirror(flyout)
+    table.insert(unit.entries, to, table.remove(unit.entries, from))
+    for i, frame in ipairs(unit.entries) do frame.entryIndex = i end
+    unit.shuffled = true
+    pending = true
+    if not InCombatLockdown() then return F.Settle() end
+    Labels(unit)
+    State(unit)
+    ns.Log(("in a fight an icon of the flyout on %s went from place %d to %d"):format(tostring(flyout.host), from, to))
     Tell("moved", unit)
 end
 
