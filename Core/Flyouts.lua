@@ -11,8 +11,10 @@ local F = {}
 ns.Flyouts = F
 local P, Bars, Art, Binds, Macros = ns.Profiles, ns.Bars, ns.Art, ns.Binds, ns.Macros
 
-local MAX = 6
-local KEYS = { "1", "2", "3", "4", "5", "6" }
+-- A flyout holds as many as a bar has buttons, and picks with the bar's own keys: twelve, for those
+-- with a mouse of twelve buttons as much as for the keyboard's number row.
+local MAX = 12
+local KEYS = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=" }
 local PADS = { "PADDUP", "PADDRIGHT", "PADDDOWN", "PADDLEFT", "PAD4", "PAD3" }
 -- Pad buttons go by where an icon sits: the two ends take the D-pad along
 -- the flyout's line (top is up, bottom is down), the ones between the rest.
@@ -864,10 +866,11 @@ end
 -- pad, each on its own side, any more on the other cross. As a strip: by where each lies along it. The
 -- D-pad comes first, or the face buttons where the flyout or the profile says so.
 -- Where each icon of a flyout stands around its button: a spot of the dial, 1 to 4 on the first ring
--- (up, right, down, left) and 5 to 8 on the second. An icon stands where it was put (entry.spot, set
--- in the pad's flyout editor); the others take the free spots in their order. Of two put on one spot
--- the first keeps it. `entries`: the icons, or how many there are.
-local SPOTS = 2 * DPAD
+-- (up, right, down, left), 5 to 8 on the second and 9 to 12 on a third. An icon stands where it was
+-- put (entry.spot, set in the pad's flyout editor); the others take the free spots in their order. Of
+-- two put on one spot the first keeps it. `entries`: the icons, or how many there are.
+local RINGS = 3
+local SPOTS = RINGS * DPAD
 local function Spots(entries)
     local out, taken = {}, {}
     if type(entries) == "number" then
@@ -897,13 +900,17 @@ local function TopSpot(entries)
 end
 F.Spots, F.TopSpot, F.SPOTS = Spots, TopSpot, SPOTS
 -- around a button: a spot of the first ring is picked by one cross of the pad, each button on its own
--- side, a spot of the second ring by the other cross
+-- side, a spot of the second ring by the other cross. A third ring has no cross left: none for it here.
 local function RingPads(entries, faces)
     local first, second = DPAD_RING, FACE_RING
     if faces then first, second = FACE_RING, DPAD_RING end
     local out = {}
     for i, spot in ipairs(Spots(entries)) do
-        out[i] = spot <= DPAD and first[spot] or second[(spot - DPAD - 1) % DPAD + 1]
+        if spot <= DPAD then
+            out[i] = first[spot]
+        elseif spot <= 2 * DPAD then
+            out[i] = second[spot - DPAD]
+        end
     end
     return out
 end
@@ -917,8 +924,9 @@ end
 -- the first ring's distance from the button's middle, in the flyout's own measure; and the plate's
 -- reach where `top` is the outermost spot in use
 function F.RingReach() return Art.BUTTON / 2 / F.Size() + RING_GAP + Art.ICON / 2 end
+function F.Rings(top) return math.max(1, math.min(RINGS, math.ceil(top / DPAD))) end
 function F.PlateReach(top, reach)
-    local rings = top > DPAD and 2 or 1
+    local rings = F.Rings(top)
     return reach + (rings - 1) * (Art.ICON + RING_GAP) + Art.ICON / 2 + PLATE_PAD
 end
 
@@ -926,9 +934,9 @@ local function PadsOf(unit, count)
     local faces = F.Faces(unit.flyout)
     local out = {}
     if unit.radial then
-        for i, pad in ipairs(RingPads(unit.flyout.entries, faces)) do
-            if i <= count then out[i] = pad end
-        end
+        -- by place: an icon of the third ring has none, and those after it keep theirs
+        local pads = RingPads(unit.flyout.entries, faces)
+        for i = 1, count do out[i] = pads[i] end
         return out
     end
     for i, pad in ipairs(PadsFor(unit.way or "UP", count)) do out[i] = faces and OTHER_CROSS[pad] or pad end
@@ -965,7 +973,9 @@ local function Picks(unit)
     end
     for i, pick in ipairs(picks) do
         pick.key = pick.key or Free(KEYS[i], KEYS, taken)
-        pick.pad = pick.pad or Free(pads[i], pool, taken)
+        -- Around a button a pad button names a side: an icon of the third ring, which no cross of the
+        -- pad is left for, is given none in its stead.
+        if not pick.pad and (pads[i] or not unit.radial) then pick.pad = Free(pads[i], pool, taken) end
     end
     return picks
 end
@@ -1203,10 +1213,12 @@ local function Lay(unit)
     Layer(unit)
     menu:ClearAllPoints()
     if unit.radial then
-        -- the first ring a step off the button, in the menu's own measure; the frame holds two rings
+        -- the first ring a step off the button, in the menu's own measure; the frame holds two rings,
+        -- and a third when icons stand on it
         unit.reach = F.RingReach()
         unit.spots = Spots(flyout.entries)
-        local span = 2 * (unit.reach + Art.ICON + RING_GAP + Art.ICON / 2)
+        local rings = math.max(2, F.Rings(TopSpot(flyout.entries)))
+        local span = 2 * (unit.reach + (rings - 1) * (Art.ICON + RING_GAP) + Art.ICON / 2)
         menu:SetPoint("CENTER", host, "CENTER")
         menu:SetSize(span, span)
         Art.HideStrip(unit.strip)

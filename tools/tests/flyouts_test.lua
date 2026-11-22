@@ -757,7 +757,7 @@ do
         end
         fine = fine and category == Binds.CATEGORY
     end
-    check(spotsListed == Binds.SLOTS * Binds.PLACES and picksListed == Binds.PLACES and fine
+    check(spotsListed == Binds.SLOTS * Binds.PLACES and picksListed == Binds.PICKS and fine
         and _G[Binds.CATEGORY] == "Fallen's Flyouts",
         "Bindings.xml lists every row the code reads, each with its text, under the addon's own heading")
 end
@@ -961,7 +961,7 @@ print("arranging a flyout without a drag, from the settings page")
 do
     local Arrange, w = NS.Arrange, page.arrange
     local function press(button) button.scripts.OnClick(button) end
-    check(w ~= nil and #w.icons == 6 and w.off ~= nil, "the page has the arrange row: six icon places, Previous, Next and Take Off")
+    check(w ~= nil and #w.icons == 12 and w.off ~= nil, "the page has the arrange row: twelve icon places, Previous, Next and Take Off")
     -- His words (2026-11-22): "ok leave it if needed for controllers. but put reminder there that you can
     -- simply drag spells onto each other where the \"+\" appears to create the flyouts so ppl dont think
     -- they HAVE to go through that ... for non controller users"
@@ -1164,9 +1164,10 @@ do
     check(ids({ entries = (Auto.Entries("potions")) }) == "118" and ids({ entries = (Auto.Entries("elixirs")) }) == "5997"
         and ids({ entries = (Auto.Entries("scrolls")) }) == "", "potions and elixirs are each their own kind; a kind with nothing is empty")
     -- more kinds of food than a flyout holds
-    for id = 4550, 4557 do W.items[id] = { sub = 5, level = id - 4500 } end
-    bags({ 4540, 4550, 4551, 4552, 4553, 4554, 4555, 4556, 4557 })
-    check(ids(NS.Flyouts.At("ActionButton9")) == "4557 4556 4555 4554 4553 4552", "with more than six kinds of food, the six best are shown")
+    for id = 4550, 4563 do W.items[id] = { sub = 5, level = id - 4500 } end
+    bags({ 4540, 4550, 4551, 4552, 4553, 4554, 4555, 4556, 4557, 4558, 4559, 4560, 4561, 4562, 4563 })
+    check(ids(NS.Flyouts.At("ActionButton9")) == "4563 4562 4561 4560 4559 4558 4557 4556 4555 4554 4553 4552",
+        "with more than twelve kinds of food, the twelve best are shown")
     bags({ 4540, 159, 118, 1179, 5997 })
     -- the game has no word yet on an item: it joins when the word comes
     W.items[4544] = { sub = 5, level = 30, unknown = true }
@@ -1280,16 +1281,16 @@ do
     bags({ 601, 602, 603 })
     check(ids(own) == "601 602 9101", "one taken off by hand is gone for good; the ones left out were not")
     -- room is counted on the whole
-    for id = 604, 606 do
+    for id = 604, 612 do
         W.bags[#W.bags + 1] = id
         stackItem("ActionButton8", id)
     end
     bags({ 601 })
     local errorsBefore = #W.errors
-    W.bags[#W.bags + 1] = 607
-    stackItem("ActionButton8", 607)
-    check(#NS.Flyouts.Full(own) == 6 and ids(own) == "601 9101" and #W.errors == errorsBefore + 1,
-        "full is full, though only two of the six show")
+    W.bags[#W.bags + 1] = 613
+    stackItem("ActionButton8", 613)
+    check(#NS.Flyouts.Full(own) == 12 and ids(own) == "601 9101" and #W.errors == errorsBefore + 1,
+        "full is full, though only two of the twelve show")
     W.cursor = nil
     fire("ACTIONBAR_HIDEGRID")
     -- none of its items, and the spell taken off: nothing to show, yet still reached from the settings
@@ -1300,12 +1301,12 @@ do
     check(box ~= nil and box:GetChecked(), "the settings page has a check box for it under Arrange, ticked")
     -- what is saved is the whole
     fire("PLAYER_LOGOUT")
-    check(own.all == nil and #own.entries == 6, "what is saved is the whole flyout")
+    check(own.all == nil and #own.entries == 12, "what is saved is the whole flyout")
     NS.Flyouts.Apply()
-    check(ids(own) == "9101" and #NS.Flyouts.Full(own) == 6, "and it is laid as before from that")
+    check(ids(own) == "9101" and #NS.Flyouts.Full(own) == 12, "and it is laid as before from that")
     box.checked = false
     box.scripts.OnClick(box)
-    check(not NS.Flyouts.Hiding() and #own.entries == 6 and own.all == nil and NS.Profiles.Data().showLacking == true,
+    check(not NS.Flyouts.Hiding() and #own.entries == 12 and own.all == nil and NS.Profiles.Data().showLacking == true,
         "unticked: everything shows, whether the player has it or not, and the profile remembers")
     W.combat = true
     box.checked = true
@@ -1315,7 +1316,7 @@ do
     NS.Flyouts.SetHiding(true)
     check(NS.Profiles.Data().showLacking == nil, "ticked again, nothing is kept in the profile: it is how flyouts are")
     -- taken apart from the front: its spell is no longer its first icon
-    for _ = 1, 8 do
+    for _ = 1, 14 do
         local left = NS.Flyouts.At("ActionButton8")
         if left then NS.Flyouts.Remove(left, 1) end
     end
@@ -1874,7 +1875,7 @@ do
         local says = Pad.Panel()
         check(says ~= nil and says:IsShown() and says.title.text == "Edit Flyout" and says.lines[1].text == NS.Flyouts.Name(target.entries[1]) .. " is selected."
             and says.lines[2].text == "The D-pad moves it to that side of the button."
-            and says.lines[3].text == "Press the same side again for the outer ring." and box.BindInstructionText.alpha == 0,
+            and says.lines[3].text == "Press the same side again for the next ring out." and box.BindInstructionText.alpha == 0,
             "the game's box says what is selected and what the D-pad does: " .. tostring(says.lines[1].text))
         check(prompts.add.label == "Select Next Icon" and prompts.left.label == "Take Icon Off" and prompts.edit.label == "Use Face Buttons"
             and prompts.back.label == "Done" and prompts.plate ~= nil and prompts.plate.label == "Hide Background"
@@ -2057,11 +2058,14 @@ do
         check(tokens[2].point[4] == -r and tokens[2].point[5] == 0 and tokens[1].point[4] == r and tokens[3].point[5] == -r,
             "the picture shows it so: one left of the button, one right, one below, none above")
         check(NS.PadEdit.Hint():find("is selected. The D-pad moves it to that side of the button.", 1, true) ~= nil
-            and NS.PadEdit.Hint():find("Press the same side again for the outer ring.", 1, true) ~= nil,
+            and NS.PadEdit.Hint():find("Press the same side again for the next ring out.", 1, true) ~= nil,
             "the line over the bar says what the D-pad does, with no word of what cannot be done: " .. NS.PadEdit.Hint())
         tap("PADDLEFT")
         check(spots() == "2 8 3" and tokens[2].pad == "PAD3" and tokens[2].point[4] < -r,
             "the same side again: to the outer ring of that side, where the face button of that side picks it: " .. spots())
+        tap("PADDLEFT")
+        check(spots() == "2 12 3" and tokens[2].pad == nil and tokens[2].key.text == "" and tokens[2].point[4] < -r - NS.Art.ICON,
+            "again: the third ring of that side, further out still, which no pad button picks: " .. spots())
         tap("PADDLEFT")
         check(spots() == "2 4 3" and tokens[2].pad == "PADDLEFT", "and once more: back on the first ring")
         tap("PADDDOWN")
@@ -2491,6 +2495,12 @@ do
             and twoUnit.plate.radius == near + step,
             "put on the outer ring below: it stands a step further out, the bottom face button picks it, and the plate reaches it")
         check(F2.Place(two, 2, 3) == true and twoUnit.plate.radius == near, "back on the first ring, the plate is as small as before")
+        -- a third ring, for a flyout of more than eight: a step further out again, with no pad button of its own
+        check(F2.Place(two, 2, 11) == true and where(2) == spot(0, -(r + 2 * step)) and F2.Picks(two)[2].pad == nil
+            and F2.Picks(two)[1].pad == "PADDUP" and twoUnit.plate.radius == near + 2 * step
+            and twoUnit.menu.w >= 2 * (r + 2 * step + NS.Art.ICON / 2),
+            "put on the third ring below: two steps out, the plate and the flyout's frame reach it, and no pad button is made up for it")
+        check(F2.Place(two, 2, 3) == true and twoUnit.plate.radius == near, "and back on the first ring again")
         -- onto a taken spot: the two change places
         check(F2.Place(two, 2, 1) == true and where(2) == spot(0, r) and where(1) == spot(0, -r) and picks() == "PADDDOWN PADDUP",
             "put on a taken side, the two change places: " .. picks())
@@ -2503,8 +2513,8 @@ do
         two, twoUnit = F2.At(NAME2)
         check(#two.entries == 2 and where(1) == spot(0, -r) and where(2) == spot(r, 0) and picks() == "PADDDOWN PADDRIGHT",
             "one taken off, the others stay where they stand: " .. picks())
-        check(F2.Place(two, 1, 9) == false and F2.Place(two, 1, 0) == false and F2.Place(two, 5, 1) == false,
-            "there are eight spots and no more; a spot that is none, or an icon that is none, moves nothing")
+        check(F2.Place(two, 1, 13) == false and F2.Place(two, 1, 0) == false and F2.Place(two, 5, 1) == false,
+            "there are twelve spots and no more; a spot that is none, or an icon that is none, moves nothing")
         W.combat = true
         check(F2.Place(two, 1, 2) == false and where(1) == spot(0, -r), "in a fight nothing is moved")
         W.combat = false
@@ -2869,6 +2879,60 @@ do
         "each icon knows what its ability is for")
     W.mouseover, W.helpful, W.harmful = nil, nil, nil
     NS.Flyouts.Shut()
+end
+
+print("a flyout holds twelve, picked with the bar's own twelve keys: 1 to 9, 0, - and =")
+do
+    -- His words (2026-11-22): "we cant put more than 6 on a flyout currently, or at least the keybindings
+    -- dont go beyond that. but it should be lim of 12 and use the 0-= keys too, bc many ppl that play wow
+    -- have mmo mouse."
+    login("Player-1-0000000T")
+    local F6 = NS.Flyouts
+    for id = 2001, 2011 do stack("ActionButton1", id) end
+    local flyout, unit = F6.At("ActionButton1")
+    check(F6.MAX == 12 and flyout ~= nil and #flyout.entries == 12, "eleven dropped onto a button's ability make a flyout of twelve")
+    local errorsBefore = #W.errors
+    stack("ActionButton1", 2012)
+    check(#flyout.entries == 12 and #W.errors == errorsBefore + 1 and W.errors[#W.errors] == "That flyout is full.",
+        "a thirteenth is refused: " .. tostring(W.errors[#W.errors]))
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    flushAll()
+    F6.Show(unit.index)
+    local keys = {}
+    for i = 1, 12 do keys[i] = entry(unit.index, i).key.text end
+    check(table.concat(keys, " ") == "1 2 3 4 5 6 7 8 9 0 - =", "each icon shows its key, the bar's twelve in their order: " .. table.concat(keys, " "))
+    check(entry(unit.index, 12):IsVisible() and entry(unit.index, 13) == nil, "all twelve are in view, and there is no thirteenth")
+    F6.Shut()
+    for i, key in ipairs({ "7", "8", "9", "0", "-", "=" }) do
+        tap("1")
+        local before = #W.casts
+        tap(key)
+        check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:" .. (2000 + i + 5),
+            "opened by its button's key, " .. key .. " casts icon " .. (i + 6) .. ": " .. tostring(W.casts[#W.casts]))
+    end
+    -- the game's key menu: a row for each of the twelve spots of every flyout
+    local named = true
+    for i = 1, 12 do named = named and _G["BINDING_NAME_" .. NS.Binds.PICK .. i] == "Spot " .. i .. " of every flyout" end
+    check(NS.Binds.PICKS == 12 and named and _G["PREFACE_" .. NS.Binds.PICK]:find("1 to 9, 0, - and =", 1, true) ~= nil,
+        "the key menu has a row for each of the twelve spots, and says what their keys are with none set")
+    -- a key set on the twelfth of those rows picks the twelfth icon
+    W.base["F12"] = NS.Binds.PICK .. "12"
+    rebound()
+    tap("1")
+    local before = #W.casts
+    tap("F12")
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:2011", "a key set on the twelfth row picks the twelfth icon: " .. tostring(W.casts[#W.casts]))
+    W.base["F12"] = nil
+    rebound()
+    -- on a controller a strip's first six have pad buttons, as ever; the rest are picked by their keys
+    local pads = F6.PadsFor("UP", 12)
+    check(pads[1] ~= nil and pads[6] ~= nil and pads[7] == nil and pads[12] == nil, "a strip's first six keep their pad buttons; the rest have none of their own")
+    F6.Shut()
+    for _ = 1, 12 do
+        local left = F6.At("ActionButton1")
+        if left then F6.Remove(left, #left.entries) end
+    end
 end
 
 print("an icon says how many there are of its item, as a bar button does")

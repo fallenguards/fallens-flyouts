@@ -9,8 +9,9 @@ local _, ns = ...
 local B = {}
 ns.Binds = B
 
--- flyouts with a heading of their own, and the spots of a flyout; Bindings.xml lists as many
-B.SLOTS, B.PLACES = 8, 6
+-- flyouts with a heading of their own, the spots under each heading, and the spots of every flyout
+-- alike (as many as a flyout holds); Bindings.xml lists as many
+B.SLOTS, B.PLACES, B.PICKS = 8, 6, 12
 local SPOT, PICK = "FALLENSFLYOUTS_F", "FALLENSFLYOUTS_PICK"
 B.SPOT, B.PICK = SPOT, PICK
 B.CATEGORY = "BINDING_HEADER_FALLENSFLYOUTS"
@@ -26,7 +27,8 @@ local TEXT = {
     spot = "%d: %s",
     empty = "%d: (empty)",
     pick = "Spot %d of every flyout",
-    pickHelp = "Every flyout: the keys of its spots where none is set above. With none set here they are 1 to 6.",
+    pickHelp = "Every flyout: the keys of its spots where none is set above. With none set here they are "
+        .. "1 to 9, 0, - and =.",
 }
 B.TEXT = TEXT
 
@@ -44,7 +46,7 @@ for n = 1, B.SLOTS do
     _G[Heading(n)] = TEXT.none:format(n)
     for i = 1, B.PLACES do _G["BINDING_NAME_" .. Command(n, i)] = TEXT.empty:format(i) end
 end
-for i = 1, B.PLACES do _G["BINDING_NAME_" .. PICK .. i] = TEXT.pick:format(i) end
+for i = 1, B.PICKS do _G["BINDING_NAME_" .. PICK .. i] = TEXT.pick:format(i) end
 
 local function IsPad(key)
     if IsBindingForGamePad then return IsBindingForGamePad(key) == true end
@@ -90,7 +92,7 @@ function B.State()
     for n = 1, B.SLOTS do
         for i = 1, B.PLACES do parts[#parts + 1] = table.concat({ GetBindingKey(Command(n, i)) }, " ") end
     end
-    for i = 1, B.PLACES do parts[#parts + 1] = table.concat({ GetBindingKey(PICK .. i) }, " ") end
+    for i = 1, B.PICKS do parts[#parts + 1] = table.concat({ GetBindingKey(PICK .. i) }, " ") end
     return table.concat(parts, "|")
 end
 

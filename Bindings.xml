@@ -2,7 +2,7 @@
 	<!-- The addon's section of the game's key menu. A row only holds its keys: Core\Flyouts.lua binds
 	     them while a flyout is open. Texts and the count of rows are in Core\Binds.lua. The game
 	     lists these once, in this order: a heading and six spots for each of eight flyouts, then
-	     the spots of every flyout alike. -->
+	     the twelve spots of every flyout alike. -->
 	<Binding name="PREFACE_FALLENSFLYOUTS_HELP" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="HEADER_FALLENSFLYOUTS_GAP1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="PREFACE_FALLENSFLYOUTS_F1" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
@@ -76,4 +76,10 @@
 	<Binding name="FALLENSFLYOUTS_PICK4" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="FALLENSFLYOUTS_PICK5" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 	<Binding name="FALLENSFLYOUTS_PICK6" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK7" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK8" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK9" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK10" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK11" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
+	<Binding name="FALLENSFLYOUTS_PICK12" category="BINDING_HEADER_FALLENSFLYOUTS"></Binding>
 </Bindings>

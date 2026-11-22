@@ -192,9 +192,14 @@ local function Fill()
     pending = nil
     local entries = target and not target.auto and target.entries or {}
     local any = false
+    -- the usual gap, or less where that many would run past the game's list
+    local gap = ROW_GAP
+    if #entries > 1 then gap = math.min(ROW_GAP, (GRID_W - 2 * ROW_IN - #entries * SLOT) / (#entries - 1)) end
     for i, button in ipairs(own.buttons) do
         local entry = entries[i]
         button.entry = entry
+        button:ClearAllPoints()
+        button:SetPoint("TOPLEFT", own, "TOPLEFT", ROW_IN + (i - 1) * (SLOT + gap), -ROW_TOP)
         button:SetShown(entry ~= nil)
         if entry then
             any = true

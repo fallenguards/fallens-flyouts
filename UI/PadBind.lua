@@ -49,7 +49,7 @@ local TEXT = {
     note2 = "The flyout editor opens then.",
     note3 = "The D-pad moves the icons there. Pressed here it changes nothing.",
     editHint = "Editing: %s is selected. The D-pad moves it to that side of the button.",
-    editRing = "Press the same side again for the outer ring.",
+    editRing = "Press the same side again for the next ring out.",
     -- the editor inside the game's dialog: the box's words
     inSelected = "%s is selected.",
     inMove = "The D-pad moves it to that side of the button.",
@@ -249,7 +249,8 @@ local function Picture(where, flyout, lead, entries, marked)
             token:SetPoint("CENTER", v, "CENTER", F.RingSpot(spots[i], reach))
             token.spot = spots[i]
             token.icon:SetTexture(F.Icon(entry))
-            token.key:SetText(F.PadText(pads[i]))
+            -- an icon of the third ring has no pad button
+            token.key:SetText(pads[i] and F.PadText(pads[i]) or "")
             token.pad = pads[i]
             token.ring:SetShown(marked == i)
         end
@@ -698,9 +699,13 @@ function E.Do(bind)
     local spots = F.Spots(flyout.entries)
     if bind.act == "side" then
         -- To that side of the button, taken or empty: anywhere on the dial ("why would they HAVE to swap
-        -- with an existing one?", 2026-11-21). Pressed for the side it stands on, to the other ring there.
-        local to = bind.side
-        if spots[e.mark] == to then to = to + RING_SIDES end
+        -- with an existing one?", 2026-11-21). Pressed for the side it stands on: a ring further out
+        -- there, and from the outermost back to the first.
+        local to, at = bind.side, spots[e.mark]
+        if (at - 1) % RING_SIDES + 1 == to then
+            to = at + RING_SIDES
+            if to > F.SPOTS then to = bind.side end
+        end
         F.Place(flyout, e.mark, to)
     elseif bind.act == "next" then
         -- round the dial as it lies: the icon on the next spot on, the first after the last
