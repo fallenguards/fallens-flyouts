@@ -2,7 +2,7 @@ local _, ns = ...
 -- luacheck: read globals UIParent CreateFrame GetTime InCombatLockdown C_Timer C_Spell C_Item GetMacroInfo
 -- luacheck: read globals SetOverrideBindingClick ClearOverrideBindings GameTooltip C_GamePad GetBindingText
 -- luacheck: read globals issecretvalue C_CVar C_Container GetMacroSpell GetMacroItem IsUsableItem geterrorhandler
--- luacheck: read globals Settings IsModifiedClick GetModifiedClick PickupSpell PickupItem PickupMacro
+-- luacheck: read globals Settings IsModifiedClick GetModifiedClick PickupSpell PickupItem PickupMacro IsMouseButtonDown
 -- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding ACTIONBAR_HOTKEY_FONT_COLOR
 
 -- Flyouts on bar buttons. One secure root owns every key.
@@ -511,7 +511,6 @@ local function Unit(f)
 
     local menu = CreateFrame("Frame", MENU .. f, UIParent, "SecureHandlerBaseTemplate")
     menu:Hide()
-    menu:SetFrameStrata("DIALOG")
     menu:SetSize(Art.STRIP, Art.POP)
     unit.menu, unit.strip = menu, Art.Strip(menu)
     root:SetFrameRef("menu" .. f, menu)
@@ -537,16 +536,47 @@ local function Unit(f)
     unit.ring = opener:CreateTexture(nil, "OVERLAY")
     unit.ring:SetAtlas(Art.NAMES.frameOver)
     unit.ring:Hide()
+    -- The arrow's look, from what is so right now: pressed only while a mouse button that went down on
+    -- it is still down. The mouse-up is not always handed to this frame (the flyout opens over it on the
+    -- press), and an arrow left waiting for it stayed dimmed.
+    local pressed, watching = false, false
+    local function Held() return IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton") end
+    local function Look()
+        if pressed and not Held() then pressed = false end
+        if pressed then return "arrowDown" end
+        return opener:IsMouseOver() and "arrowOver" or "arrow"
+    end
+    local function Watch(tries)
+        watching = false
+        if not pressed then return end
+        if Held() and tries < 300 then
+            watching = true
+            return C_Timer.After(0.1, function() Watch(tries + 1) end)
+        end
+        pressed = false
+        Arrow(unit, Look())
+    end
+    unit.look = Look
     opener:HookScript("OnEnter", function()
-        Arrow(unit, "arrowOver")
+        Arrow(unit, Look())
         unit.glow:Show()
     end)
     opener:HookScript("OnLeave", function()
-        Arrow(unit, "arrow")
+        Arrow(unit, Look())
         unit.glow:SetShown(menu:IsShown())
     end)
-    opener:HookScript("OnMouseDown", function() Arrow(unit, "arrowDown") end)
-    opener:HookScript("OnMouseUp", function() Arrow(unit, opener:IsMouseOver() and "arrowOver" or "arrow") end)
+    opener:HookScript("OnMouseDown", function()
+        pressed = true
+        Arrow(unit, "arrowDown")
+        if not watching then
+            watching = true
+            C_Timer.After(0.1, function() Watch(1) end)
+        end
+    end)
+    opener:HookScript("OnMouseUp", function()
+        pressed = false
+        Arrow(unit, Look())
+    end)
 
     -- These run inside the secure Show and Hide. An error here would stop
     -- the keys being bound, so the drawing runs guarded and is still reported.
@@ -554,7 +584,7 @@ local function Unit(f)
         open = unit
         quiet = math.max(quiet, GetTime() + 0.5)
         xpcall(function()
-            Arrow(unit)
+            Arrow(unit, Look())
             unit.glow:Show()
             -- keys or pad symbols, as the game's bars show right now
             Labels(unit)
@@ -566,7 +596,7 @@ local function Unit(f)
         if open == unit then open = nil end
         quiet = math.max(quiet, GetTime() + 0.5)
         xpcall(function()
-            Arrow(unit)
+            Arrow(unit, Look())
             unit.glow:SetShown(opener:IsMouseOver())
             Tell("shut", unit)
         end, geterrorhandler())
@@ -841,6 +871,25 @@ function F.Shape(flyout, auto)
     return side, side, false
 end
 
+-- The flyout is in its bar's layer, just over every bar button of that layer, so a window that is
+-- over the bars is over the flyout too. (It used to be in the layer of the game's own flyout, over
+-- most windows, and showed through them.) The game lifts the bars for a spell on the cursor: the
+-- flyout goes with them.
+local OVER_BARS = 20
+local function Layer(unit)
+    local host, menu = unit.host, unit.menu
+    if not (host and menu) or InCombatLockdown() then return end
+    local strata, level = host:GetFrameStrata(), host:GetFrameLevel()
+    for _, button in ipairs(Bars.All()) do
+        if button:GetFrameStrata() == strata then level = math.max(level, button:GetFrameLevel()) end
+    end
+    menu:SetFrameStrata(strata)
+    menu:SetFrameLevel(level + OVER_BARS)
+end
+local function Layers()
+    for f = 1, used do Layer(units[f]) end
+end
+
 local function Lay(unit)
     local flyout, host = unit.flyout, unit.host
     local way, runs = Bars.Way(host)
@@ -876,6 +925,7 @@ local function Lay(unit)
     opener:Show()
     -- the bar's scale times the size picked in the settings (1 is the game's own)
     menu:SetScale(scale * F.Size())
+    Layer(unit)
     menu:ClearAllPoints()
     if sideName == runName or centered then
         -- straight out, or lying along the side with its middle at the button's middle
@@ -1746,6 +1796,9 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
 events:RegisterEvent("UPDATE_MACROS")
+-- the game lifts the bars to another layer for a spell on the cursor, and lets them down after
+pcall(events.RegisterEvent, events, "ACTIONBAR_SHOWGRID")
+pcall(events.RegisterEvent, events, "ACTIONBAR_HIDEGRID")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -1777,6 +1830,10 @@ events:SetScript("OnEvent", function(_, event, on)
         F.Follow()
     elseif event == "UPDATE_MACROS" then
         MacrosChanged()
+    elseif event == "ACTIONBAR_SHOWGRID" or event == "ACTIONBAR_HIDEGRID" then
+        -- whether the bars are moved before or after this is told is not ours to know: looked at twice
+        C_Timer.After(0, Layers)
+        C_Timer.After(0.2, Layers)
     elseif event == "PLAYER_LOGOUT" then
         -- what is saved is the whole of each flyout
         Whole(list)

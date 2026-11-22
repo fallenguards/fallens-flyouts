@@ -18,7 +18,7 @@ local SIDES = { "UP", "RIGHT", "DOWN", "LEFT" }
 -- the grip: the game's own icon for a thing that is dragged about (its four arrows), else its
 -- turn icon, else its flyout arrow, whichever this client knows first
 local GRIP_ICONS = { "common-icon-move", "common-icon-rotateright" }
-local ARROW_W, ARROW_H, GRIP_OUT = 18, 7, 2
+local ARROW_W, ARROW_H, GRIP_OUT, GRIP_OVER = 18, 7, 2, 30
 local GRIP = Art.ICON * 2 / 3
 -- how often the mouse is looked for, and how long the grip stays once it has left
 local LOOK, LINGER = 0.1, 0.4
@@ -113,6 +113,9 @@ local function Place()
     local unit = shown
     local side = Art.SIDES[unit.way]
     grip:SetScale(unit.menu:GetEffectiveScale() / UIParent:GetEffectiveScale())
+    -- in the flyout's own layer, just over it: a window over the flyout is over its grip too
+    grip:SetFrameStrata(unit.menu:GetFrameStrata())
+    grip:SetFrameLevel(unit.menu:GetFrameLevel() + GRIP_OVER)
     grip:ClearAllPoints()
     grip:SetPoint(side.point, unit.menu, side.to, side.x * GRIP_OUT, side.y * GRIP_OUT)
     if grip.icon then

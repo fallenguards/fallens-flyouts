@@ -1829,6 +1829,56 @@ stack("OwnBarButton3", 501)
 check(opener("3") ~= nil and way("3") == "LEFT", "the key is found, and the flyout grows left, away from the edge")
 barWorld = function() return "game" end
 
+print("the flyout is in its bar's layer, and its arrow never stays pressed")
+do
+    login("Player-1-0000000L")
+    stack("ActionButton1", 501)
+    local _, unit = NS.Flyouts.At("ActionButton1")
+    local host = W.frames.ActionButton1
+    local top = 0
+    for i = 1, 12 do top = math.max(top, W.frames["ActionButton" .. i]:GetFrameLevel()) end
+    -- His report (2026-11-21): flyouts showed through windows that were over the bars. They sat in the
+    -- layer of the game's own flyout, over most windows.
+    check(unit.menu:GetFrameStrata() == host:GetFrameStrata() and unit.menu:GetFrameStrata() == "MEDIUM"
+        and unit.menu:GetFrameLevel() > top,
+        "the flyout is in its bar's own layer, just over the bar's buttons: a window over the bars is over it too")
+    tap("1")
+    unit.menu.over = true
+    NS.Turn.Poll()
+    local grip = NS.Turn.Grip()
+    check(grip ~= nil and grip:IsShown() and grip:GetFrameStrata() == "MEDIUM" and grip:GetFrameLevel() > unit.menu:GetFrameLevel(),
+        "its grip is in that layer too, just over the flyout")
+    unit.menu.over = nil
+    -- the game lifts its bars for a spell on the cursor: the flyout goes up with them, and comes down after
+    W.cursor = { "spell", 7, "spell", 777, 777 }
+    fire("ACTIONBAR_SHOWGRID")
+    flushAll()
+    check(host:GetFrameStrata() == "TOOLTIP" and unit.menu:GetFrameStrata() == "TOOLTIP",
+        "the bars lifted for a spell on the cursor, the flyout is lifted with them")
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    flushAll()
+    check(unit.menu:GetFrameStrata() == "MEDIUM", "and let down again with them")
+    if unit.menu:IsShown() then tap("1") end
+    -- His report (2026-11-21): the arrow sometimes stayed dimmed. Its pressed look waited for a mouse-up
+    -- that is not always handed to it.
+    local opener = unit.opener
+    W.mouseDown = true
+    opener.scripts.OnMouseDown(opener)
+    check(unit.art == "arrowDown", "pressed with the mouse, the arrow looks pressed")
+    W.mouseDown = false
+    flushAll()
+    check(unit.art == "arrow", "the mouse let go with no word of it to the arrow, it is its plain self again all the same")
+    opener.over = true
+    W.mouseDown = true
+    opener.scripts.OnMouseDown(opener)
+    W.mouseDown = false
+    opener.over = nil
+    opener.scripts.OnLeave(opener)
+    check(unit.art == "arrow", "and the mouse gone off it after a let-go leaves it plain, not pressed")
+    flushAll()
+end
+
 print("macros of one name are told apart by their text")
 do
     login("Player-1-0000000J")
