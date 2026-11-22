@@ -2,6 +2,9 @@
 
 ## [1.1.3] - 2026-11-22
 
+### Added
+- A first login with the addon shows a short dialog, once: one line on how a flyout is made, and the flyouts that fill themselves (Food, Drink, Potions and the rest) in a row, each ready to be dragged onto a bar from there. Okay, its x or Escape closes it for good. Anyone who already has a flyout never sees it.
+
 ### Fixed
 - The settings page was taller than the game's Options window, so its last check boxes hung out under it. The page now scrolls inside the window, with the game's own scroll bar, and a controller's cursor scrolls it too.
 

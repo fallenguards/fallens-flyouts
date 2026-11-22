@@ -27,3 +27,4 @@ UI\PadBind.lua
 Options\Profiles.lua
 Options\Arrange.lua
 Options\Auto.lua
+UI\Welcome.lua

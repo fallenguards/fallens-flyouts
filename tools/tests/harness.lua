@@ -773,15 +773,45 @@ end
 function SetOverrideBindingClick(owner, priority, key, name, button) owner:SetBindingClick(priority, key, name, button) end
 function ClearOverrideBindings(owner) W.overrides[owner] = {} end
 StaticPopupDialogs = {}
-function StaticPopup_Show(which, text)
-    W.popup = { which = which, text = text }
+-- A frame handed in with the call is taken in by the dialog and shown under its text, and let go of
+-- (hidden) when the dialog goes (StaticPopup.lua: SetupInsertedFrame, StaticPopup_ReleaseInsertedFrame).
+function StaticPopup_Show(which, text, _, data, inserted)
+    W.popup = { which = which, text = text, data = data, inserted = inserted }
+    if inserted then inserted.shown = true end
     local dialog = StaticPopupDialogs[which]
     if dialog and dialog.OnShow then dialog.OnShow(region(), nil) end
 end
+local function popupGone(p)
+    W.popup = nil
+    if p.inserted then p.inserted.shown = false end
+end
 function StaticPopup_Hide(which)
     local dialog = StaticPopupDialogs[which]
-    if W.popup and W.popup.which == which then W.popup = nil end
+    if W.popup and W.popup.which == which then popupGone(W.popup) end
     if dialog and dialog.OnHide then dialog.OnHide(region()) end
+end
+-- Escape on the dialog that is up, as the game's own walk does it: its cancel is called with "clicked"
+function escapePopup()
+    local p = assert(W.popup, "no popup to leave")
+    local info = StaticPopupDialogs[p.which]
+    assert(info.hideOnEscape, "that dialog does not close on Escape")
+    popupGone(p)
+    if info.OnCancel then info.OnCancel(nil, p.data, "clicked") end
+end
+-- a click on the dialog's x
+function closePopup()
+    local p = assert(W.popup, "no popup to close")
+    local info = StaticPopupDialogs[p.which]
+    assert(info.closeButton, "that dialog has no x")
+    popupGone(p)
+    if info.OnCloseClicked then info.OnCloseClicked(nil, p.data) end
+end
+-- The game could not put a dialog up (dead, a cinematic): it calls the cancel with no reason
+function refusePopup()
+    local p = assert(W.popup, "no popup to refuse")
+    local info = StaticPopupDialogs[p.which]
+    popupGone(p)
+    if info.OnCancel then info.OnCancel(nil, p.data) end
 end
 DONE = "Done"
 -- the game's Quick Keybind Mode, and the modifiers held
@@ -953,6 +983,7 @@ local function acceptPopup()
     local p = W.popup
     assert(p, "no popup to accept")
     W.popup = nil
+    if p.inserted then p.inserted.shown = false end
     StaticPopupDialogs[p.which].OnAccept()
     return p.text
 end

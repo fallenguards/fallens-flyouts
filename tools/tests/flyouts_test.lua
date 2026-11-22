@@ -2871,6 +2871,114 @@ do
     NS.Flyouts.Shut()
 end
 
+print("a first install: once, the game's own dialog says how a flyout is made and offers the flyouts that fill themselves")
+do
+    -- His words (2026-11-22): "so i ran the ffdev fresh and got.. nothing? so we have no new player popup at
+    -- all?" and "do you think we should have a brief popup for new users telling them super concisely how to
+    -- make flyouts, but also for telling them about the auto flyouts and having them in a row that they can
+    -- immediately drag to their bars?"
+    local savedDB = FallensFlyoutsDB
+    local hadPlaced = W.placed
+    FallensFlyoutsDB = nil
+    login("Player-1-0000000W")
+    local Welcome = NS.Welcome
+    W.placed = {}
+    W.macros, W.level, W.items, W.bags = {}, 10, { [4540] = { sub = 5, level = 5 } }, { 4540 }
+    local up = W.popup
+    check(up ~= nil and up.which == Welcome.POPUP and FallensFlyoutsDB.welcome == "owed",
+        "with no saved data at all, the dialog comes up after the login")
+    local text = up and up.text or ""
+    check(text:find("Fallen's Flyouts", 1, true) == 1
+        and text:find("To make a flyout, drag a spell, item or macro onto a bar button and drop it on the +.", 1, true) ~= nil
+        and text:find("These fill themselves from your bags.", 1, true) ~= nil, "it says in a line how a flyout is made: " .. text)
+    local dialog = StaticPopupDialogs[Welcome.POPUP]
+    check(dialog.button1 == OKAY and dialog.hideOnEscape == 1 and dialog.closeButton == true and dialog.timeout == 0,
+        "it is the game's own dialog: an Okay button, an x, and Escape closes it")
+    local row = up and up.inserted
+    local names = {}
+    for i, icon in ipairs(row and row.icons or {}) do names[i] = icon.kind.name end
+    check(row ~= nil and row.shown and table.concat(names, " ") == "Food Drink Potions Elixirs Flasks Scrolls Bandages"
+        and row.more.text == "More in the settings: /ff",
+        "under its text, the flyouts that fill themselves, in a row: " .. table.concat(names, " "))
+    -- dragged out of the dialog onto a bar: the flyout is there, and the dialog is still up for the next one
+    local food = row.icons[1]
+    food.scripts.OnDragStart(food)
+    check(W.cursor ~= nil and W.cursor[1] == "macro" and W.cursor[2] == "Food" and W.popup == up, "one dragged from it is on the cursor, the dialog still up")
+    PlaceAction(9)
+    flushAll()
+    local made = NS.Flyouts.At("ActionButton9")
+    check(made ~= nil and made.auto == "food" and #made.entries == 1 and W.popup == up,
+        "dropped on a bar button, its flyout is there, filled from the bags")
+    local drink = row.icons[2]
+    drink.scripts.OnClick(drink)
+    check(W.cursor ~= nil and W.cursor[2] == "Drink", "a click picks one up as well")
+    W.cursor = nil
+    -- not closed by the player: owed still, at the next login too
+    StaticPopup_Hide(Welcome.POPUP)
+    check(FallensFlyoutsDB.welcome == "owed" and row.shown == false, "taken away by anything but the player, it is still owed")
+    login("Player-1-0000000W")
+    check(W.popup ~= nil and W.popup.which == Welcome.POPUP, "and comes up again at the next login")
+    refusePopup()
+    check(FallensFlyoutsDB.welcome == "owed", "a dialog the game could not put up at all was not seen")
+    -- Okay: for good, on every character
+    login("Player-1-0000000W")
+    acceptPopup()
+    check(FallensFlyoutsDB.welcome == "done", "closed with Okay, it is done with")
+    login("Player-1-0000000W")
+    check(W.popup == nil, "the next login has no dialog")
+    login("Player-1-0000000X")
+    check(W.popup == nil, "nor has another character's")
+    -- Escape and the x close it for good as well
+    FallensFlyoutsDB = nil
+    login("Player-1-0000000W")
+    escapePopup()
+    check(FallensFlyoutsDB.welcome == "done", "Escape closes it for good")
+    FallensFlyoutsDB = nil
+    login("Player-1-0000000W")
+    closePopup()
+    check(FallensFlyoutsDB.welcome == "done", "so does its x")
+    -- a login in a fight: it waits for the fight's end
+    FallensFlyoutsDB = nil
+    W.popup = nil
+    char.guid, char.class, char.name = "Player-1-0000000W", "MAGE", "Tester W"
+    boot()
+    W.combat = true
+    flushAll()
+    check(W.popup == nil and FallensFlyoutsDB.welcome == "owed", "at a login in a fight it waits")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    flushAll()
+    check(W.popup ~= nil and W.popup.which == Welcome.POPUP, "and comes up when the fight is over")
+    acceptPopup()
+    -- in the game's gamepad mode nothing is dragged: the line names the game's own way
+    FallensFlyoutsDB = nil
+    login("Player-1-0000000W")
+    acceptPopup()
+    local padBar = W.frames.GamepadMainActionBarFrame or CreateFrame("Frame", "GamepadMainActionBarFrame", UIParent)
+    padBar.shown = true
+    NS.Welcome.Show()
+    check(W.popup ~= nil and W.popup.text:find("bind an ability onto a button that already holds one and choose Add to Flyout.", 1, true) ~= nil
+        and W.popup.text:find("drop it on the +", 1, true) == nil, "in gamepad mode the line names Add to Flyout, not a drag")
+    padBar.shown = false
+    NS.Welcome.Show()
+    check(W.popup.text:find("drop it on the +", 1, true) ~= nil, "out of that mode it names the drag")
+    StaticPopup_Hide(Welcome.POPUP)
+    -- saved data from before this version, with a flyout in it: nobody new, never shown
+    FallensFlyoutsDB = { profiles = { ["Tester W - Realm"] = { flyouts = { { host = "ActionButton1",
+        main = { kind = "spell", id = 101 }, entries = { { kind = "spell", id = 101 }, { kind = "spell", id = 501 } } } } } } }
+    login("Player-1-0000000W")
+    check(W.popup == nil and FallensFlyoutsDB.welcome == "done", "saved data that holds a flyout is no new install: no dialog, ever")
+    -- saved data with no flyout in it: shown once
+    FallensFlyoutsDB = { profiles = { ["Tester W - Realm"] = { flyouts = {} } } }
+    login("Player-1-0000000W")
+    check(W.popup ~= nil and W.popup.which == Welcome.POPUP, "saved data with no flyout in it: shown, once")
+    acceptPopup()
+    W.macros, W.level, W.items, W.bags = nil, nil, nil, nil
+    W.placed = hadPlaced
+    FallensFlyoutsDB = savedDB
+    login("Player-1-0000000A")
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")

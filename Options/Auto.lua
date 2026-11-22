@@ -40,9 +40,9 @@ local function ShowTip(self)
 end
 local function HideTip() GameTooltip:Hide() end
 
--- an icon dressed as a flyout's own, with the kind's name under it
-local function Icon(kind)
-    local button = CreateFrame("Button", nil, panel)
+-- an icon dressed as a flyout's own, with the kind's name under it; on the page, or on `parent`
+function UI.Icon(kind, parent)
+    local button = CreateFrame("Button", nil, parent or panel)
     button:SetSize(Art.ICON, Art.ICON)
     button.kind = kind
     button.back = button:CreateTexture(nil, "BACKGROUND", nil, -1)
@@ -92,7 +92,7 @@ function UI.Build()
     local how = Line(TEXT.how, "GameFontHighlight", intro, GAP)
     panel.icons = {}
     for i, kind in ipairs(Auto.KINDS) do
-        local button = Icon(kind)
+        local button = UI.Icon(kind, panel)
         if i == 1 then
             button:SetPoint("TOPLEFT", how, "BOTTOMLEFT", GAP, -GAP * 3)
         else
