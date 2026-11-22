@@ -53,8 +53,8 @@ local TEXT = {
     -- the editor inside the game's dialog: the box's words
     inSelected = "%s is selected.",
     inMove = "The D-pad moves it to that side of the button.",
-    -- the game's Unbind on a flyout's button: the flyout is kept, and that is said
-    putAway = "%s is off the bars, so its flyout is put away. It comes back when %s is on a button again.",
+    -- the game's Unbind on a flyout's button does away with the button, and its flyout with it
+    unbindFlyout = "Unbind and Remove Flyout",
 }
 G.TEXT, G.KEY = TEXT, KEY_ADD
 
@@ -71,8 +71,6 @@ local cannotCatch
 -- the flyouts' marks on the dialog's copies of the bar's buttons, and how often they are looked at
 local Marks
 local MARK_LOOK = 0.25
--- a flyout's ability let go of in the dialog, neither set down nor put back: looked at once the dialog is left
-local dropped
 -- the slot of the flyout last made, for its picture
 local latestSlot
 -- how far under the dialog the picture of the flyout stands (the hint bar is between)
@@ -434,7 +432,7 @@ local function ShowPicked(frame)
     prompts.add:SetPromptText(TEXT.editFlyout)
     prompts.edit:Hide()
     prompts.left:SetShown(armed == nil)
-    prompts.left:SetPromptText(FRAME_ACTION_UNBIND or TEXT.unbind)
+    prompts.left:SetPromptText(TEXT.unbindFlyout)
     prompts.back:Show()
     prompts.back:SetPromptText(armed and TEXT.openEditor or (FRAME_ACTION_CANCEL or TEXT.cancel))
     if prompts.plate then prompts.plate:Hide() end
@@ -979,23 +977,14 @@ function G.Install(frame)
     local function Gone()
         -- an edit asked for in the dialog begins now that the dialog is gone
         if editing and editing.inside then E.Close() end
-        local next, lost = armed, dropped
-        armed, dropped = nil, nil
+        local next = armed
+        armed = nil
         if next and next.done then next = nil end
         Marks(false)
         Clear()
         F.Moved()
         C_Timer.After(FIND_AFTER, function()
             F.Follow()
-            -- unbound there (the game's Unbind), the flyout's ability is on no button: the flyout waits, and says so
-            local kept = lost and Bars.Find(lost.lead, nil, true) ~= nil
-            for slot in pairs(lost and not kept and Bars.Copies() or {}) do
-                kept = kept or F.Same(Bars.ActionAt(slot), lost.lead)
-            end
-            if lost and not kept then
-                local name = F.Name(lost.lead)
-                ns.Say(TEXT.putAway:format(name, name))
-            end
             if next then E.Open(next.flyout) end
         end)
     end
@@ -1005,7 +994,9 @@ function G.Install(frame)
     end))
     -- moving abilities: the held one was set down, let go or put back, or the mode left
     hooksecurefunc(frame, "TransitionToSelectActionToPickup", Guard(function(self)
-        if picked and not armed then dropped = picked end
+        -- Picked up and neither set down nor put back: the game's Unbind. With its ability on no button
+        -- the flyout is removed (set down elsewhere or put back, it is on one and stays).
+        if picked and not armed then F.Discard(picked.flyout) end
         -- Back at the dialog's first step with the editor still up in it: the dialog acted on a press
         -- that was the editor's (ended by its own button, the editor is closed before the dialog hears of
         -- it). A frame of ours cannot keep the pad from it here: the editor will open after the dialog.

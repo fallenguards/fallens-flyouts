@@ -10,12 +10,12 @@
 - In gamepad mode, binding an ability onto a taken button shows the flyout in place, around that button: its icons and the pad button that picks each. It changes at once when the face buttons, the D-pad or the background are swapped there.
 - Edit Flyout, in gamepad mode: in Edit Action Bar, pick up a button that has a flyout and the hint bar offers Edit Flyout. The ability goes back on its button and the flyout editor is up at once, there in Edit Action Bar, around that button. In it the D-pad puts the selected icon on that side of the button, whether an icon is there or not (one that is there changes places with it), and the same side again puts it on the outer ring. Each icon stays where it is put. The hint bar names the rest: select the next icon, take it off, pick with the face buttons or the D-pad, show or hide the background, done.
 - In gamepad mode, the buttons shown in Bind to Action Bar and Edit Action Bar wear the flyout mark too, so the buttons that have flyouts can be told there.
-- In gamepad mode, unbinding a button that has a flyout in Edit Action Bar now says in chat that the flyout is put away and comes back when its ability is on a button again.
 - The icon window (right-click a flyout's button) has a row of the flyout's own icons over the game's list. Pick one and it goes onto the bar button itself, so its icon, tooltip and cooldown are there to see without opening the flyout. What was on the button stays in the flyout.
 - Reset to default icon, in the same window: the button gets back the ability it had, and any icon picked for it is taken off.
 - A flyout lying along a side of its button can be centered on the button. Drag its grip to the middle of that side of the button and it snaps there; the Turn button under Arrange a flyout in the settings steps through the centered shapes too.
 
 ### Changed
+- A flyout now goes with its button when the button is thrown away. Drag the button off the bar and let go, or unbind it in gamepad mode, and its flyout is removed: it no longer comes back when the same spell is put on a bar again. Moving the button to another spot keeps its flyout, as before.
 - Turning a flyout by its grip is steadier: a shape takes over only when the mouse is clearly nearer to it and has stayed there a moment, so the flyout no longer jumps through every shape passed on the way.
 - Macros that cast ranks of one spell are kept in rank order in a flyout, Rank 1 first, as the spells themselves are.
 

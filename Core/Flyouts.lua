@@ -58,6 +58,7 @@ local TEXT = {
     removeLast = "%s to move it. Right-click takes it off, and the flyout with it: nothing else was added.",
     took = "%s taken off the flyout.",
     gone = "%s taken off. Nothing else was added, so the flyout is gone.",
+    cleared = "%s is off the bars. Its flyout is removed.",
     it = "It",
 }
 F.MAX, F.KEYS, F.PADS, F.CLOSE_KEYS, F.TEXT = MAX, KEYS, PADS, CLOSE_KEYS, TEXT
@@ -1917,6 +1918,71 @@ local function Forget(flyout)
     run[flyout] = nil
 end
 
+-- A button done away with by hand takes its flyout with it. His words (2026-11-22): "if someone
+-- explicitly destroys a flyout by dragging off/erasing, it shouldnt auto pop back onto that spell next
+-- time its dragged from spellbook". So: a flyout's ability carried off its button on the cursor is in
+-- the hand. Set down on a button, the flyout goes with it, as ever; let go of anywhere else, with no
+-- button left that holds it, the flyout is removed. An ability that leaves the bars in any other way
+-- (a talent change, another character of the profile) keeps its flyout waiting for it, as before.
+local inHand = {}
+local LET_GO = 0.2
+-- with its ability on no button at all, in view or not, the flyout is removed; true when it was
+function F.Discard(flyout)
+    if InCombatLockdown() or not (list and flyout and flyout.main) then return false end
+    -- one of the profile in use, not of a profile left since
+    local mine = false
+    for _, own in ipairs(list) do mine = mine or own == flyout end
+    if not mine then
+        inHand[flyout] = nil
+        return false
+    end
+    for _, button in ipairs(Bars.All()) do
+        if Bars.Holds(button, flyout.main) then return false end
+    end
+    inHand[flyout] = nil
+    ns.Say(TEXT.cleared:format(Name(flyout.main)))
+    ns.Log(("the button of %s was done away with: its flyout is removed"):format(Name(flyout.main)))
+    Forget(flyout)
+    F.Apply()
+    return true
+end
+-- A slot changed: a flyout's ability now on the cursor and no longer on its button was lifted off it.
+-- Not while the pad's bind dialog is up: that one lifts and holds abilities itself, with choices of
+-- its own still to come (add to the flyout, swap out), and says for itself when a button is unbound.
+local function Lifted()
+    for _, still in ipairs(stills) do
+        if still() then return end
+    end
+    local carried = ns.Drop and ns.Drop.Carried()
+    if not carried then return end
+    for _, flyout in ipairs(list) do
+        -- off its button just now: one that was waiting already (its ability carried in from the
+        -- spellbook) was lifted off nothing
+        if flyout.main and Same(flyout.main, carried) and not Run(flyout).lost then
+            local held = Bars.Named(flyout.host)
+            if not (held and Bars.Holds(held, flyout.main)) then inHand[flyout] = true end
+        end
+    end
+end
+-- the cursor let go of something: each ability that was in the hand and is not any more is looked for
+local function LetGo()
+    if not list or not next(inHand) or InCombatLockdown() then return end
+    for _, still in ipairs(stills) do
+        if still() then return end
+    end
+    local carried = ns.Drop and ns.Drop.Carried()
+    local kept = {}
+    for flyout in pairs(inHand) do
+        if carried and flyout.main and Same(flyout.main, carried) then kept[flyout] = true end
+    end
+    for flyout in pairs(inHand) do
+        if not kept[flyout] then
+            inHand[flyout] = nil
+            F.Discard(flyout)
+        end
+    end
+end
+
 -- takes an entry out; one left with only its lead goes
 function F.Remove(flyout, i)
     if InCombatLockdown() then return false, TEXT.fight end
@@ -2119,6 +2185,7 @@ events:RegisterEvent("UPDATE_MACROS")
 -- the game lifts the bars to another layer for a spell on the cursor, and lets them down after
 pcall(events.RegisterEvent, events, "ACTIONBAR_SHOWGRID")
 pcall(events.RegisterEvent, events, "ACTIONBAR_HIDEGRID")
+pcall(events.RegisterEvent, events, "CURSOR_CHANGED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -2134,12 +2201,17 @@ local STATE_EVENTS = { SPELL_UPDATE_COOLDOWN = true, SPELL_UPDATE_USABLE = true,
 for event in pairs(STATE_EVENTS) do pcall(events.RegisterEvent, events, event) end
 events:SetScript("OnEvent", function(_, event, on)
     if event == "ACTIONBAR_SLOT_CHANGED" then
+        if ready and list and #list > 0 then Lifted() end
         if ready and list and #list > 0 and not moved then
             moved = true
             C_Timer.After(0.1, Sync)
         end
+    elseif event == "CURSOR_CHANGED" then
+        if next(inHand) then C_Timer.After(LET_GO, LetGo) end
     elseif event == "PLAYER_REGEN_ENABLED" then
         if pending then F.Settle() end
+        -- what was let go of in the fight is settled now
+        if next(inHand) then C_Timer.After(LET_GO, LetGo) end
     elseif event == "PLAYER_REGEN_DISABLED" then
         -- the last moment it can be set: nothing is placed in a fight
         if root then root:SetAttribute("carrying", nil) end
@@ -2154,6 +2226,8 @@ events:SetScript("OnEvent", function(_, event, on)
         -- whether the bars are moved before or after this is told is not ours to know: looked at twice
         C_Timer.After(0, Layers)
         C_Timer.After(0.2, Layers)
+        -- the cursor holds no ability any more: one lifted off a flyout's button was set down or let go of
+        if event == "ACTIONBAR_HIDEGRID" and next(inHand) then C_Timer.After(LET_GO, LetGo) end
     elseif event == "PLAYER_LOGOUT" then
         -- what is saved is the whole of each flyout
         Whole(list)

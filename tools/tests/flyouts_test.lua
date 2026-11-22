@@ -1947,31 +1947,20 @@ do
         flushAll()
         check(Edit.Editing() == nil and not bound("PADDUP"), "the dialog left after that, nothing opens")
 
-        -- His words (2026-11-21): "backing out of the flyout editing just completely deleted the flyout
-        -- entirely". His log: the flyout's button picked up, then X, the game's own Unbind, then out. The
-        -- ability was unbound and the flyout, with no button, was put away without a word. It is kept, and
-        -- now that is said; back on a button, the ability has its flyout again.
+        -- an ability picked up and set down on an empty button: the flyout stays, and nothing is said
+        local function alive()
+            for _, own in ipairs(NS.Flyouts.List()) do
+                if own == target then return true end
+            end
+            return false
+        end
         local lines = #W.chat
-        dialog:EnterEditMode()
-        pickUp(7)
-        dialog:TransitionToSelectActionToPickup()
-        dialog:ExitEditMode()
-        for _ = 1, 3 do flushAll() end
-        check(#W.chat == lines + 1 and W.chat[#W.chat]:find("is off the bars, so its flyout is put away. It comes back when", 1, true) ~= nil,
-            "the game's Unbind on a flyout's button: a chat line says the flyout is put away and how it comes back: "
-            .. tostring(W.chat[#W.chat]))
-        W.placed[7] = 771
-        fire("ACTIONBAR_SLOT_CHANGED", 7)
-        for _ = 1, 3 do flushAll() end
-        check(NS.Flyouts.At("ActionButton7") == target and ids() == "771 772 773", "the ability bound again, its flyout is back, whole")
-        -- moved to an empty button instead, or put back: nothing is said
-        lines = #W.chat
         dialog:EnterEditMode()
         pickUp(7)
         press("PADDLEFT", 6)
         dialog:ExitEditMode()
         for _ = 1, 3 do flushAll() end
-        check(#W.chat == lines and W.placed[6] == 771, "the ability moved to an empty button instead: no such line")
+        check(#W.chat == lines and W.placed[6] == 771 and alive(), "the ability moved to an empty button: its flyout stays, and nothing is said")
         W.placed[6] = false
         W.placed[7] = 771
         fire("ACTIONBAR_SLOT_CHANGED", 6)
@@ -2077,7 +2066,27 @@ do
         check(Edit.Editing() ~= nil and bound("PADDUP"), "opened again")
         fire("PLAYER_REGEN_DISABLED")
         check(Edit.Editing() == nil and not bound("PADDUP"), "a fight beginning ends the editing and gives the buttons back")
-        NS.Flyouts.Remove(target, 2)
+        -- His words (2026-11-21): "backing out of the flyout editing just completely deleted the flyout
+        -- entirely" (his log: the button picked up, then X, the game's own Unbind, then out); and
+        -- (2026-11-22): "if someone explicitly destroys a flyout by dragging off/erasing, it shouldnt auto
+        -- pop back onto that spell next time". Unbind does away with the button and its flyout for good,
+        -- and the hint bar says so before it is pressed.
+        dialog:EnterEditMode()
+        pickUp(7)
+        check(prompts.left.shown and prompts.left.label == "Unbind and Remove Flyout",
+            "a flyout's button picked up: the left button is named for what it does there: " .. tostring(prompts.left.label))
+        lines = #W.chat
+        dialog:TransitionToSelectActionToPickup()
+        check(not alive() and NS.Flyouts.At("ActionButton7") == nil and #W.chat == lines + 1
+            and W.chat[#W.chat]:find("is off the bars. Its flyout is removed.", 1, true) ~= nil,
+            "the game's Unbind on a flyout's button: the flyout is removed, and a chat line says so: " .. tostring(W.chat[#W.chat]))
+        dialog:ExitEditMode()
+        for _ = 1, 3 do flushAll() end
+        W.cursor = { "spell", 7, "spell", 771, 771 }
+        PlaceAction(7)
+        for _ = 1, 4 do flushAll() end
+        check(select(2, GetActionInfo(7)) == 771 and NS.Flyouts.At("ActionButton7") == nil and not alive(),
+            "the same ability bound there again: a plain button, no flyout comes back with it")
         W.placed[7] = nil
         fire("ACTIONBAR_SLOT_CHANGED", 7)
         flushAll()
@@ -2636,6 +2645,112 @@ do
         "each icon runs its own macro, and the button's own still leads the flyout")
     W.macros, W.shared, W.macroCount, W.macroSpell = nil, nil, nil, nil
     W.placed[8] = nil
+end
+
+print("a button done away with by hand takes its flyout with it; moved, the flyout goes along")
+do
+    -- His words (2026-11-22): "if i destroy a button that had a flyout, then put a new button in its place,
+    -- there is still a flyout there. why? it only happens if i do it with the same base spell. i get saving
+    -- it when dragging to another spot. but if someone explicitly destroys a flyout by dragging off/erasing,
+    -- it shouldnt auto pop back onto that spell next time its dragged from spellbook. very annoying"
+    login("Player-1-0000000N")
+    local F3 = NS.Flyouts
+    W.placed = W.placed or {}
+    W.placed[9], W.placed[10], W.placed[11] = 901, false, false
+    fire("ACTIONBAR_SLOT_CHANGED", 9)
+    flushAll()
+    stack("ActionButton9", 902)
+    stack("ActionButton9", 903)
+    local flyout = F3.At("ActionButton9")
+    local function alive()
+        for _, own in ipairs(F3.List()) do
+            if own == flyout then return true end
+        end
+        return false
+    end
+    local function settle() for _ = 1, 4 do flushAll() end end
+    local function fromBook(id, slot)
+        W.cursor = { "spell", 7, "spell", id, id }
+        PlaceAction(slot)
+        settle()
+    end
+    check(flyout ~= nil and #flyout.entries == 3, "a flyout of three on a button")
+
+    -- dragged to another spot: that is kept
+    PickupAction(9)
+    settle()
+    check(alive() and F3.At("ActionButton9") == nil, "its ability lifted off the button and still held: the flyout is off the button, and still there")
+    PlaceAction(11)
+    settle()
+    check(alive() and F3.At("ActionButton11") == flyout and #flyout.entries == 3, "set down on another button: the flyout is on that one, whole")
+    -- another ability dropped onto its button: the flyout's own comes onto the cursor, and is set down elsewhere
+    W.cursor = { "spell", 7, "spell", 960, 960 }
+    PlaceAction(11)
+    settle()
+    check(alive() and select(4, GetCursorInfo()) == 901, "another ability dropped on its button, its own now held: still there")
+    PlaceAction(9)
+    settle()
+    check(alive() and F3.At("ActionButton9") == flyout, "its own set down on a free button: the flyout is on that one")
+
+    -- dragged off the bar and let go of: the button is done away with, and the flyout with it
+    local lines = #W.chat
+    PickupAction(9)
+    settle()
+    ClearCursor()
+    settle()
+    check(not alive() and F3.At("ActionButton9") == nil, "dragged off the bar and let go of: the flyout is removed")
+    check(#W.chat == lines + 1 and W.chat[#W.chat]:find("is off the bars. Its flyout is removed.", 1, true) ~= nil,
+        "and a chat line says so: " .. tostring(W.chat[#W.chat]))
+    fromBook(901, 9)
+    check(select(2, GetActionInfo(9)) == 901 and F3.At("ActionButton9") == nil and #F3.List() == 0,
+        "the same spell dragged from the spellbook onto that spot again: a plain button, no flyout comes back")
+
+    -- the same ability on two buttons: one done away with, the flyout stays with the other
+    stack("ActionButton9", 902)
+    flyout = F3.At("ActionButton9")
+    fromBook(901, 10)
+    PickupAction(9)
+    settle()
+    ClearCursor()
+    settle()
+    check(alive() and F3.At("ActionButton10") == flyout, "the same ability on two buttons, one of them done away with: the flyout is on the other")
+
+    -- an ability that leaves the bars with no hand in it (a talent change, a bar the game refills): kept
+    W.placed[10] = false
+    fire("ACTIONBAR_SLOT_CHANGED", 10)
+    settle()
+    check(alive() and F3.At("ActionButton10") == nil and F3.Lost(flyout), "an ability that leaves the bars by no hand keeps its flyout waiting")
+    W.placed[10] = 901
+    fire("ACTIONBAR_SLOT_CHANGED", 10)
+    settle()
+    check(F3.At("ActionButton10") == flyout, "and has it again when it is back")
+    -- a waiting flyout's ability taken from the spellbook and let go of again: it was lifted off no button
+    W.placed[10] = false
+    fire("ACTIONBAR_SLOT_CHANGED", 10)
+    settle()
+    W.cursor = { "spell", 7, "spell", 901, 901 }
+    fire("ACTIONBAR_SLOT_CHANGED", 11)
+    settle()
+    ClearCursor()
+    settle()
+    check(alive() and F3.Lost(flyout), "a waiting flyout's ability taken from the spellbook and let go of again: the flyout still waits")
+    W.placed[10] = 901
+    fire("ACTIONBAR_SLOT_CHANGED", 10)
+    settle()
+
+    -- let go of as a fight begins: settled when the fight is over
+    PickupAction(10)
+    settle()
+    W.combat = true
+    fire("PLAYER_REGEN_DISABLED")
+    ClearCursor()
+    settle()
+    check(alive(), "let go of in a fight: nothing is removed in the fight")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    settle()
+    check(not alive(), "the fight over, the flyout is removed")
+    W.placed[9], W.placed[10], W.placed[11] = nil, nil, nil
 end
 
 -- what ships names nobody else's addon and nothing of the dev folder
