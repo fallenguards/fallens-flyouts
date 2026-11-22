@@ -208,13 +208,13 @@ function UI.Refresh()
     panel.slider:SetValue(percent)
     panel.syncing = nil
     panel.sizeText:SetText(TEXT.percent:format(percent))
-    ns.Checks.Refresh()
+    ns.Arrange.Refresh()
     UI.Fit()
 end
 
 -- What the page holds is as tall as it is, down to its lowest control: the scroll goes that far.
 function UI.Fit()
-    local content, last = panel.content, panel.checks and panel.checks.plate
+    local content, last = panel.content, panel.arrange and panel.arrange.plate
     if not (content and last) then return end
     local top, bottom = content:GetTop(), last:GetBottom()
     if not (top and bottom) then return end
@@ -335,8 +335,8 @@ function UI.Build()
     local smaller, larger = Make(MORE[1]), Make(MORE[2])
     smaller:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -GAP * 2)
     larger:SetPoint("LEFT", smaller, "RIGHT", GAP / 2, 0)
-    -- under it: the check boxes (Options/Checks.lua)
-    ns.Checks.Build(panel, smaller, content)
+    -- under it: arranging a flyout without a drag (Options/Arrange.lua)
+    ns.Arrange.Build(panel, smaller, content)
     panel.built = true
     P.OnChange(UI.Refresh)
 end

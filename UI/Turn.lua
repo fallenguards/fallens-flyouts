@@ -247,6 +247,27 @@ end
 
 function T.Turning() return turning ~= nil end
 
+-- The next shape that fits, for those with no mouse to pull the grip: a
+-- flyout on the bars is stepped through its shapes one press at a time.
+function T.Next(flyout)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local unit = flyout and F.UnitOf(flyout)
+    if not unit then return false end
+    local shapes = T.Shapes(unit)
+    local at = 0
+    for i, shape in ipairs(shapes) do
+        if Is(shape, unit) then at = i end
+    end
+    for step = 1, #shapes do
+        local shape = shapes[(at + step - 1) % #shapes + 1]
+        if shape.fits then
+            Set(unit, shape, false)
+            return true, shape
+        end
+    end
+    return false
+end
+
 -- whether the mouse is on the open flyout, its bar button or the grip itself
 local function Over()
     if not shown then return false end

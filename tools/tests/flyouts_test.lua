@@ -381,10 +381,10 @@ do
             end
         end
     end
-    check(inside >= 15 and #outside == 0, ("all %d of the page's controls are inside it; outside: %s"):format(inside,
+    check(inside >= 20 and #outside == 0, ("all %d of the page's controls are inside it; outside: %s"):format(inside,
         table.concat(outside, ", ")))
     -- it scrolls as far as its lowest control, the last check box
-    local last = page.checks.plate
+    local last = page.arrange.plate
     content.rect, last.rect = { 0, 500, 1000, 999 }, { 0, 20, 300, 280 }
     scroll.h = 500
     NS.ProfileUI.Fit()
@@ -957,39 +957,54 @@ do
     tap("E")
 end
 
-print("the settings page has no Arrange a flyout: a flyout is arranged on the flyout itself")
+print("arranging a flyout without a drag, from the settings page")
 do
-    -- His words (2026-11-22): "remove the arrange a flyout part of the settings too. can just do it live idk
-    -- why thats there"
-    local found = {}
-    for _, f in ipairs(W.all) do
-        local up = f.parent
-        while up and up ~= page do up = up.parent end
-        local text = tostring(f.text or "")
-        if up == page and (text == "Previous" or text == "Next" or text == "Turn" or text == "Take Off") then
-            found[#found + 1] = text
-        end
-    end
-    check(page.arrange == nil and NS.Arrange == nil and #found == 0,
-        "no Previous, Next, Turn or Take Off on the page: " .. table.concat(found, ", "))
-    local w = page.checks
-    check(w ~= nil and w.ranks ~= nil and w.hide ~= nil and w.around ~= nil and w.faces ~= nil and w.plate ~= nil
-        and NS.Checks.TEXT.head == "Flyout options", "the five check boxes that stood beside it stay, under a heading of their own")
-    local point, to = w.plate:GetPoint()
-    check(point == "TOPLEFT" and to == w.around, "the round background's box is under the one it goes with")
-    -- a box pressed sets its choice, and a refusal leaves it showing what stands
-    w.hide.checked = false
-    w.hide.scripts.OnClick(w.hide)
-    check(NS.Flyouts.Hiding() == false, "a box pressed sets its choice")
+    local Arrange, w = NS.Arrange, page.arrange
+    local function press(button) button.scripts.OnClick(button) end
+    check(w ~= nil and #w.icons == 6 and w.off ~= nil, "the page has the arrange row: six icon places, Previous, Next and Take Off")
+    -- His words (2026-11-22): "ok leave it if needed for controllers. but put reminder there that you can
+    -- simply drag spells onto each other where the \"+\" appears to create the flyouts so ppl dont think
+    -- they HAVE to go through that ... for non controller users"
+    local live = w.live and w.live.text or ""
+    check(live:find("With a mouse none of this is needed", 1, true) ~= nil and live:find("drag a spell, item or macro onto a bar button", 1, true) ~= nil
+        and live:find("where the + appears", 1, true) ~= nil and live:find("This section is for a controller.", 1, true) ~= nil,
+        "over it, a line for those with a mouse: a flyout is made by a drag onto the +, and this section is for a controller")
+    check(select(2, w.status:GetPoint()) == w.live, "the section's own line stands under that reminder")
+    -- the page up, as when it is being used: it follows what changes on the bars
+    page:Show()
+    flushAll()
+    check(w.which.text == "1 of 1: Spell 101" and w.icons[3].shown and not w.icons[4].shown and not w.off:IsEnabled(),
+        "it shows the flyout on the bars, an icon for each of its three")
+    press(w.icons[3])
+    check(Arrange.Held() == 3 and w.icons[3].scale == 1.25 and w.icons[3].ring.shown and w.off:IsEnabled()
+        and w.status.text:find("Spell 502", 1, true) ~= nil, "a press picks an icon up: it grows, and the page says what comes next")
+    press(w.icons[1])
+    check(order() == "502 101 501" and Arrange.Held() == nil and w.icons[1].scale == 1, "a press on another place moves it there")
+    press(w.icons[1])
+    press(w.icons[1])
+    check(order() == "502 101 501" and Arrange.Held() == nil, "a second press on the picked icon puts it down where it was")
+    press(w.icons[1])
+    press(w.icons[3])
+    check(order() == "101 501 502", "and it goes back the same way")
     W.combat = true
-    w.hide.checked = true
-    w.hide.scripts.OnClick(w.hide)
-    check(NS.Flyouts.Hiding() == false and w.hide:GetChecked() == false and W.errors[#W.errors]:find("fight") ~= nil,
-        "in a fight nothing is set, the reason is said, and the box shows what stands")
+    press(w.icons[1])
+    press(w.icons[2])
+    check(order() == "101 501 502" and W.errors[#W.errors]:find("fight"), "in a fight nothing moves")
     W.combat = false
-    w.hide.checked = true
-    w.hide.scripts.OnClick(w.hide)
-    check(NS.Flyouts.Hiding() == true, "and set back out of the fight")
+    press(w.icons[3])
+    press(w.off)
+    check(count(one) == 2 and lastChat("Spell 502 taken off the flyout") ~= nil and Arrange.Held() == nil,
+        "Take Off takes the picked icon off its flyout")
+    stack("ActionButton1", 502)
+    stack("ActionButton2", 601)
+    check(order() == "101 501 502" and w.which.text == "1 of 2: Spell 101" and w.next:IsEnabled(), "with two flyouts on the bars, Next is there")
+    press(w.next)
+    check(w.which.text:find("^2 of 2: ") ~= nil and w.icons[2].shown and not w.icons[3].shown, "Next shows the other flyout")
+    press(w.next)
+    check(w.which.text == "1 of 2: Spell 101", "and round to the first again")
+    NS.Flyouts.Remove(NS.Flyouts.At("ActionButton2"), 2)
+    check(w.which.text == "1 of 1: Spell 101", "a flyout taken away elsewhere is gone from the page too")
+    page:Hide()
 end
 
 print("an upright bar whose other buttons are empty and hidden")
@@ -1057,7 +1072,7 @@ do
     NS.Flyouts.Move(ranked, 4, 1)
     check(ids(ranked) == "9001 9002 777 9003", "with a rank the game does not name, they go by the spells' own numbers")
     W.ranks[9002][2] = 2
-    local box = page.checks.ranks
+    local box = page.arrange.ranks
     check(box ~= nil and box:GetChecked() and NS.Flyouts.Ranked(), "the settings page has a check box for it, on to begin with")
     box.checked = false
     box.scripts.OnClick(box)
@@ -1280,9 +1295,9 @@ do
     -- none of its items, and the spell taken off: nothing to show, yet still reached from the settings
     bags({})
     check(ids(own) == "9101" and NS.Flyouts.At("ActionButton8") == own, "with none of the items it shows what is left: the spell")
-    NS.Checks.Refresh()
-    local box = page.checks.hide
-    check(box ~= nil and box:GetChecked(), "the settings page has a check box for it, ticked")
+    NS.Arrange.Refresh()
+    local box = page.arrange.hide
+    check(box ~= nil and box:GetChecked(), "the settings page has a check box for it under Arrange, ticked")
     -- what is saved is the whole
     fire("PLAYER_LOGOUT")
     check(own.all == nil and #own.entries == 6, "what is saved is the whole flyout")
@@ -1502,15 +1517,18 @@ do
     fire("PLAYER_REGEN_ENABLED")
     flushAll()
     if unit.menu:IsShown() then tap("E") end
-    -- every shape there is, for the grip to offer
+    -- stepped through from the settings, for those with no mouse
     bar(500)
-    local seen, kinds = {}, 0
-    for _, shape in ipairs(Turn.Shapes(unit)) do
-        local name = shape.side .. ">" .. shape.run .. (shape.mid and " centered" or "")
-        if not seen[name] then seen[name], kinds = true, kinds + 1 end
+    NS.Arrange.Refresh()
+    local seen = {}
+    for _ = 1, 16 do
+        page.arrange.turn.scripts.OnClick(page.arrange.turn)
+        seen[unit.side .. ">" .. unit.way .. (unit.mid and " centered" or "")] = true
     end
-    check(kinds == 16 and seen["DOWN>RIGHT centered"] and seen["LEFT>DOWN centered"] and Turn.Next == nil,
-        "the grip is offered all sixteen shapes, the centered ones among them")
+    local kinds = 0
+    for _ in pairs(seen) do kinds = kinds + 1 end
+    check(kinds == 16 and seen["DOWN>RIGHT centered"] and seen["LEFT>DOWN centered"] and flyout.side == nil,
+        "the Turn button under Arrange steps through all sixteen, the centered ones among them, and comes round to the bar's own")
     unit.menu.over = nil
     for i = 1, 12 do W.frames["ActionButton" .. i].cx, W.frames["ActionButton" .. i].cy = was[i][1], was[i][2] end
     NS.Flyouts.SetShape(flyout, nil)
@@ -2432,8 +2450,8 @@ do
     local _, plain = F2.At("ActionButton1")
     check(plain ~= nil and plain.radial == false, "a flyout on any other bar is a strip as ever")
     local page = NS.Options and NS.Options.Page and NS.Options.Page()
-    if page and page.checks and page.checks.around then
-        check(page.checks.around:GetChecked() == true and page.checks.faces:GetChecked() == false, "the settings show both choices")
+    if page and page.arrange and page.arrange.around then
+        check(page.arrange.around:GetChecked() == true and page.arrange.faces:GetChecked() == false, "the settings show both choices")
     end
     -- His words (2026-11-21): "why would we not let users move an icon anywhere they want on the dial? why
     -- would they HAVE to swap with an existing one?" An icon stands on the spot it is put on, taken or
