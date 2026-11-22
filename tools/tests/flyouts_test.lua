@@ -1521,6 +1521,13 @@ do
     -- takes the ability; a taken one takes it too, and the dialog then holds the old one.
     local dialog = CreateFrame("Frame", "TestPadBindDialog", UIParent)
     dialog.BindingInfoFrame = CreateFrame("Frame", nil, dialog)
+    -- the box's own words: its title, its instruction, and the name and icon of the ability it holds
+    local box = dialog.BindingInfoFrame
+    box.TitleBox = CreateFrame("Frame", nil, box)
+    box.TitleBox.TitleText = box.TitleBox:CreateFontString()
+    box.BindInstructionText, box.ActionName, box.ActionIcon = box:CreateFontString(), box:CreateFontString(), box:CreateTexture()
+    for _, region in ipairs({ box.TitleBox.TitleText, box.BindInstructionText, box.ActionName, box.ActionIcon }) do region.alpha = 1 end
+    dialog.ActionTooltip = CreateFrame("Frame", nil, dialog)
     dialog:Hide()
     -- As the game's: while it is up the bar itself is put away, and the dialog shows copies
     -- of the bar's buttons, each of the same slot as the button it stands for.
@@ -1736,7 +1743,26 @@ do
             and prompts.left.shown and not prompts.edit.shown and GetActionInfo(7) == nil,
             "a flyout's button picked up: its ability is off the button and held, and A offers Edit Flyout")
         check(Pad.View():IsShown() and Pad.View().count == 3 and Pad.View().marked == nil, "with a picture of that flyout")
+        check(box.BindInstructionText.alpha == 1 and box.ActionName.alpha == 1 and (Pad.Panel() == nil or not Pad.Panel():IsShown()),
+            "the box still speaks of the ability the game holds: that is what is so until A is pressed")
         press("PAD1")
+        -- His words (2026-11-21): "not intuitive at all": it did not say how to select, rearrange or move;
+        -- no option for the background was to be seen; and the game's box still said "Press the button
+        -- combination you want to use for".
+        local words = Pad.Panel()
+        check(box.BindInstructionText.alpha == 0 and box.ActionName.alpha == 0 and box.ActionIcon.alpha == 0
+            and box.TitleBox.TitleText.alpha == 0 and not dialog.ActionTooltip:IsShown(),
+            "editing, the game's words about binding the ability are out of sight")
+        check(words ~= nil and words:IsShown() and words.title.text == "Edit Flyout"
+            and words.selected.text == "Selected: Spell 771 (1 of 3). It is lit in the picture below.",
+            "and the box says Edit Flyout, and which icon is selected: " .. tostring(words.selected.text))
+        local seen = {}
+        for i, line in ipairs(words.lines) do seen[i] = (line.lit and "> " or "") .. line.text end
+        check(#words.lines == 5 and words.lines[1].lit and words.lines[1].text:find("Select the next icon", 1, true)
+            and words.lines[2].text == "Move the selected icon to the next place" and words.lines[3].text == "Take the selected icon off the flyout"
+            and words.lines[4].text == "Pick with the face buttons (now: the D-pad)" and words.lines[5].text == "Hide the round background"
+            and words.lines[2].alpha < 1 and words.lines[1].alpha == 1,
+            "every option is listed at once, the background among them, the one A does lit: " .. table.concat(seen, " | "))
         local e = Pad.Editing()
         check(e ~= nil and e.flyout == target and select(2, GetActionInfo(7)) == 771 and NS.Flyouts.At("ActionButton7") == target
             and ids() == "771 772 773",
@@ -1747,7 +1773,9 @@ do
         press("PAD1")
         check(Pad.Editing().mark == 2 and Pad.View().marked == 2 and Pad.View().tokens[2].ring.shown, "A: the next icon is marked")
         press("PAD4")
-        check(prompts.add.label == "Move Icon On", "Y: the next option, to move the marked icon on")
+        check(prompts.add.label == "Move Icon On" and words.lines[2].lit and not words.lines[1].lit
+            and words.selected.text:find("2 of 3", 1, true) ~= nil,
+            "Y: the next line of the list is lit, to move the selected icon on")
         press("PAD1")
         check(ids() == "771 773 772" and Pad.Editing().mark == 3 and Pad.View().marked == 3,
             "A: the marked icon moves one place on and stays marked: " .. ids())
@@ -1775,6 +1803,8 @@ do
         press("PAD1")
         check(NS.Flyouts.At("ActionButton7") == nil and Pad.Editing() == nil and not up(),
             "the last but one taken off, the flyout is no more and the editing is over")
+        check(box.BindInstructionText.alpha == 1 and box.ActionName.alpha == 1 and box.TitleBox.TitleText.alpha == 1
+            and not Pad.Panel():IsShown(), "and the box has its own words back")
         dialog:TransitionToSelectActionToPickup()
         dialog:ExitEditMode()
         W.placed[7] = nil

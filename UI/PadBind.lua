@@ -41,6 +41,16 @@ local TEXT = {
     toolMove = "Move Icon On",
     toolOff = "Take Icon Off",
     unbind = "Unbind",
+    -- the game's box while a flyout is edited: its title, the icon selected, and every option in a list
+    editTitle = "Edit Flyout",
+    selected = "Selected: %s (%d of %d). It is lit in the picture below.",
+    lineNext = "Select the next icon",
+    lineMove = "Move the selected icon to the next place",
+    lineOff = "Take the selected icon off the flyout",
+    lineFaces = "Pick with the face buttons (now: the D-pad)",
+    lineDpad = "Pick with the D-pad (now: the face buttons)",
+    lineHide = "Hide the round background",
+    lineShow = "Show the round background",
     refused = "The game kept the new ability on the button, so no flyout was made.",
 }
 G.TEXT, G.KEY = TEXT, KEY_ADD
@@ -55,6 +65,12 @@ local picked, editing
 local VIEW_DOWN = 56
 local view
 local TOOLS = { "next", "move", "off", "faces", "plate" }
+-- Our words in the game's box while a flyout is edited, and the pieces of the box put out of sight for
+-- them. The list in the box: how far in and down its first line stands, the room a line takes, the size
+-- of the button symbol on the line that is lit, and how dim the other lines are.
+local panel, covered
+local LIST_X, LIST_Y, LIST_STEP, LIST_GLYPH, LIST_DIM = 70, 74, 18, 14, 0.6
+local SEL_Y = 46
 -- between the dialog's opening for a bind and its shutting; else abilities are being moved
 local binding = false
 -- when the dialog last placed an ability: that press is not also a press on a hint
@@ -288,6 +304,89 @@ local function ToolText(e)
     return F.Plate() and TEXT.plateOff or TEXT.plateOn
 end
 
+-- an option as its line in the list reads
+local function LineText(e, tool)
+    if tool == "next" then return TEXT.lineNext end
+    if tool == "move" then return TEXT.lineMove end
+    if tool == "off" then return TEXT.lineOff end
+    if tool == "faces" then return F.Faces(e.flyout) and TEXT.lineDpad or TEXT.lineFaces end
+    return F.Plate() and TEXT.lineHide or TEXT.lineShow
+end
+
+-- The pieces of the game's box that speak of binding an ability: its title, its instruction, and the
+-- ability's name and icon. Only looked up; none of the box's fields is written.
+local function Theirs(frame)
+    local box = type(frame) == "table" and frame.BindingInfoFrame
+    local out = {}
+    if type(box) ~= "table" then return out, nil end
+    local title = type(box.TitleBox) == "table" and box.TitleBox.TitleText or nil
+    for _, region in ipairs({ box.BindInstructionText, box.ActionName, box.ActionIcon, title }) do
+        if type(region) == "table" and region.SetAlpha then out[#out + 1] = region end
+    end
+    return out, title
+end
+
+-- While a flyout is edited the box says so: the game's words there are about binding the ability it
+-- thinks it holds. They are made unseen, not changed, and seen again when the editing ends.
+local function Cover(frame, on)
+    if on == (covered ~= nil) then return end
+    if on then
+        covered = Theirs(frame)
+        for _, region in ipairs(covered) do region:SetAlpha(0) end
+        local tip = frame.ActionTooltip
+        if type(tip) == "table" and tip.Hide then tip:Hide() end
+    else
+        for _, region in ipairs(covered) do region:SetAlpha(1) end
+        covered = nil
+        if panel then panel:Hide() end
+    end
+end
+
+-- our words in the box: what is being done, which icon is selected, and every option, the one the
+-- bottom button does now lit and marked with that button's symbol
+local function Panel(frame, e)
+    local box = frame.BindingInfoFrame or frame
+    if not panel then
+        panel = CreateFrame("Frame", nil, holder)
+        panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge2")
+        panel.selected = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        panel.lines = {}
+        for i = 1, #TOOLS do panel.lines[i] = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal") end
+    end
+    -- in the box's own layer, over what it draws
+    if box.GetFrameStrata and box.GetFrameLevel then
+        panel:SetFrameStrata(box:GetFrameStrata())
+        panel:SetFrameLevel(box:GetFrameLevel() + LIST_STEP)
+    end
+    panel:ClearAllPoints()
+    panel:SetAllPoints(box)
+    local _, title = Theirs(frame)
+    panel.title:ClearAllPoints()
+    if title then
+        panel.title:SetPoint("CENTER", title, "CENTER")
+    else
+        panel.title:SetPoint("TOP", panel, "TOP", 0, -LIST_STEP)
+    end
+    panel.title:SetText(TEXT.editTitle)
+    local flyout = e.flyout
+    local entry = flyout.entries[e.mark]
+    panel.selected:ClearAllPoints()
+    panel.selected:SetPoint("TOP", panel, "TOP", 0, -SEL_Y)
+    panel.selected:SetText(TEXT.selected:format(entry and F.Name(entry) or "", e.mark, #flyout.entries))
+    for i, tool in ipairs(TOOLS) do
+        local line = panel.lines[i]
+        local lit = i == e.tool
+        line:ClearAllPoints()
+        line:SetPoint("TOPLEFT", panel, "TOPLEFT", LIST_X, -(LIST_Y + (i - 1) * LIST_STEP))
+        local text = LineText(e, tool)
+        if lit then text = F.PadText(KEY_ADD, LIST_GLYPH) .. " " .. text end
+        line:SetText(text)
+        line:SetAlpha(lit and 1 or LIST_DIM)
+        line.lit = lit
+    end
+    panel:Show()
+end
+
 -- The bar in Edit Action Bar, on a button that has a flyout. Picked up: the bottom button offers to
 -- edit the flyout, the others are the game's, named as it names them. Editing: the bottom button does
 -- the option shown, the top one goes to the next option, and the right one ends it.
@@ -307,9 +406,14 @@ local function ShowEdit(frame)
     prompts.back:Show()
     prompts.back:SetPromptText(e and TEXT.close or (FRAME_ACTION_CANCEL or TEXT.cancel))
     Up(frame, bar)
+    -- the box says what is going on: the game's own words while it only holds the ability, ours once
+    -- the flyout is being edited
+    Cover(frame, e ~= nil)
+    if e then Panel(frame, e) end
 end
 
 local function Hide()
+    if watched then Cover(watched, false) end
     if holder then holder:Hide() end
 end
 
@@ -389,6 +493,7 @@ end
 function G.Editing() return editing end
 function G.Picked() return picked end
 function G.View() return view end
+function G.Panel() return panel end
 
 -- The flyout just made picks with the pad's other cross: the face buttons for the D-pad, or back.
 function G.Swap()
