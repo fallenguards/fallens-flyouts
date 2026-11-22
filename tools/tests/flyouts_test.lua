@@ -109,6 +109,61 @@ check(not window:IsShown() and W.errors[#W.errors]:find("fight"), "in a fight th
 W.combat = false
 check(W.released == 4, "each showing hands the game's icon list back")
 
+print("one of the flyout's own icons on the bar button, and a way back")
+do
+    -- His words (2026-11-21): a row over the first row of icons with the icons of every spell in the flyout;
+    -- picking one shows that spell's tooltip on the bar as well, so its cooldown is seen without opening the
+    -- flyout; and a button like "Reset to default icon".
+    local record = NS.Flyouts.At("ActionButton1")
+    local function ids()
+        local out = {}
+        for i, e in ipairs(record.entries) do out[i] = tostring(e.id) end
+        return table.concat(out, " ")
+    end
+    local order = ids()
+    rightClick(host)
+    local own, reset = NS.Icon.own, NS.Icon.reset
+    check(own ~= nil and own:IsShown() and own.buttons[1]:IsShown() and own.buttons[2].Icon.texture == record.entries[2].id
+        and not own.buttons[#record.entries + 1]:IsShown(),
+        "the window has a row of the flyout's own icons, one for each")
+    check(window.IconSelector.point[5] == -(97 + 52) and window.IconSelector.height == 361 - 52,
+        "the game's list starts under the row")
+    check(own.buttons[1].SelectedTexture:IsShown() and not own.buttons[2].SelectedTexture:IsShown(),
+        "the one the bar button holds is marked")
+    check(reset ~= nil and reset.text == "Reset to default icon", "and there is a button to reset to the default icon")
+    local second = record.entries[2]
+    own.buttons[2].scripts.OnClick(own.buttons[2])
+    check(own.buttons[2].SelectedTexture:IsShown() and not own.buttons[1].SelectedTexture:IsShown()
+        and window.BorderBox.SelectedIconArea.SelectedIconButton:GetIconTexture() == second.id,
+        "one clicked in the row is the one picked")
+    window:OkayButton_OnClick()
+    flushAll()
+    local kind, id = GetActionInfo(1)
+    check(kind == "spell" and id == second.id and W.cursor == nil,
+        "Okay puts that one on the bar button itself: the game then shows its icon, tooltip and cooldown there")
+    check(NS.Flyouts.At("ActionButton1") == record and record.main.id == second.id and ids() == order and saved() == nil,
+        "the flyout stays on its button with every icon in its place, led by the one picked")
+    rightClick(host)
+    check(own.buttons[2].SelectedTexture:IsShown(), "opened again, the row marks the one on the button now")
+    reset.scripts.OnClick(reset)
+    flushAll()
+    kind, id = GetActionInfo(1)
+    check(not window:IsShown() and kind == "spell" and id == 101 and record.main.id == 101 and record.first == nil and ids() == order,
+        "Reset to default icon puts back the ability the button had")
+    -- an icon of the game's list is reset the same way
+    rightClick(host)
+    window.IconSelector.picked(3, FIRE)
+    window:OkayButton_OnClick()
+    rightClick(host)
+    reset.scripts.OnClick(reset)
+    check(saved() == nil and not face():IsShown(), "and takes an icon picked from the game's list off again")
+    W.combat = true
+    local ok, why = NS.Flyouts.Lead(record, second)
+    check(ok == false and why:find("fight") ~= nil and record.main.id == 101, "nothing is put on a bar button in a fight")
+    W.combat = false
+    flushAll()
+end
+
 print("an icon's frame hugs the icon, as on the game's own flyout")
 do
     local Art = NS.Art

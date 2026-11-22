@@ -3,6 +3,8 @@
 ## [1.1.1] - 2026-11-21
 
 ### Added
+- The icon window (right-click a flyout's button) has a row of the flyout's own icons over the game's list. Pick one and it goes onto the bar button itself, so its icon, tooltip and cooldown are there to see without opening the flyout. What was on the button stays in the flyout.
+- Reset to default icon, in the same window: the button gets back the ability it had, and any icon picked for it is taken off.
 - A flyout lying along a side of its button can be centered on the button. Drag its grip to the middle of that side of the button and it snaps there; the Turn button under Arrange a flyout in the settings steps through the centered shapes too.
 
 ### Changed

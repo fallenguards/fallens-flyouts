@@ -3,6 +3,7 @@ local _, ns = ...
 -- luacheck: read globals SetOverrideBindingClick ClearOverrideBindings GameTooltip C_GamePad GetBindingText
 -- luacheck: read globals issecretvalue C_CVar C_Container GetMacroSpell GetMacroItem IsUsableItem geterrorhandler
 -- luacheck: read globals Settings IsModifiedClick GetModifiedClick PickupSpell PickupItem PickupMacro IsMouseButtonDown
+-- luacheck: read globals PlaceAction ClearCursor GetCursorInfo
 -- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding ACTIONBAR_HOTKEY_FONT_COLOR
 
 -- Flyouts on bar buttons. One secure root owns every key.
@@ -36,6 +37,7 @@ local TEXT = {
     fight = "Flyouts change only out of a fight.",
     full = "That flyout is full.",
     twice = "That is in the flyout already.",
+    noPick = "That one cannot be picked up just now.",
     noLead = "That button's action cannot lead a flyout.",
     auto = "That flyout fills itself from your bags.",
     how = "Drag",
@@ -341,7 +343,7 @@ local function Pickup(entry)
     end
 end
 
-F.Name, F.TakeOff, F.Pickup = Name, TakeOff, Pickup
+F.Name, F.TakeOff, F.Pickup, F.Same = Name, TakeOff, Pickup, Same
 
 -- dragged out as off a bar: off the flyout and onto the cursor
 function F.CarryOff(unit, i)
@@ -828,6 +830,54 @@ end
 
 -- a right-click on a flyout's bar button opens the icon window
 -- while keys are being set, a hover on the bar button opens its flyout
+-- Another of a flyout's own icons goes onto its bar button, in the place of the one there. The button
+-- then is that one: its icon, tooltip, cooldown and count, shown by the game itself. What was there
+-- stays in the flyout, and the first one so replaced is remembered as the button's own, for a reset.
+function F.Lead(flyout, entry)
+    if InCombatLockdown() then return false, TEXT.fight end
+    if not (list and flyout and entry) or flyout.auto or Run(flyout).lost then return false end
+    local host = Bars.Named(flyout.host)
+    local slot = host and Bars.Slot(host)
+    if not slot then return false end
+    flyout.icon = nil
+    local was = flyout.main
+    if was and Same(was, entry) then
+        F.Apply()
+        return true
+    end
+    ClearCursor()
+    Pickup(entry)
+    if not GetCursorInfo() then return false, TEXT.noPick end
+    flyout.main = Copy(entry)
+    PlaceAction(slot)
+    ClearCursor()
+    if was and not flyout.first then flyout.first = Copy(was) end
+    if flyout.first and Same(flyout.first, entry) then flyout.first = nil end
+    ns.Log(("lead: %s now holds %s:%s of its flyout"):format(tostring(flyout.host), tostring(entry.kind),
+        tostring(entry.id)))
+    F.Apply()
+    return true
+end
+
+-- The button's own again: no icon of the player's choosing, and the ability it had before another of
+-- the flyout's was put on it, when that one is still in the flyout.
+function F.Reset(flyout)
+    if InCombatLockdown() then return false, TEXT.fight end
+    if not (list and flyout) then return false end
+    flyout.icon = nil
+    local first = flyout.first
+    for _, entry in ipairs(first and F.Full(flyout) or {}) do
+        if Same(entry, first) then
+            local ok, why = F.Lead(flyout, entry)
+            flyout.first = nil
+            return ok, why
+        end
+    end
+    flyout.first = nil
+    F.Apply()
+    return true
+end
+
 local function HostEntered(self)
     if not (ns.Keys and ns.Keys.On()) then return end
     local _, unit = F.At(self:GetName())

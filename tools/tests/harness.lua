@@ -258,8 +258,8 @@ local function iconWindow(f)
         SetIconTexture = function(self, v) self.v = v == QUESTION_PATH and 134400 or v end,
         GetIconTexture = function(self) return self.v end,
     }
-    f.BorderBox = { EditBoxHeaderText = region(), OkayButton = region(), IconSelectorEditBox = region(),
-        SelectedIconArea = { SelectedIconButton = chosen } }
+    f.BorderBox = { EditBoxHeaderText = region(), OkayButton = region(), CancelButton = region(),
+        IconSelectorEditBox = region(), SelectedIconArea = { SelectedIconButton = chosen } }
     f.IconSelector = {
         SetSelectedCallback = function(self, fn) self.picked = fn end,
         SetSelectedIndex = function(self, i) self.index = i end,
@@ -267,6 +267,11 @@ local function iconWindow(f)
         SetSelectionsDataProvider = function(self, get, num) self.get, self.num = get, num end,
         ScrollToSelectedIndex = noop,
         UpdateSelections = function(self) self.updates = (self.updates or 0) + 1 end,
+        -- the list can be moved and sized, as any frame
+        ClearAllPoints = function(self) self.point = nil end,
+        SetPoint = function(self, ...) self.point = { ... } end,
+        SetHeight = function(self, h) self.height = h end,
+        GetFrameLevel = function() return 2 end,
     }
 end
 
@@ -275,6 +280,13 @@ function CreateFrame(otype, name, parent, template)
     local f = setmetatable({ name = name, scripts = {}, attrs = {}, shown = true, otype = otype, parent = parent,
         protected = protected }, Frame)
     if template == "IconSelectorPopupFrameTemplate" then iconWindow(f) end
+    -- the game's icon button of its selector lists: an icon and a mark for the one picked
+    if template == "SelectorButtonTemplate" then
+        f.Icon, f.SelectedTexture = f:CreateTexture(), f:CreateTexture()
+        f.SelectedTexture:Hide()
+        f.SetIconTexture = function(self, v) self.Icon:SetTexture(v) end
+        f.GetIconTexture = function(self) return self.Icon.texture end
+    end
     if name then W.frames[name] = f; _G[name] = f end
     W.all[#W.all + 1] = f
     return f
