@@ -24,6 +24,7 @@
 - An error from the spellbook while the addon looked for bar buttons ("attempt to index a nil value" in the game's spellbook code).
 - Flyouts showed through windows that were over the action bars. A flyout is now in the same layer as its bar, so such a window covers it too.
 - The arrow on a flyout's button could stay dimmed after a click.
+- In gamepad mode the mark on a flyout's button was sized late when its group grew or shrank. It keeps the button's size at every moment now.
 - A flyout lying along a side of its button had no edge at its near end. It is closed at both ends now.
 - A spell dragged out of a flyout had to be clicked onto a bar spot. Letting go over the spot now places it, as with a spell dragged from anywhere else.
 

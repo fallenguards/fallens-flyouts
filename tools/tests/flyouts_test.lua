@@ -2051,6 +2051,17 @@ do
         "its button is marked by four dots at its corner, as the pad's buttons lie, and wears no arrow")
     check(unit.plate.rim.shown and unit.hub.shown and unit.hub.icon.texture == 811,
         "open, a round plate with a rim lies behind the icons, the button's own icon at its middle")
+    -- His words (2026-11-21): the symbol's "resize is delayed" when a group of gamepad mode is picked and
+    -- grows. It was sized again only at the next laying out, up to a second on.
+    local dot = unit.dots.pieces[2].dot
+    local was, wasX = dot.w, dot.point[4]
+    unit.host.w = (unit.host.w or 100) * 2
+    unit.host.scripts.OnSizeChanged(unit.host)
+    check(dot.w == was * 2 and dot.point[4] == wasX * 2 and unit.grown == 2,
+        "its button grown to twice its size, the dots are twice as large and as far in at once, with no laying out between")
+    unit.host.w = unit.host.w / 2
+    unit.host.scripts.OnSizeChanged(unit.host)
+    check(dot.w == was and unit.grown == 1, "and back with it")
     tap(unit.keys[1] or "1")
     unit.menu.over = true
     NS.Turn.Poll()

@@ -171,7 +171,7 @@ function A.LayDisc(disc, frame, radius)
 end
 -- A mark for a button whose flyout opens around it: four small gold dots in a cross, as the pad's
 -- buttons lie. It points no way, where the bar arrow would seem to name a D-pad button.
-local DOT, DOT_RIM, DOT_OUT, DOT_IN = 4, 1, 4, 7
+local DOT, DOT_RIM, DOT_OUT, DOT_IN = 6, 1, 6, 10
 local GOLD, DARK = { 1, 0.82, 0.25 }, { 0.08, 0.05, 0.02 }
 local DOT_WAYS = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
 function A.Dots(owner)
@@ -192,17 +192,21 @@ function A.Dots(owner)
     end
     return dots
 end
--- at the top right corner of that button, or put away
-function A.LayDots(dots, host, on)
+-- At the top right corner of that button, or put away. `grown`: how much larger the button is now than
+-- when its marks were last laid (the game grows a group of gamepad mode while it is picked).
+function A.LayDots(dots, host, on, grown)
+    grown = grown or 1
     dots.shown = on == true and dots.known
     for i, piece in ipairs(dots.pieces) do
         piece.rim:SetShown(dots.shown)
         piece.dot:SetShown(dots.shown)
         if dots.shown then
             local x, y = -DOT_IN + DOT_WAYS[i][1] * DOT_OUT, -DOT_IN + DOT_WAYS[i][2] * DOT_OUT
+            piece.rim:SetSize((DOT + 2 * DOT_RIM) * grown, (DOT + 2 * DOT_RIM) * grown)
+            piece.dot:SetSize(DOT * grown, DOT * grown)
             for _, texture in ipairs({ piece.rim, piece.dot }) do
                 texture:ClearAllPoints()
-                texture:SetPoint("CENTER", host, "TOPRIGHT", x, y)
+                texture:SetPoint("CENTER", host, "TOPRIGHT", x * grown, y * grown)
             end
         end
     end

@@ -255,14 +255,34 @@ local function Arrow(unit, art)
     local turn = Art.TURN[unit.side or unit.way or "UP"].arrow
     if unit.menu:IsShown() then turn = (turn + 180) % 360 end
     unit.turn = turn
-    Art.Set(unit.arrow, Art.NAMES[unit.art], turn, ARROW_W, ARROW_H)
+    -- as much larger as its button is now than when it was laid
+    local grown = unit.grown or 1
+    Art.Set(unit.arrow, Art.NAMES[unit.art], turn, ARROW_W * grown, ARROW_H * grown)
     -- the game draws it 2 closer while open; left as it is in a fight
     local side, host = Art.SIDES[unit.side or unit.way or "UP"], unit.host
     if host and not InCombatLockdown() then
-        local out = unit.menu:IsShown() and ARROW_OPEN or ARROW_OUT
+        local out = (unit.menu:IsShown() and ARROW_OPEN or ARROW_OUT) * grown
         unit.arrow:ClearAllPoints()
         unit.arrow:SetPoint(side.to, host, side.to, side.x * out, side.y * out)
     end
+end
+
+-- A flyout's button changed size under its marks: the game grows a group of gamepad mode as it is
+-- picked, and lets it shrink again. The dots or the arrow are sized again at once, not at the next
+-- laying out. They are plain textures, so this is done in a fight too.
+local function Remark(unit)
+    local host, scale = unit.host, unit.opener:GetScale()
+    if not host or not unit.flyout then return end
+    local now = Bars.Size(host)
+    unit.grown = (scale and scale > 0) and now / scale or 1
+    -- written down when it has changed by a tenth or more since last written
+    if math.abs(unit.grown - (unit.grownSaid or 1)) >= 0.1 then
+        unit.grownSaid = unit.grown
+        ns.Log(("marks: %s is now %.2f of the size it was laid at; its marks follow at once"):format(
+            tostring(host:GetName()), unit.grown))
+    end
+    Art.LayDots(unit.dots, host, unit.radial, unit.grown)
+    if not unit.dots.shown then Arrow(unit) end
 end
 
 local function EntryTip(self)
@@ -940,6 +960,10 @@ function F.Reset(flyout)
     return true
 end
 
+local function HostSized(self)
+    local _, unit = F.At(self:GetName())
+    if unit then Remark(unit) end
+end
 local function HostEntered(self)
     if not (ns.Keys and ns.Keys.On()) then return end
     local _, unit = F.At(self:GetName())
@@ -1029,6 +1053,7 @@ local function Lay(unit)
     -- the button's child: shows and hides with its bar
     opener:SetParent(host)
     opener:SetScale(Bars.Size(host))
+    unit.grown = 1
     opener:SetFrameStrata(host:GetFrameStrata())
     opener:SetFrameLevel(host:GetFrameLevel() + 10)
     opener:ClearAllPoints()
@@ -1424,6 +1449,7 @@ function F.Apply()
                 if wrapped[name] then
                     host:HookScript("PostClick", HostClicked)
                     host:HookScript("OnEnter", HostEntered)
+                    host:HookScript("OnSizeChanged", HostSized)
                 end
             end
             root:SetAttribute("host-" .. name, used)
