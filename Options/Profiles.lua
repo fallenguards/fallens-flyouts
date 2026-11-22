@@ -342,7 +342,7 @@ function UI.Build()
 end
 
 function ns.OpenOptions()
-    if InCombatLockdown() then return ns.Say(TEXT.fight) end
+    if InCombatLockdown() then return ns.Warn(TEXT.fight) end
     if category and Settings.OpenToCategory then Settings.OpenToCategory(category:GetID()) end
 end
 

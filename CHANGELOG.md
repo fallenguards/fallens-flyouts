@@ -3,7 +3,7 @@
 ## [1.1.3] - 2026-11-22
 
 ### Added
-- A first login with the addon shows a short dialog, once: one line on how a flyout is made, and the flyouts that fill themselves (Food, Drink, Potions and the rest) in a row, each ready to be dragged onto a bar from there. Okay, its x or Escape closes it for good. Anyone who already has a flyout never sees it.
+- A first login with the addon shows a small window, once: one line on how a flyout is made, and the preset flyouts that keep themselves filled from your bags (Food, Drink, Potions and the rest) in a row, each ready to be dragged onto a bar from there. It is one of the game's own windows in look and can be dragged about. Okay or its x closes it for good. Anyone who already has a flyout never sees it.
 
 ### Fixed
 - An error in another addon that listens to this one could stop flyouts being laid out and followed: a flyout then stayed on a button whose ability had been dragged off. Such an error is now reported and stops nothing.
@@ -15,6 +15,7 @@
 - The settings page says, over Arrange a flyout, that none of it is needed with a mouse: a flyout is made by dragging a spell, item or macro onto a bar button, where the + appears. That section is for a controller.
 
 ### Removed
+- The chat lines that told what had just been done are gone: an icon taken off a flyout, a flyout removed with its button, an ability added to a flyout in gamepad mode.
 - Set Keys is gone from the settings page. A key for an icon inside a flyout is set the game's own ways: in its Keybindings options, or by hovering the icon in Quick Keybind Mode and pressing the key.
 
 ## [1.1.2] - 2026-11-21

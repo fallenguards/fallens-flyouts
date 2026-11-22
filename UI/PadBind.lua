@@ -28,7 +28,6 @@ local TEXT = {
     close = "Done",
     edit = "Edit Action Bar",
     cancel = "Cancel",
-    done = "%s is in the flyout of %s now.",
     -- the flyout just made: which of the pad's crosses picks from it
     faces = "Use Face Buttons",
     dpad = "Use D-Pad",
@@ -806,7 +805,6 @@ function G.Stack()
     end
     ns.Log(("pad bind: %s:%s stacked with %s:%s on %s"):format(o.new.kind, tostring(o.new.id), o.old.kind,
         tostring(o.old.id), o.button and o.button:GetName() or "a button to be found"))
-    ns.Say(TEXT.done:format(F.Name(o.new), F.Name(o.old)))
     -- the dialog is still up: the bar now names the button that ends it, and the one that swaps the picks
     latest, latestSlot, G.moving = flyout, o.slot, o.moving
     if watched then Show(watched, o.moving, true) end

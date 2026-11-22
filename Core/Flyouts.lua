@@ -58,9 +58,6 @@ local TEXT = {
     howHeld = "%s-drag",
     remove = "%s to move it. Right-click takes it off the flyout.",
     removeLast = "%s to move it. Right-click takes it off, and the flyout with it: nothing else was added.",
-    took = "%s taken off the flyout.",
-    gone = "%s taken off. Nothing else was added, so the flyout is gone.",
-    cleared = "%s is off the bars. Its flyout is removed.",
     it = "It",
 }
 F.MAX, F.KEYS, F.PADS, F.CLOSE_KEYS, F.TEXT = MAX, KEYS, PADS, CLOSE_KEYS, TEXT
@@ -374,7 +371,7 @@ local function Name(entry)
     return TEXT.it
 end
 
--- an icon taken off: chat says what went, and if the flyout went too
+-- an icon taken off; a refusal is said in red, and nothing is said of what was plainly done
 local function TakeOff(unit, i)
     local flyout = unit.flyout
     local entry = flyout and flyout.entries[i]
@@ -384,7 +381,6 @@ local function TakeOff(unit, i)
         ns.Warn(more)
         return nil
     end
-    ns.Say((more and TEXT.gone or TEXT.took):format(Name(entry)))
     return entry
 end
 
@@ -2042,7 +2038,6 @@ function F.Discard(flyout)
         if Bars.Holds(button, flyout.main) then return false end
     end
     inHand[flyout] = nil
-    ns.Say(TEXT.cleared:format(Name(flyout.main)))
     ns.Log(("the button of %s was done away with: its flyout is removed"):format(Name(flyout.main)))
     Forget(flyout)
     F.Apply()

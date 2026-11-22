@@ -519,15 +519,14 @@ tap("E")
 rightClick(entry(one, 4))
 check(count(one) == 3 and menu:IsShown() and #W.casts == casts, "a right-click takes an entry out, casts nothing")
 check(#NS.Profiles.Data().flyouts[1].entries == 3, "and it is out of the saved flyout")
-check(lastChat("Spell 503 taken off the flyout") ~= nil, "chat says what was taken off")
+check(lastChat("taken off") == nil, "and chat says nothing of it: it was plain to see")
 tap("ESCAPE")
 tap("Q")
 rightClick(entry(two, 2))
 check(not opens("2") and not opens("Q") and #NS.Profiles.Data().flyouts == 1,
     "with its one added entry out, the second flyout is gone")
 check(opener("1") ~= nil and GetBindingAction("2", true) == "ACTIONBUTTON2", "and its key is the bar's again")
-check(lastChat("Spell 601 taken off. Nothing else was added, so the flyout is gone") ~= nil,
-    "and chat says the flyout went with it")
+check(lastChat("taken off") == nil and lastChat("flyout is gone") == nil, "and chat says nothing of that either")
 mouse(W.frames.ActionButton2)
 check(W.casts[#W.casts] == "action:2", "and a click on that button casts its own ability again")
 
@@ -634,7 +633,7 @@ Move.Tick(0.02)
 check(count(one) == 2 and W.cursor ~= nil and W.cursor[4] == 502 and menu:IsShown() and Move.Moving() == nil,
     "the mouse let go, it is off the flyout and still on the cursor, the flyout still open")
 check(entry(one, 1).alpha == 1 and entry(one, 2).alpha == 1 and along(entry(one, 2)) == slot(2), "the icons left close up, seen")
-check(lastChat("Spell 502 taken off the flyout") ~= nil, "chat says what was taken off")
+check(lastChat("taken off") == nil, "with no word of it in chat")
 plus().scripts.OnReceiveDrag(plus())
 check(count(one) == 3 and entry(one, 3).attrs.spell == 502 and W.cursor == nil,
     "dropped on the plus it is back in the flyout")
@@ -993,7 +992,7 @@ do
     W.combat = false
     press(w.icons[3])
     press(w.off)
-    check(count(one) == 2 and lastChat("Spell 502 taken off the flyout") ~= nil and Arrange.Held() == nil,
+    check(count(one) == 2 and lastChat("taken off") == nil and Arrange.Held() == nil,
         "Take Off takes the picked icon off its flyout")
     stack("ActionButton1", 502)
     stack("ActionButton2", 601)
@@ -1720,7 +1719,7 @@ do
     check(W.placed[2] == 702 and W.cursor == nil, "A: the old ability is back on the button and the cursor is empty")
     check(made ~= nil and #made.entries == 2 and made.main.id == 702 and made.entries[2].id == 703,
         "and the new one is in a flyout made on that button")
-    check(lastChat("Spell 703 is in the flyout of Spell 702 now") ~= nil and up() and prompts.back.label == "Done",
+    check(lastChat("is in the flyout of") == nil and up() and prompts.back.label == "Done",
         "chat says so, and the bar now says B is Done")
     -- His idea (2026-11-21): a quick swap of what picks from the flyout, as it is made, on a button the
     -- hint bar names.
@@ -2124,9 +2123,8 @@ do
             "a flyout's button picked up: the left button is named for what it does there: " .. tostring(prompts.left.label))
         lines = #W.chat
         dialog:TransitionToSelectActionToPickup()
-        check(not alive() and NS.Flyouts.At("ActionButton7") == nil and #W.chat == lines + 1
-            and W.chat[#W.chat]:find("is off the bars. Its flyout is removed.", 1, true) ~= nil,
-            "the game's Unbind on a flyout's button: the flyout is removed, and a chat line says so: " .. tostring(W.chat[#W.chat]))
+        check(not alive() and NS.Flyouts.At("ActionButton7") == nil and #W.chat == lines,
+            "the game's Unbind on a flyout's button: the flyout is removed, with no chat line about it")
         dialog:ExitEditMode()
         for _ = 1, 3 do flushAll() end
         W.cursor = { "spell", 7, "spell", 771, 771 }
@@ -2752,8 +2750,9 @@ do
     ClearCursor()
     settle()
     check(not alive() and F3.At("ActionButton9") == nil, "dragged off the bar and let go of: the flyout is removed")
-    check(#W.chat == lines + 1 and W.chat[#W.chat]:find("is off the bars. Its flyout is removed.", 1, true) ~= nil,
-        "and a chat line says so: " .. tostring(W.chat[#W.chat]))
+    -- His words (2026-11-22), of the line this used to print: "what the fuck is the point of these
+    -- messages? every time you make an addon i tell you to remove extranneous chat messages"
+    check(#W.chat == lines, "and nothing is said in chat: it was plain to see")
     fromBook(901, 9)
     check(select(2, GetActionInfo(9)) == 901 and F3.At("ActionButton9") == nil and #F3.List() == 0,
         "the same spell dragged from the spellbook onto that spot again: a plain button, no flyout comes back")
@@ -2998,12 +2997,15 @@ do
     W.placed = hadPlaced
 end
 
-print("a first install: once, the game's own dialog says how a flyout is made and offers the flyouts that fill themselves")
+print("a first install: once, a window of the game's own kind says how a flyout is made and offers the preset flyouts")
 do
-    -- His words (2026-11-22): "so i ran the ffdev fresh and got.. nothing? so we have no new player popup at
-    -- all?" and "do you think we should have a brief popup for new users telling them super concisely how to
-    -- make flyouts, but also for telling them about the auto flyouts and having them in a row that they can
-    -- immediately drag to their bars?"
+    -- His words (2026-11-22): "so we have no new player popup at all?", "a brief popup for new users telling
+    -- them super concisely how to make flyouts, but also for telling them about the auto flyouts and having
+    -- them in a row that they can immediately drag to their bars"; and of the first one built, on the
+    -- game's confirmation box: "why are you using classic styling instead of forever... for the popup",
+    -- "\"These fill themselves\". the \"These\" seems like it's referring to the statement above. it should
+    -- say \"You can also use these preset flyouts that automatically update with these items from your
+    -- bags.\" or something along those lines", "also why cant the window be dragged".
     local savedDB = FallensFlyoutsDB
     local hadPlaced = W.placed
     FallensFlyoutsDB = nil
@@ -3011,95 +3013,100 @@ do
     local Welcome = NS.Welcome
     W.placed = {}
     W.macros, W.level, W.items, W.bags = {}, 10, { [4540] = { sub = 5, level = 5 } }, { 4540 }
-    local up = W.popup
-    check(up ~= nil and up.which == Welcome.POPUP and FallensFlyoutsDB.welcome == "owed",
-        "with no saved data at all, the dialog comes up after the login")
-    local text = up and up.text or ""
-    check(text:find("Fallen's Flyouts", 1, true) == 1
-        and text:find("To make a flyout, drag a spell, item or macro onto a bar button and drop it on the +.", 1, true) ~= nil
-        and text:find("These fill themselves from your bags.", 1, true) ~= nil, "it says in a line how a flyout is made: " .. text)
-    local dialog = StaticPopupDialogs[Welcome.POPUP]
-    check(dialog.button1 == OKAY and dialog.hideOnEscape == 1 and dialog.closeButton == true and dialog.timeout == 0,
-        "it is the game's own dialog: an Okay button, an x, and Escape closes it")
-    local row = up and up.inserted
+    local up = Welcome.Frame()
+    check(up ~= nil and up:IsShown() and FallensFlyoutsDB.welcome == "owed" and W.popup == nil,
+        "with no saved data at all, the window comes up after the login; it is no confirmation box of the game's")
+    check(up.template == "DefaultPanelFlatTemplate" and up.title.text == "Fallen's Flyouts" and up.close ~= nil
+        and up.close.template == "UIPanelCloseButtonDefaultAnchors" and up.okay.template == "UIPanelButtonTemplate",
+        "it is made of the game's own flat panel, the one its Loot Rolls window is made of, with that panel's title, x and button")
+    check(up.make.text == "To make a flyout, drag a spell, item or macro onto a bar button and drop it on the +.",
+        "it says in a line how a flyout is made: " .. tostring(up.make.text))
+    check(up.auto.text:find("You can also use these preset flyouts.", 1, true) == 1
+        and up.auto.text:find("keeps itself filled with that kind of item from your bags", 1, true) ~= nil
+        and up.auto.text:find("These fill themselves", 1, true) == nil,
+        "and then, in words that cannot be read as part of that line, what the preset flyouts are: " .. tostring(up.auto.text))
     local names = {}
-    for i, icon in ipairs(row and row.icons or {}) do names[i] = icon.kind.name end
-    check(row ~= nil and row.shown and table.concat(names, " ") == "Food Drink Potions Elixirs Flasks Scrolls Bandages"
-        and row.more.text == "More in the settings: /ff",
-        "under its text, the flyouts that fill themselves, in a row: " .. table.concat(names, " "))
-    -- dragged out of the dialog onto a bar: the flyout is there, and the dialog is still up for the next one
-    local food = row.icons[1]
+    for i, icon in ipairs(up.icons) do names[i] = icon.kind.name end
+    check(table.concat(names, " ") == "Food Drink Potions Elixirs Flasks Scrolls Bandages" and up.icons[1].parent == up
+        and up.more.text == "More in the settings: /ff", "under them the preset flyouts, in a row: " .. table.concat(names, " "))
+    -- it can be dragged, and stays where it is put
+    check(up.movable == true and up.clamped == true and up.scripts.OnDragStart ~= nil and up.scripts.OnDragStop ~= nil,
+        "the window may be moved, and is kept on the screen")
+    up.scripts.OnDragStart(up)
+    check(up.moving == true, "a drag on it moves it")
+    up.scripts.OnDragStop(up)
+    check(up.moving == nil and up.moved == true, "and the mouse let go, it stays there")
+    local where = up.point
+    Welcome.Show()
+    check(up.point == where, "shown again while it is up, it is not put back where it first stood")
+    -- as high as its words run to
+    check(up.h == 34 + up.make:GetStringHeight() + 12 + up.auto:GetStringHeight() + 12 + NS.Art.ICON + 16 + 12 + 22 + 14,
+        "it is as high as its words and its row need: " .. tostring(up.h))
+    -- dragged out of it onto a bar: the flyout is there, and the window is still up for the next one
+    local food = up.icons[1]
     food.scripts.OnDragStart(food)
-    check(W.cursor ~= nil and W.cursor[1] == "macro" and W.cursor[2] == "Food" and W.popup == up, "one dragged from it is on the cursor, the dialog still up")
+    check(W.cursor ~= nil and W.cursor[1] == "macro" and W.cursor[2] == "Food" and up:IsShown(), "one dragged from it is on the cursor, the window still up")
     PlaceAction(9)
     flushAll()
     local made = NS.Flyouts.At("ActionButton9")
-    check(made ~= nil and made.auto == "food" and #made.entries == 1 and W.popup == up,
+    check(made ~= nil and made.auto == "food" and #made.entries == 1 and up:IsShown(),
         "dropped on a bar button, its flyout is there, filled from the bags")
-    local drink = row.icons[2]
+    local drink = up.icons[2]
     drink.scripts.OnClick(drink)
     check(W.cursor ~= nil and W.cursor[2] == "Drink", "a click picks one up as well")
     W.cursor = nil
     -- not closed by the player: owed still, at the next login too
-    StaticPopup_Hide(Welcome.POPUP)
-    check(FallensFlyoutsDB.welcome == "owed" and row.shown == false, "taken away by anything but the player, it is still owed")
+    Welcome.Hide()
+    check(FallensFlyoutsDB.welcome == "owed" and not up:IsShown(), "taken down by anything but the player, it is still owed")
     login("Player-1-0000000W")
-    check(W.popup ~= nil and W.popup.which == Welcome.POPUP, "and comes up again at the next login")
-    refusePopup()
-    check(FallensFlyoutsDB.welcome == "owed", "a dialog the game could not put up at all was not seen")
+    up = NS.Welcome.Frame()
+    check(up ~= nil and up:IsShown(), "and comes up again at the next login")
     -- Okay: for good, on every character
+    up.okay.scripts.OnClick(up.okay)
+    check(FallensFlyoutsDB.welcome == "done" and not up:IsShown(), "closed with Okay, it is done with")
     login("Player-1-0000000W")
-    acceptPopup()
-    check(FallensFlyoutsDB.welcome == "done", "closed with Okay, it is done with")
-    login("Player-1-0000000W")
-    check(W.popup == nil, "the next login has no dialog")
+    check(NS.Welcome.Frame() == nil, "the next login has no window")
     login("Player-1-0000000X")
-    check(W.popup == nil, "nor has another character's")
-    -- Escape and the x close it for good as well
+    check(NS.Welcome.Frame() == nil, "nor has another character's")
+    -- its x closes it for good as well
     FallensFlyoutsDB = nil
     login("Player-1-0000000W")
-    escapePopup()
-    check(FallensFlyoutsDB.welcome == "done", "Escape closes it for good")
-    FallensFlyoutsDB = nil
-    login("Player-1-0000000W")
-    closePopup()
-    check(FallensFlyoutsDB.welcome == "done", "so does its x")
+    up = NS.Welcome.Frame()
+    up.close.scripts.OnClick(up.close)
+    check(FallensFlyoutsDB.welcome == "done" and not up:IsShown(), "so does its x")
     -- a login in a fight: it waits for the fight's end
     FallensFlyoutsDB = nil
-    W.popup = nil
     char.guid, char.class, char.name = "Player-1-0000000W", "MAGE", "Tester W"
     boot()
     W.combat = true
     flushAll()
-    check(W.popup == nil and FallensFlyoutsDB.welcome == "owed", "at a login in a fight it waits")
+    check(NS.Welcome.Frame() == nil and FallensFlyoutsDB.welcome == "owed", "at a login in a fight it waits")
     W.combat = false
     fire("PLAYER_REGEN_ENABLED")
     flushAll()
-    check(W.popup ~= nil and W.popup.which == Welcome.POPUP, "and comes up when the fight is over")
-    acceptPopup()
+    up = NS.Welcome.Frame()
+    check(up ~= nil and up:IsShown(), "and comes up when the fight is over")
     -- in the game's gamepad mode nothing is dragged: the line names the game's own way
-    FallensFlyoutsDB = nil
-    login("Player-1-0000000W")
-    acceptPopup()
     local padBar = W.frames.GamepadMainActionBarFrame or CreateFrame("Frame", "GamepadMainActionBarFrame", UIParent)
     padBar.shown = true
     NS.Welcome.Show()
-    check(W.popup ~= nil and W.popup.text:find("bind an ability onto a button that already holds one and choose Add to Flyout.", 1, true) ~= nil
-        and W.popup.text:find("drop it on the +", 1, true) == nil, "in gamepad mode the line names Add to Flyout, not a drag")
+    check(up.make.text == "To make a flyout, bind an ability onto a button that already holds one and choose Add to Flyout.",
+        "in gamepad mode the line names Add to Flyout, not a drag: " .. tostring(up.make.text))
     padBar.shown = false
     NS.Welcome.Show()
-    check(W.popup.text:find("drop it on the +", 1, true) ~= nil, "out of that mode it names the drag")
-    StaticPopup_Hide(Welcome.POPUP)
+    check(up.make.text:find("drop it on the +", 1, true) ~= nil, "out of that mode it names the drag")
+    up.okay.scripts.OnClick(up.okay)
     -- saved data from before this version, with a flyout in it: nobody new, never shown
     FallensFlyoutsDB = { profiles = { ["Tester W - Realm"] = { flyouts = { { host = "ActionButton1",
         main = { kind = "spell", id = 101 }, entries = { { kind = "spell", id = 101 }, { kind = "spell", id = 501 } } } } } } }
     login("Player-1-0000000W")
-    check(W.popup == nil and FallensFlyoutsDB.welcome == "done", "saved data that holds a flyout is no new install: no dialog, ever")
+    check(NS.Welcome.Frame() == nil and FallensFlyoutsDB.welcome == "done", "saved data that holds a flyout is no new install: no window, ever")
     -- saved data with no flyout in it: shown once
     FallensFlyoutsDB = { profiles = { ["Tester W - Realm"] = { flyouts = {} } } }
     login("Player-1-0000000W")
-    check(W.popup ~= nil and W.popup.which == Welcome.POPUP, "saved data with no flyout in it: shown, once")
-    acceptPopup()
+    up = NS.Welcome.Frame()
+    check(up ~= nil and up:IsShown(), "saved data with no flyout in it: shown, once")
+    up.okay.scripts.OnClick(up.okay)
     W.macros, W.level, W.items, W.bags = nil, nil, nil, nil
     W.placed = hadPlaced
     FallensFlyoutsDB = savedDB
@@ -3131,8 +3138,9 @@ do
     local function settle() for _ = 1, 4 do flushAll() end end
     check(told > 0 and #W.caught > 0 and W.caught[1]:find("the listener broke", 1, true) ~= nil,
         ("the listeners were told at the login, broke, and were reported: %d errors"):format(#W.caught))
-    check(W.popup ~= nil and W.popup.which == NS.Welcome.POPUP, "every part of the addon came up all the same: the last one's dialog is there")
-    acceptPopup()
+    local hello = NS.Welcome.Frame()
+    check(hello ~= nil and hello:IsShown(), "every part of the addon came up all the same: the last one's window is there")
+    hello.okay.scripts.OnClick(hello.okay)
     W.placed = {}
     W.placed[1], W.placed[9] = 101, 9401
     fire("ACTIONBAR_SLOT_CHANGED", 9)
@@ -3150,7 +3158,7 @@ do
     settle()
     ClearCursor()
     settle()
-    check(F7.At("ActionButton9") == nil and #F7.List() == 1 and W.chat[#W.chat]:find("is off the bars. Its flyout is removed.", 1, true) ~= nil,
+    check(F7.At("ActionButton9") == nil and #F7.List() == 1,
         "a button's ability dragged off the bar and let go of: its flyout is gone from the button, removed")
     PickupAction(1)
     settle()
@@ -3180,6 +3188,10 @@ for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")
     check(not (text:find("FallensFlyoutsDev")),
         file .. " names nothing of the dev folder")
+    -- Chat is not for telling what the player has just done and can see. No file that ships writes
+    -- to it; a line for someone new or about an update is added here by name when one is wanted.
+    check(not text:find("DEFAULT_CHAT_FRAME", 1, true) and not text:find("ChatFrame", 1, true) and not text:find("ns.Say(", 1, true)
+        and not text:find("[^%w_.]print%("), file .. " writes nothing to chat")
 end
 
 print(fails == 0 and "FLYOUTS TEST: PASS" or ("FLYOUTS TEST: FAIL (" .. fails .. ")"))

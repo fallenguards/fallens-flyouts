@@ -85,6 +85,21 @@ function Frame:GetAlpha() return self.alpha or 1 end
 function Frame:GetLeft() return self.rect and self.rect[1] end
 function Frame:GetRight() return self.rect and self.rect[2] end
 function Frame:GetTop() return self.rect and self.rect[3] end
+-- a window that can be dragged: whether it may be, whether it is being, and that it was
+function Frame:SetMovable(v) self.movable = v == true end
+function Frame:IsMovable() return self.movable == true end
+function Frame:SetClampedToScreen(v) self.clamped = v == true end
+function Frame:StartMoving() if self.movable then self.moving = true end end
+function Frame:StopMovingOrSizing()
+    if self.moving then self.moved = true end
+    self.moving = nil
+end
+-- words on as many lines as their width makes of them: seven wide a letter, twelve high a line
+function Frame:GetStringHeight()
+    local wide = self.w or 0
+    local long = #(self.text or "") * 7
+    return 12 * math.max(1, wide > 0 and math.ceil(long / wide) or 1)
+end
 -- a scroll frame: what scrolls in it, how far it can go (its child's height over its own), where it is
 function Frame:SetScrollChild(child) self.scrollChild = child end
 function Frame:GetScrollChild() return self.scrollChild end
@@ -302,6 +317,8 @@ function CreateFrame(otype, name, parent, template)
     local f = setmetatable({ name = name, scripts = {}, attrs = {}, shown = true, otype = otype, parent = parent,
         protected = protected, template = template }, Frame)
     if template == "IconSelectorPopupFrameTemplate" then iconWindow(f) end
+    -- the game's flat panel: its title is a text of its own in the bar at its top
+    if template == "DefaultPanelFlatTemplate" then f.TitleContainer = { TitleText = region() } end
     -- the game's icon button of its selector lists: an icon and a mark for the one picked
     if template == "SelectorButtonTemplate" then
         f.Icon, f.SelectedTexture = f:CreateTexture(), f:CreateTexture()
@@ -783,45 +800,15 @@ end
 function SetOverrideBindingClick(owner, priority, key, name, button) owner:SetBindingClick(priority, key, name, button) end
 function ClearOverrideBindings(owner) W.overrides[owner] = {} end
 StaticPopupDialogs = {}
--- A frame handed in with the call is taken in by the dialog and shown under its text, and let go of
--- (hidden) when the dialog goes (StaticPopup.lua: SetupInsertedFrame, StaticPopup_ReleaseInsertedFrame).
-function StaticPopup_Show(which, text, _, data, inserted)
-    W.popup = { which = which, text = text, data = data, inserted = inserted }
-    if inserted then inserted.shown = true end
+function StaticPopup_Show(which, text)
+    W.popup = { which = which, text = text }
     local dialog = StaticPopupDialogs[which]
     if dialog and dialog.OnShow then dialog.OnShow(region(), nil) end
 end
-local function popupGone(p)
-    W.popup = nil
-    if p.inserted then p.inserted.shown = false end
-end
 function StaticPopup_Hide(which)
     local dialog = StaticPopupDialogs[which]
-    if W.popup and W.popup.which == which then popupGone(W.popup) end
+    if W.popup and W.popup.which == which then W.popup = nil end
     if dialog and dialog.OnHide then dialog.OnHide(region()) end
-end
--- Escape on the dialog that is up, as the game's own walk does it: its cancel is called with "clicked"
-function escapePopup()
-    local p = assert(W.popup, "no popup to leave")
-    local info = StaticPopupDialogs[p.which]
-    assert(info.hideOnEscape, "that dialog does not close on Escape")
-    popupGone(p)
-    if info.OnCancel then info.OnCancel(nil, p.data, "clicked") end
-end
--- a click on the dialog's x
-function closePopup()
-    local p = assert(W.popup, "no popup to close")
-    local info = StaticPopupDialogs[p.which]
-    assert(info.closeButton, "that dialog has no x")
-    popupGone(p)
-    if info.OnCloseClicked then info.OnCloseClicked(nil, p.data) end
-end
--- The game could not put a dialog up (dead, a cinematic): it calls the cancel with no reason
-function refusePopup()
-    local p = assert(W.popup, "no popup to refuse")
-    local info = StaticPopupDialogs[p.which]
-    popupGone(p)
-    if info.OnCancel then info.OnCancel(nil, p.data) end
 end
 DONE = "Done"
 -- the game's Quick Keybind Mode, and the modifiers held
@@ -995,7 +982,6 @@ local function acceptPopup()
     local p = W.popup
     assert(p, "no popup to accept")
     W.popup = nil
-    if p.inserted then p.inserted.shown = false end
     StaticPopupDialogs[p.which].OnAccept()
     return p.text
 end

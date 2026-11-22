@@ -1,7 +1,7 @@
 local _, ns = ...
 -- luacheck: globals FallensFlyoutsDB FallensFlyouts_AttachDevTools
 -- luacheck: read globals CreateFrame UnitGUID UnitName GetUnitName UnitClass GetRealmName issecretvalue
--- luacheck: read globals InCombatLockdown DEFAULT_CHAT_FRAME UIErrorsFrame geterrorhandler
+-- luacheck: read globals InCombatLockdown UIErrorsFrame geterrorhandler
 
 -- the dev addon's way in
 function FallensFlyouts_AttachDevTools(take) take(ns) end
@@ -9,7 +9,9 @@ function FallensFlyouts_AttachDevTools(take) take(ns) end
 -- the dev addon swaps this for its log
 function ns.Log() end
 
-function ns.Say(msg) DEFAULT_CHAT_FRAME:AddMessage("|cffffd100Fallen's Flyouts:|r " .. msg) end
+-- Nothing is said in chat of what the player has just done and can see. (His words, 2026-11-22, of
+-- "Elixirs is off the bars. Its flyout is removed.": "what the fuck is the point of these messages?")
+-- A line for someone new, or one that tells of an update, is the only kind chat is for.
 
 -- red, where the game says what it cannot do
 function ns.Warn(why)
