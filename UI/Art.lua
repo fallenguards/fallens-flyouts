@@ -122,6 +122,8 @@ function A.LayStrip(strip, frame, way, capped)
     end
     strip.capped = capped == true
     A.Set(strip.last, strip.last.art, turn.ends)
+    strip.first:Show()
+    strip.last:Show()
     A.Set(mid, mid.art, turn.mid)
     strip.first:SetPoint(side.point, frame, side.point)
     strip.last:SetPoint(side.to, frame, side.to)
@@ -130,6 +132,11 @@ function A.LayStrip(strip, frame, way, capped)
     for _, piece in ipairs({ strip.first, strip.last, mid }) do
         if upright then piece:SetWidth(A.STRIP) else piece:SetHeight(A.STRIP) end
     end
+end
+
+-- no strip at all: a flyout whose icons stand around their button
+function A.HideStrip(strip)
+    for _, piece in ipairs({ strip.first, strip.last, strip.upright, strip.level }) do piece:Hide() end
 end
 
 -- an icon cut to the game's bar button shape

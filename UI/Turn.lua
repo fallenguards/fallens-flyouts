@@ -182,7 +182,7 @@ end
 
 -- A turn begins: the flyout follows the mouse from here. Out of a fight.
 function T.Start(unit)
-    if turning or not (unit and unit.flyout and unit.menu:IsShown()) then return false end
+    if turning or not (unit and unit.flyout and unit.menu:IsShown()) or unit.radial then return false end
     if InCombatLockdown() then
         ns.Warn(TEXT.fight)
         return false
@@ -280,7 +280,8 @@ end
 function T.Poll()
     local now = GetTime()
     local want = false
-    if shown and shown.flyout and shown.menu:IsShown() and not InCombatLockdown() then
+    -- a flyout around its button has no end to pull
+    if shown and shown.flyout and shown.menu:IsShown() and not shown.radial and not InCombatLockdown() then
         if turning or Over() then seenAt = now end
         want = seenAt ~= nil and now - seenAt <= LINGER
         -- not while something is carried to the flyout or an icon of it is being moved: it is in the way

@@ -29,6 +29,12 @@ local TEXT = {
     hide = "Hide items I have none of",
     hideTip = "Flyouts leave out items you have none of, and take them back when you have some again. "
         .. "Off, they stay, grayed.",
+    around = "Open around the button in gamepad mode",
+    aroundTip = "On the bars of gamepad mode a flyout opens around its button, each icon on the side its pad "
+        .. "button is: up, right, down, left. Off, it opens as a strip.",
+    faces = "Pick with the face buttons",
+    facesTip = "On a controller the first four icons take the face buttons, and the D-pad takes any past "
+        .. "them. Off, the D-pad comes first. Each flyout can be swapped as it is made in gamepad mode.",
 }
 A.TEXT = TEXT
 
@@ -62,6 +68,8 @@ function A.Refresh()
     w.off:SetEnabled(held ~= nil)
     w.ranks:SetChecked(F.Ranked())
     w.hide:SetChecked(F.Hiding())
+    w.around:SetChecked(F.Around())
+    w.faces:SetChecked(F.Faces())
     for i, button in ipairs(w.icons) do
         local entry = flyout and flyout.entries[i]
         button:SetShown(entry ~= nil)
@@ -181,6 +189,18 @@ function A.Hide(on)
     A.Refresh()
 end
 
+-- the controller's two: flyouts around the button in gamepad mode, and which of its crosses picks first
+function A.Around(on)
+    local ok, why = F.SetAround(on)
+    if not ok and why then ns.Warn(why) end
+    A.Refresh()
+end
+function A.Faces(on)
+    local ok, why = F.SetFaces(on)
+    if not ok and why then ns.Warn(why) end
+    A.Refresh()
+end
+
 function A.Build(page, above)
     if page.arrange then return end
     panel = page
@@ -213,9 +233,13 @@ function A.Build(page, above)
     w.off = Button(TEXT.off, TEXT.offTip, A.TakeOff)
     w.off:SetPoint("TOPLEFT", w.icons[1], "BOTTOMLEFT", -GAP / 2, -GAP * 2)
     -- the game's own check boxes, beside it: both for every flyout of the profile
-    local function Check(text, tip, run, after)
+    local function Check(text, tip, run, after, under)
         local box = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-        box:SetPoint("LEFT", after, "RIGHT", GAP * 2, 0)
+        if under then
+            box:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -GAP / 2)
+        else
+            box:SetPoint("LEFT", after, "RIGHT", GAP * 2, 0)
+        end
         local label = box.Text or box.text
         if not label then
             label = box:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -231,6 +255,10 @@ function A.Build(page, above)
     local ranksLabel
     w.ranks, ranksLabel = Check(TEXT.ranks, TEXT.ranksTip, A.Ranks, w.off)
     w.hide = Check(TEXT.hide, TEXT.hideTip, A.Hide, ranksLabel)
+    -- a line lower, the two for a controller
+    local aroundLabel
+    w.around, aroundLabel = Check(TEXT.around, TEXT.aroundTip, A.Around, nil, w.ranks)
+    w.faces = Check(TEXT.faces, TEXT.facesTip, A.Faces, aroundLabel)
     panel.arrange = w
     -- a flyout changed elsewhere shows here at once
     F.Watch(function(what)

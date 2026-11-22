@@ -22,6 +22,16 @@ local PAD_UPRIGHT = { first = "PADDUP", last = "PADDDOWN", between = { "PADDRIGH
 local PAD_LEVEL = { first = "PADDLEFT", last = "PADDRIGHT", between = { "PADDUP", "PADDDOWN" }, past = PAD_PAST }
 -- the D-pad has four directions
 local DPAD = 4
+-- The pad's two crosses of four, each from the top round by the right, and the button on the same side
+-- of the other cross. A flyout around its button has its icons in that order, on those sides.
+local DPAD_RING = { "PADDUP", "PADDRIGHT", "PADDDOWN", "PADDLEFT" }
+local FACE_RING = { "PAD4", "PAD2", "PAD1", "PAD3" }
+local PADS_ALL = { "PADDUP", "PADDRIGHT", "PADDDOWN", "PADDLEFT", "PAD4", "PAD3", "PAD2", "PAD1" }
+local OTHER_CROSS = { PADDUP = "PAD4", PADDRIGHT = "PAD2", PADDDOWN = "PAD1", PADDLEFT = "PAD3",
+    PAD4 = "PADDUP", PAD2 = "PADDRIGHT", PAD1 = "PADDDOWN", PAD3 = "PADDLEFT" }
+-- the ways the four of a ring lie from the button, and the room between the button and a ring
+local RING = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
+local RING_GAP = 6
 -- the pad symbol's size on a flyout icon
 local GLYPH = 11
 -- a controller's label style, as the game's key strings end
@@ -736,9 +746,27 @@ local function LayerHeld()
     return ok and held == true
 end
 
+-- The pad button for each place of a unit's flyout. Around its button: the first four on one cross of the
+-- pad, each on its own side, any more on the other cross. As a strip: by where each lies along it. The
+-- D-pad comes first, or the face buttons where the flyout or the profile says so.
+local function PadsOf(unit, count)
+    local faces = F.Faces(unit.flyout)
+    local out = {}
+    if unit.radial then
+        local first, second = DPAD_RING, FACE_RING
+        if faces then first, second = FACE_RING, DPAD_RING end
+        for i = 1, count do out[i] = i <= DPAD and first[i] or second[(i - DPAD - 1) % DPAD + 1] end
+        return out
+    end
+    for i, pad in ipairs(PadsFor(unit.way or "UP", count)) do out[i] = faces and OTHER_CROSS[pad] or pad end
+    return out
+end
+F.PadsOf = PadsOf
+
 local function Picks(unit)
     local entries = unit.flyout.entries
-    local pads = PadsFor(unit.way or "UP", #entries)
+    local pads = PadsOf(unit, #entries)
+    local pool = F.Faces(unit.flyout) and PADS_ALL or PADS
     -- a key that holds a layer is as good as taken
     local picks, taken = {}, HoldKeys()
     for i, entry in ipairs(entries) do
@@ -764,7 +792,7 @@ local function Picks(unit)
     end
     for i, pick in ipairs(picks) do
         pick.key = pick.key or Free(KEYS[i], KEYS, taken)
-        pick.pad = pick.pad or Free(pads[i], PADS, taken)
+        pick.pad = pick.pad or Free(pads[i], pool, taken)
     end
     return picks
 end
@@ -899,6 +927,14 @@ function F.Put(unit, frame, out)
     frame:ClearAllPoints()
     frame:SetPoint(side.point, unit.menu, side.point, side.x * out, side.y * out)
 end
+-- icon i in its place: along the strip, or around the button (up, right, down, left; a second ring past four)
+function F.Seat(unit, frame, i)
+    if not unit.radial then return F.Put(unit, frame, F.Slot(i)) end
+    local way = RING[(i - 1) % DPAD + 1]
+    local out = unit.reach + math.floor((i - 1) / DPAD) * (Art.ICON + RING_GAP)
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", unit.menu, "CENTER", way[1] * out, way[2] * out)
+end
 
 -- a unit placed, sized and turned for its bar
 -- the ways a flyout can lie along each side of its button
@@ -955,6 +991,9 @@ local function Lay(unit)
     local long = Art.FIRST + count * Art.ICON + (count - 1) * Art.NEXT + Art.PAD
     local opener, menu = unit.opener, unit.menu
     unit.way, unit.side, unit.barWay, unit.runs, unit.mid = runName, sideName, way, runs, centered
+    -- On a bar of gamepad mode, with no shape of the player's own: around the button, as the pad's
+    -- buttons lie around its middle.
+    unit.radial = flyout.side == nil and Bars.Pad(host) and F.Around()
     -- the button's child: shows and hides with its bar
     opener:SetParent(host)
     opener:SetScale(Bars.Size(host))
@@ -977,7 +1016,14 @@ local function Lay(unit)
     menu:SetScale(scale * F.Size())
     Layer(unit)
     menu:ClearAllPoints()
-    if sideName == runName or centered then
+    if unit.radial then
+        -- the first ring a step off the button, in the menu's own measure; the frame holds two rings
+        unit.reach = Art.BUTTON / 2 / F.Size() + RING_GAP + Art.ICON / 2
+        local span = 2 * (unit.reach + Art.ICON + RING_GAP + Art.ICON / 2)
+        menu:SetPoint("CENTER", host, "CENTER")
+        menu:SetSize(span, span)
+        Art.HideStrip(unit.strip)
+    elseif sideName == runName or centered then
         -- straight out, or lying along the side with its middle at the button's middle
         menu:SetPoint(side.point, host, side.to, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
     else
@@ -986,14 +1032,16 @@ local function Lay(unit)
         if edge then mine, its = side.point .. along.point, side.to .. along.point end
         menu:SetPoint(mine, host, its, -side.x * Art.OVERLAP, -side.y * Art.OVERLAP)
     end
-    menu:SetSize(upright and Art.STRIP or long, upright and long or Art.STRIP)
-    -- lying along the side, neither end opens onto the button: both are closed
-    Art.LayStrip(unit.strip, menu, runName, sideName ~= runName)
+    if not unit.radial then
+        menu:SetSize(upright and Art.STRIP or long, upright and long or Art.STRIP)
+        -- lying along the side, neither end opens onto the button: both are closed
+        Art.LayStrip(unit.strip, menu, runName, sideName ~= runName)
+    end
 
     for i, frame in ipairs(unit.entries) do
         local entry = flyout.entries[i]
         frame.entry, frame.flyout = entry, flyout
-        F.Put(unit, frame, F.Slot(i))
+        F.Seat(unit, frame, i)
         frame:SetAttribute("type", entry and entry.kind or nil)
         frame:SetAttribute("spell", nil)
         frame:SetAttribute("item", nil)
@@ -1569,6 +1617,49 @@ function F.SetHiding(on)
     if not data then return false end
     data.showLacking = not on or nil
     F.Apply()
+    return true
+end
+
+-- Whether a flyout on a bar of gamepad mode opens around its button, each icon on the side its pad
+-- button is: the profile's, on unless turned off. One with a shape of its own keeps that shape.
+function F.Around()
+    local data = P.Data()
+    return not (data and data.padStrip)
+end
+function F.SetAround(on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    data.padStrip = not on or nil
+    F.Apply()
+    return true
+end
+
+-- Whether a controller picks with its face buttons before its D-pad: the flyout's own word where it has
+-- one, else the profile's (the D-pad first unless turned on).
+function F.Faces(flyout)
+    if flyout and flyout.face ~= nil then return flyout.face == true end
+    local data = P.Data()
+    return data ~= nil and data.padFace == true
+end
+function F.SetFaces(on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    data.padFace = on or nil
+    F.Apply()
+    return true
+end
+-- one flyout's own word on it; nil gives it the profile's again
+function F.SetFace(flyout, on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    if not (list and flyout) then return false end
+    flyout.face = on
+    local unit = Run(flyout).unit
+    local shown = unit ~= nil and open == unit
+    F.Apply()
+    unit = Run(flyout).unit
+    if shown and unit then F.Show(unit.index) end
     return true
 end
 

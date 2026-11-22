@@ -1603,8 +1603,17 @@ do
     check(W.placed[2] == 702 and W.cursor == nil, "A: the old ability is back on the button and the cursor is empty")
     check(made ~= nil and #made.entries == 2 and made.main.id == 702 and made.entries[2].id == 703,
         "and the new one is in a flyout made on that button")
-    check(lastChat("Spell 703 is in the flyout of Spell 702 now") ~= nil and up() and not prompts.add.shown
-        and prompts.back.label == "Done", "chat says so, and the bar now says B is Done")
+    check(lastChat("Spell 703 is in the flyout of Spell 702 now") ~= nil and up() and prompts.back.label == "Done",
+        "chat says so, and the bar now says B is Done")
+    -- His idea (2026-11-21): a quick swap of what picks from the flyout, as it is made, on a button the
+    -- hint bar names.
+    check(prompts.add.shown and prompts.add.label == "Use Face Buttons" and NS.Flyouts.Faces(made) == false,
+        "and A, its work done, now offers the pad's other cross for picking from this flyout")
+    press("PAD1")
+    check(NS.Flyouts.Faces(made) == true and made.face == true and prompts.add.label == "Use D-Pad" and up(),
+        "A again: this flyout picks with the face buttons, and the bar offers the D-pad back")
+    press("PAD1")
+    check(NS.Flyouts.Faces(made) == false and prompts.add.label == "Use Face Buttons", "and again: the D-pad once more")
     dialog:ExitBindingMode()
     check(not up(), "the dialog shut, the bar goes with it")
 
@@ -1883,6 +1892,78 @@ login("Player-1-0000000I")
 stack("OwnBarButton3", 501)
 check(opener("3") ~= nil and way("3") == "LEFT", "the key is found, and the flyout grows left, away from the edge")
 barWorld = function() return "game" end
+
+print("in gamepad mode a flyout opens around its button, as the pad's buttons lie")
+do
+    login("Player-1-0000000M")
+    local F2, Art2 = NS.Flyouts, NS.Art
+    local padBar = W.frames.GamepadMainActionBarFrame or CreateFrame("Frame", "GamepadMainActionBarFrame", UIParent)
+    local NAME = "GamepadMainActionBarFrameTestActionButton7"
+    actionButton(NAME, 27, padBar).id = 27
+    W.placed = W.placed or {}
+    W.placed[27] = 811
+    fire("ACTIONBAR_SLOT_CHANGED", 27)
+    flushAll()
+    for id = 812, 815 do stack(NAME, id) end
+    local flyout, unit = F2.At(NAME)
+    local function at(i)
+        local p = entry(unit.index, i).point
+        return p[1] == "CENTER" and p[2] == unit.menu and math.floor(p[4] + 0.5) .. "," .. math.floor(p[5] + 0.5) or "not centered"
+    end
+    local function pads()
+        local out = {}
+        for i, pick in ipairs(F2.Picks(flyout)) do out[i] = pick.pad end
+        return table.concat(out, " ")
+    end
+    local r = Art2.BUTTON / 2 + 6 + Art2.ICON / 2
+    local step = Art2.ICON + 6
+    local function spot(x, y) return math.floor(x + 0.5) .. "," .. math.floor(y + 0.5) end
+    -- His idea (2026-11-21): four on a flyout for gamepad: D-pad up above the icon, down below, right to
+    -- the right, and so on.
+    check(flyout ~= nil and #flyout.entries == 5 and unit.radial == true, "a flyout on a bar of gamepad mode opens around its button")
+    check(at(1) == spot(0, r) and at(2) == spot(r, 0) and at(3) == spot(0, -r) and at(4) == spot(-r, 0),
+        "the first four stand above, right of, below and left of the button: " .. table.concat({ at(1), at(2), at(3), at(4) }, " | "))
+    check(at(5) == spot(0, r + step), "a fifth stands a step further out, above: " .. at(5))
+    check(pads() == "PADDUP PADDRIGHT PADDDOWN PADDLEFT PAD4",
+        "each is picked by the D-pad button of its side, the fifth by the face button of its side: " .. pads())
+    check(unit.strip.first.shown == false and unit.strip.last.shown == false and unit.menu.point[1] == "CENTER",
+        "there is no strip: the icons stand by themselves, around the button's middle")
+    tap(unit.keys[1] or "1")
+    unit.menu.over = true
+    NS.Turn.Poll()
+    check((NS.Turn.Grip() == nil or not NS.Turn.Grip():IsShown()) and NS.Turn.Start(unit) == false and NS.Move.Start(entry(unit.index, 2)) == false,
+        "it has no end to pull and no line to slide along: no grip, and no icon is lifted")
+    unit.menu.over = nil
+    -- the face buttons first, for every flyout of the profile
+    check(F2.SetFaces(true) == true and pads() == "PAD4 PAD2 PAD1 PAD3 PADDUP",
+        "with the face buttons picked in the settings they come first, each on its side, and the D-pad takes the fifth: " .. pads())
+    -- one flyout's own word, as the quick swap in the bind dialog gives it
+    F2.SetFace(flyout, false)
+    check(pads() == "PADDUP PADDRIGHT PADDDOWN PADDLEFT PAD4" and F2.Faces() == true, "a flyout's own choice stands over the profile's")
+    F2.SetFace(flyout, nil)
+    F2.SetFaces(false)
+    -- a strip again where the player wants one
+    check(F2.SetAround(false) == true and unit.radial == false and unit.strip.first.shown ~= false
+        and entry(unit.index, 2).point[1] ~= "CENTER",
+        "with that turned off in the settings it opens as a strip, as on any bar")
+    F2.SetFaces(true)
+    check(pads() == table.concat({ "PAD1", "PAD3", "PAD2", "PAD4", "PADDUP" }, " "),
+        "a strip picked with the face buttons takes the one on the same side as each D-pad button was: " .. pads())
+    F2.SetFaces(false)
+    F2.SetAround(true)
+    F2.SetShape(flyout, "RIGHT")
+    _, unit = F2.At(NAME)
+    check(unit.radial == false and unit.side == "RIGHT", "and a flyout given a shape of its own keeps that shape in gamepad mode too")
+    F2.SetShape(flyout, nil)
+    -- on any other bar nothing changes
+    stack("ActionButton1", 501)
+    local _, plain = F2.At("ActionButton1")
+    check(plain ~= nil and plain.radial == false, "a flyout on any other bar is a strip as ever")
+    local page = NS.Options and NS.Options.Page and NS.Options.Page()
+    if page and page.arrange and page.arrange.around then
+        check(page.arrange.around:GetChecked() == true and page.arrange.faces:GetChecked() == false, "the settings show both choices")
+    end
+end
 
 print("the flyout is in its bar's layer, and its arrow never stays pressed")
 do

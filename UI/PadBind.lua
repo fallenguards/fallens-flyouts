@@ -28,11 +28,16 @@ local TEXT = {
     edit = "Edit Action Bar",
     cancel = "Cancel",
     done = "%s is in the flyout of %s now.",
+    -- the flyout just made: which of the pad's crosses picks from it
+    faces = "Use Face Buttons",
+    dpad = "Use D-Pad",
     refused = "The game kept the new ability on the button, so no flyout was made.",
 }
 G.TEXT, G.KEY = TEXT, KEY_ADD
 
 local watched, offer
+-- the flyout the last Add to Flyout made, while the dialog is still up: its picks can be swapped
+local latest
 -- between the dialog's opening for a bind and its shutting; else abilities are being moved
 local binding = false
 -- when the dialog last placed an ability: that press is not also a press on a hint
@@ -130,7 +135,13 @@ end
 local function Show(frame, moving, done)
     local bar = Legend()
     if not bar then return end
-    prompts.add:SetShown(not done)
+    -- once the flyout is made, the same button swaps what picks from it: the other cross of the pad
+    prompts.add:SetShown(not done or latest ~= nil)
+    if done and latest then
+        prompts.add:SetPromptText(F.Faces(latest) and TEXT.dpad or TEXT.faces)
+    else
+        prompts.add:SetPromptText(TEXT.add)
+    end
     prompts.left:SetShown(moving)
     prompts.left:SetPromptText(done and TEXT.close or TEXT.swap)
     prompts.edit:SetShown(not moving)
@@ -158,8 +169,20 @@ local function Hide()
 end
 
 local function Clear()
-    offer = nil
+    offer, latest = nil, nil
     Hide()
+end
+
+-- The flyout just made picks with the pad's other cross: the face buttons for the D-pad, or back.
+function G.Swap()
+    local flyout = latest
+    if not flyout or InCombatLockdown() then return false end
+    local ok = F.SetFace(flyout, not F.Faces(flyout))
+    if not ok then return false end
+    ns.Log(("pad bind: the flyout on %s now picks with the %s first"):format(tostring(flyout.host),
+        F.Faces(flyout) and "face buttons" or "D-pad"))
+    if watched then Show(watched, G.moving == true, true) end
+    return true
 end
 
 -- The old ability back on its button, the new one into its flyout.
@@ -188,7 +211,8 @@ function G.Stack()
     ns.Log(("pad bind: %s:%s stacked with %s:%s on %s"):format(o.new.kind, tostring(o.new.id), o.old.kind,
         tostring(o.old.id), o.button and o.button:GetName() or "a button to be found"))
     ns.Say(TEXT.done:format(F.Name(o.new), F.Name(o.old)))
-    -- the dialog is still up: the bar now names the button that ends it
+    -- the dialog is still up: the bar now names the button that ends it, and the one that swaps the picks
+    latest, G.moving = flyout, o.moving
     if watched then Show(watched, o.moving, true) end
     return true
 end
@@ -225,9 +249,11 @@ end
 
 -- a pad button the dialog was handed; one that placed an ability is not a hint's
 local function Pressed(_, key)
-    if not offer or placedAt == GetTime() then return end
-    ns.Log(("pad bind: %s pressed while the offer is up"):format(tostring(key)))
-    if key == KEY_ADD then G.Stack() end
+    if placedAt == GetTime() or not (offer or latest) then return end
+    ns.Log(("pad bind: %s pressed while %s"):format(tostring(key),
+        offer and "the offer is up" or "a flyout was just made"))
+    if key ~= KEY_ADD then return end
+    if offer then G.Stack() else G.Swap() end
 end
 
 -- watches one dialog; the game's is found at the start

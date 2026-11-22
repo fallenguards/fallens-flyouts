@@ -3,6 +3,8 @@
 ## [1.1.1] - 2026-11-21
 
 ### Added
+- In gamepad mode a flyout opens around its button, each icon on the side its pad button is: the first above the button on D-pad up, then right, down and left. A fifth and sixth stand a step further out and take the face buttons of their sides. A check box under Arrange a flyout in the settings (`/ff`) turns this off, and a flyout given a shape of its own keeps it.
+- The face buttons can pick before the D-pad: a check box under Arrange a flyout sets it for every flyout, and in gamepad mode, right after Add to Flyout, the same button swaps it for the flyout just made (the hint bar names it: Use Face Buttons, Use D-Pad).
 - The icon window (right-click a flyout's button) has a row of the flyout's own icons over the game's list. Pick one and it goes onto the bar button itself, so its icon, tooltip and cooldown are there to see without opening the flyout. What was on the button stays in the flyout.
 - Reset to default icon, in the same window: the button gets back the ability it had, and any icon picked for it is taken off.
 - A flyout lying along a side of its button can be centered on the button. Drag its grip to the middle of that side of the button and it snaps there; the Turn button under Arrange a flyout in the settings steps through the centered shapes too.
