@@ -50,6 +50,9 @@ local TEXT = {
     note3 = "The D-pad moves the icons there. Pressed here it changes nothing.",
     editHint = "Editing: %s is selected. The D-pad moves it to that side of the button.",
     editRing = "Press the same side again for the outer ring.",
+    -- the editor inside the game's dialog: the box's words
+    inSelected = "%s is selected.",
+    inMove = "The D-pad moves it to that side of the button.",
     -- the game's Unbind on a flyout's button: the flyout is kept, and that is said
     putAway = "%s is off the bars, so its flyout is put away. It comes back when %s is on a button again.",
 }
@@ -61,6 +64,13 @@ local latest
 -- Edit Action Bar: a flyout's button was picked up (its ability is held by the dialog); and the flyout
 -- being edited, with the icon marked and the option the bottom button does
 local picked, armed
+-- the flyout editor's state while it is up: inside the game's dialog (`inside`) or after it
+local editing
+-- learned in play: a frame of ours is given no pad press ahead of the game's dialog on this client
+local cannotCatch
+-- the flyouts' marks on the dialog's copies of the bar's buttons, and how often they are looked at
+local Marks
+local MARK_LOOK = 0.25
 -- a flyout's ability let go of in the dialog, neither set down nor put back: looked at once the dialog is left
 local dropped
 -- the slot of the flyout last made, for its picture
@@ -377,7 +387,7 @@ end
 
 -- Our notice in the game's box, in the top layer: the box's own border and title box are frames of
 -- their own, and words a few levels over the box stood behind their dark fill.
-local function Notice(frame)
+local function Notice(frame, words)
     local box = frame.BindingInfoFrame or frame
     if not panel then
         panel = CreateFrame("Frame", nil, holder)
@@ -399,7 +409,6 @@ local function Notice(frame)
         panel.title:SetPoint("TOP", panel, "TOP", 0, -NOTE_STEP)
     end
     panel.title:SetText(TEXT.editTitle)
-    local words = { TEXT.note1:format(F.PadText(KEY_BACK, NOTE_GLYPH)), TEXT.note2, TEXT.note3 }
     for i, line in ipairs(panel.lines) do
         line:ClearAllPoints()
         line:SetPoint("TOP", panel, "TOP", 0, -(NOTE_Y + (i - 1) * NOTE_STEP))
@@ -417,7 +426,8 @@ local function ShowPicked(frame)
     local bar = Legend()
     if not bar then return end
     local on = armed or picked
-    if not on then return end
+    -- edited and done with: the game's own dialog has the screen again
+    if not on or on.done then return end
     local flyout = on.flyout
     Picture(Where(frame, on.slot), flyout, flyout.main, flyout.entries)
     prompts.add:SetShown(armed == nil)
@@ -435,7 +445,7 @@ local function ShowPicked(frame)
     local holding = armed ~= nil and type(box) == "table" and box:IsShown()
     Up(frame, bar, armed ~= nil and not holding)
     Cover(frame, holding)
-    if holding then Notice(frame) end
+    if holding then Notice(frame, { TEXT.note1:format(F.PadText(KEY_BACK, NOTE_GLYPH)), TEXT.note2, TEXT.note3 }) end
 end
 
 local function Hide()
@@ -495,7 +505,7 @@ local function Heal(frame, slot, possess)
     ns.Log(("pad bind: a press for slot %d while waiting to edit was undone: %s"):format(slot,
         back and "the slot is as it was" or "THE SLOT IS NOT AS IT WAS"))
     if not back then ns.Warn(TEXT.refused) end
-    ShowPicked(frame)
+    if not editing then ShowPicked(frame) end
 end
 
 -- Edit Action Bar took a flyout's ability off its button and the bottom button was pressed. The
@@ -521,8 +531,12 @@ function G.Edit()
     for slot in pairs(Bars.Copies()) do bars[slot] = Bars.ActionAt(slot) or (HasAction(slot) and OTHER) or false end
     picked, armed = nil, { flyout = p.flyout, slot = p.slot, bars = bars }
     F.Apply()
+    if not watched then return true end
+    -- The editor, here and now, the pad's presses kept from the dialog. Where that cannot be (learned
+    -- the first time it fails), the box says to leave the dialog and the editor opens after it.
+    if not cannotCatch and E.Open(p.flyout, watched) then return true end
     ns.Log(("pad bind: the flyout on %s is to be edited once the dialog is left"):format(tostring(p.flyout.host)))
-    if watched then ShowPicked(watched) end
+    ShowPicked(watched)
     return true
 end
 function G.Armed() return armed end
@@ -541,21 +555,74 @@ local EDIT_KEYS = {
     { key = KEY_ADD, act = "next" }, { key = KEY_LEFT, act = "off" }, { key = KEY_EDIT, act = "pads" },
     { key = KEY_PLATE, act = "plate" }, { key = KEY_BACK, act = "done" }, { key = "ESCAPE", act = "done" },
 }
-local editor, editing
+local editor
 E.KEYS = EDIT_KEYS
 
 function E.Editing() return editing end
 function E.Hint() return editor and editor.hint:IsShown() and editor.hint:GetText() or "" end
 
+-- Inside the game's dialog the pad's presses are the dialog's unless a frame of ours, over it, is given
+-- them first and keeps them. That frame: up only while the editor is up in the dialog, it keeps every
+-- pad button but the one that ends the editing, which goes on to the dialog as its own Cancel.
+local catcher, caughtAt
+local BY_KEY = {}
+for _, bind in ipairs(EDIT_KEYS) do BY_KEY[bind.key] = bind end
+local function Caught(self, button)
+    local e = editing
+    local pass = not (e and e.inside)
+    if not pass then
+        caughtAt = GetTime()
+        local bind = BY_KEY[button]
+        -- the press that opened the editor is not one in it
+        if bind and e.openedAt ~= caughtAt then
+            pass = bind.act == "done"
+            ns.Log(("pad edit: %s kept from the game's dialog%s"):format(tostring(button),
+                pass and ", then passed on to it" or ""))
+            xpcall(E.Do, geterrorhandler(), bind)
+        end
+    end
+    if self.SetPropagateKeyboardInput and not InCombatLockdown() then self:SetPropagateKeyboardInput(pass) end
+    return pass
+end
+local function Catch(on)
+    if not on then
+        if catcher then catcher:Hide() end
+        return
+    end
+    if not catcher then
+        catcher = CreateFrame("Frame", "FallensFlyoutsPadCatcher", UIParent)
+        catcher:Hide()
+        catcher:SetFrameStrata("TOOLTIP")
+        catcher:SetAllPoints(UIParent)
+        if catcher.EnableGamePadButton then catcher:EnableGamePadButton(true) end
+        catcher:SetScript("OnGamePadButtonDown", Caught)
+        -- never up without the editor under it: a frame that keeps the pad must not outlive its use
+        catcher:SetScript("OnUpdate", function(self)
+            if not (editing and editing.inside and watched and watched:IsShown()) then self:Hide() end
+        end)
+    end
+    catcher:Show()
+end
+function E.Catcher() return catcher end
+function G.CannotCatch() return cannotCatch == true end
+-- what was learned of this client is forgotten: the next edit tries inside the dialog again
+function G.Relearn() cannotCatch = nil end
+
 -- The pad's buttons go back to the game before anything else. (A fight's beginning is still time
--- enough; should one ever be on already, it is done when the fight ends.)
-function E.Close()
+-- enough; should one ever be on already, it is done when the fight ends.) `waiting`: closed inside
+-- the dialog only to open after it; otherwise an edit inside the dialog is over and done with.
+function E.Close(waiting)
     if editor and not InCombatLockdown() then ClearOverrideBindings(editor) end
+    Catch(false)
     if not editing then return true end
     ns.Log("pad edit: closed")
+    local inside = editing.inside
     editing = nil
-    editor.hint:Hide()
-    editor:Hide()
+    if editor then
+        editor.hint:Hide()
+        editor:Hide()
+    end
+    if inside and armed and waiting ~= true then armed.done = true end
     Hide()
     return true
 end
@@ -587,7 +654,10 @@ function E.Draw()
     local unit = e and F.UnitOf(e.flyout)
     if not (bar and unit) then return E.Close() end
     local flyout = e.flyout
-    if not Picture({ button = unit.host }, flyout, flyout.main, flyout.entries, e.mark) then return E.Close() end
+    -- in the dialog the flyout's button is the dialog's copy of it; after it, the button itself
+    local where = { button = unit.host }
+    if e.inside then where = Where(e.inside, armed and armed.slot) end
+    if not Picture(where, flyout, flyout.main, flyout.entries, e.mark) then return E.Close() end
     prompts.add:Show()
     prompts.add:SetPromptText(TEXT.toolNext)
     prompts.left:Show()
@@ -601,13 +671,20 @@ function E.Draw()
         prompts.plate:Show()
         prompts.plate:SetPromptText(F.Plate() and TEXT.plateOff or TEXT.plateOn)
     end
+    local entry = flyout.entries[e.mark]
+    if e.inside then
+        -- the game's box holds the words, and our bar stands where the game's does
+        Up(e.inside, bar)
+        Cover(e.inside, true)
+        Notice(e.inside, { TEXT.inSelected:format(entry and F.Name(entry) or ""), TEXT.inMove, TEXT.editRing })
+        return true
+    end
     bar:ApplyDefaultPromptPositioning()
     bar:ClearAllPoints()
     bar:SetPoint("BOTTOM", view, "TOP", 0, EDIT_GAP)
     bar:Show()
     editor.hint:ClearAllPoints()
     editor.hint:SetPoint("BOTTOM", bar, "TOP", 0, EDIT_GAP)
-    local entry = flyout.entries[e.mark]
     editor.hint:SetText(TEXT.editHint:format(entry and F.Name(entry) or "") .. "\n" .. TEXT.editRing)
     editor.hint:Show()
     holder:Show()
@@ -650,10 +727,22 @@ function E.Do(bind)
     return E.Draw()
 end
 
-function E.Open(flyout)
+-- `dialog`: the game's dialog, to edit inside it; none, to edit after it with the pad's buttons bound
+function E.Open(flyout, dialog)
     if InCombatLockdown() or not flyout or flyout.auto or not Legend() then return false end
     if not F.UnitOf(flyout) then return false end
     F.Shut()
+    -- the first icon round the dial is the one selected
+    local mark, low = 1, nil
+    for i, spot in ipairs(F.Spots(flyout.entries)) do
+        if not low or spot < low then mark, low = i, spot end
+    end
+    if dialog then
+        editing = { flyout = flyout, mark = mark, inside = dialog, openedAt = GetTime() }
+        Catch(true)
+        ns.Log(("pad edit: open inside the game's dialog for the flyout on %s"):format(tostring(flyout.host)))
+        return E.Draw()
+    end
     if not editor then
         editor = CreateFrame("Frame", "FallensFlyoutsPadEditor", UIParent)
         editor:Hide()
@@ -668,11 +757,6 @@ function E.Open(flyout)
             end)
         end
         editor.hint = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    end
-    -- the first icon round the dial is the one selected
-    local mark, low = 1, nil
-    for i, spot in ipairs(F.Spots(flyout.entries)) do
-        if not low or spot < low then mark, low = i, spot end
     end
     editing = { flyout = flyout, mark = mark, width = F.UnitOf(flyout).host:GetWidth() }
     editor.since = 0
@@ -760,7 +844,19 @@ local function Placed(frame, slot, possess)
 end
 
 -- a pad button the dialog was handed; one that placed an ability is not a hint's
-local function Pressed(_, key)
+local function Pressed(frame, key)
+    -- The editor is up in the dialog and the dialog was still given a press that is the editor's: on this
+    -- client a frame of ours cannot keep the pad from it. Said once in the log, and from then on the
+    -- editor opens after the dialog instead (whatever the press set down has been undone already).
+    if editing and editing.inside and key ~= KEY_BACK and editing.openedAt ~= GetTime() then
+        cannotCatch = true
+        ns.Log(("pad edit: the game's dialog was given %s while the editor was up in it (our frame %s it first): "
+            .. "the editor will open after the dialog"):format(tostring(key),
+            caughtAt == GetTime() and "saw" or "never saw"))
+        E.Close(true)
+        ShowPicked(frame)
+        return
+    end
     if placedAt == GetTime() then return end
     if picked then
         if key == KEY_ADD then G.Edit() end
@@ -801,6 +897,67 @@ local function Picked(frame, slot, possess)
 end
 
 -- watches one dialog; the game's is found at the start
+-- The dialog shows copies of the bar's buttons, and a copy has none of the bar's marks: there was no
+-- telling which buttons have flyouts ("we just force user to memorize which is the flyouts?",
+-- 2026-11-21). While the dialog is up, a copy whose ability leads a flyout wears the flyout's dots.
+local marks
+local function LayMarks()
+    local seen, n = Bars.Copies(true), 0
+    for slot, copy in pairs(seen) do
+        local lead = Bars.ActionAt(slot)
+        local flyout = lead and F.Of(lead)
+        -- the same ability on two buttons: the flyout is on the one it was last on, where that still holds it
+        local home = flyout and Bars.Named(flyout.host)
+        local homeSlot = home and Bars.Pad(home) and home:GetID() or nil
+        if homeSlot and homeSlot ~= slot and seen[homeSlot] and F.Same(Bars.ActionAt(homeSlot), lead) then
+            flyout = nil
+        end
+        if flyout then
+            n = n + 1
+            local mark = marks.pool[n]
+            if not mark then
+                mark = CreateFrame("Frame", nil, marks)
+                mark.dots = Art.Dots(mark)
+                marks.pool[n] = mark
+            end
+            mark:SetScale(Bars.Scale(copy))
+            mark:ClearAllPoints()
+            mark:SetAllPoints(copy)
+            Art.LayDots(mark.dots, copy, true)
+            mark.on = copy
+            mark:Show()
+        end
+    end
+    for i = n + 1, #marks.pool do
+        marks.pool[i]:Hide()
+        marks.pool[i].on = nil
+    end
+    marks.count = n
+end
+function Marks(on)
+    if not on then
+        if marks then marks:Hide() end
+        return
+    end
+    if not marks then
+        marks = CreateFrame("Frame", nil, UIParent)
+        marks:Hide()
+        -- over the dialog and its copies, under the picture of a flyout
+        marks:SetFrameStrata("FULLSCREEN_DIALOG")
+        marks.pool, marks.count, marks.since = {}, 0, 0
+        marks:SetScript("OnUpdate", function(self, elapsed)
+            self.since = self.since + elapsed
+            if self.since < MARK_LOOK then return end
+            self.since = 0
+            if not (watched and watched:IsShown()) then return self:Hide() end
+            xpcall(LayMarks, geterrorhandler())
+        end)
+    end
+    marks:Show()
+    LayMarks()
+end
+function G.Marks() return marks end
+
 function G.Install(frame)
     if watched or not (frame and hooksecurefunc) then return false end
     for _, name in ipairs({ "EnterBindingMode", "PlaceOrClearHeldActionCapturedInputHandler", "ExitBindingMode",
@@ -821,8 +978,11 @@ function G.Install(frame)
     -- the dialog gone, the console bar is back: a flyout looks for its button again
     local function Gone()
         -- an edit asked for in the dialog begins now that the dialog is gone
+        if editing and editing.inside then E.Close() end
         local next, lost = armed, dropped
         armed, dropped = nil, nil
+        if next and next.done then next = nil end
+        Marks(false)
         Clear()
         F.Moved()
         C_Timer.After(FIND_AFTER, function()
@@ -846,6 +1006,16 @@ function G.Install(frame)
     -- moving abilities: the held one was set down, let go or put back, or the mode left
     hooksecurefunc(frame, "TransitionToSelectActionToPickup", Guard(function(self)
         if picked and not armed then dropped = picked end
+        -- Back at the dialog's first step with the editor still up in it: the dialog acted on a press
+        -- that was the editor's (ended by its own button, the editor is closed before the dialog hears of
+        -- it). A frame of ours cannot keep the pad from it here: the editor will open after the dialog.
+        if editing and editing.inside then
+            cannotCatch = true
+            ns.Log("pad edit: the game's dialog stepped back while the editor was up in it: "
+                .. "the editor will open after it")
+            E.Close(true)
+        end
+        if armed and armed.done then armed = nil end
         Clear()
         -- still waiting to be left for the editor: the bar goes on saying which button does it
         if armed then ShowPicked(self) end
@@ -859,6 +1029,9 @@ function G.Install(frame)
     local pressed = Guard(Pressed)
     hooksecurefunc(frame, "StartListeningForButtons", Guard(function(self)
         self:HookScript("OnGamePadButtonDown", pressed)
+        -- the dialog is up: its copies of the bar's buttons are found afresh and wear the flyouts' marks
+        Bars.ForgetCopies()
+        Marks(true)
     end))
     return true
 end

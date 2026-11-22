@@ -43,7 +43,8 @@ for _, m in ipairs({ "ClearAllPoints", "RegisterForClicks", "EnableMouse",
     "AddMaskTexture", "SetLooping",
     "SetFromAlpha", "SetToAlpha", "SetDuration", "Play", "Stop", "RemoveMaskTexture", "SetDrawLayer",
     "SetToplevel", "SetMovable", "SetClampedToScreen", "RegisterForDrag", "SetMaxLetters", "SetFocus",
-    "Enable", "Disable", "SetValueStep", "SetObeyStepOnDrag", "SetAutoFocus", "SetFontObject", "EnableGamePadButton" }) do
+    "Enable", "Disable", "SetValueStep", "SetObeyStepOnDrag", "SetAutoFocus", "SetFontObject", "EnableGamePadButton",
+    "SetPropagateKeyboardInput" }) do
     Frame[m] = noop
 end
 local function region() return setmetatable({ scripts = {}, attrs = {}, shown = true }, Frame) end

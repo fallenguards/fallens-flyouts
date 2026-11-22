@@ -113,18 +113,27 @@ end
 -- put away then), by the slot each stands for: its ID, which is what the dialog itself reads off it.
 -- `seen`: only those in view.
 local FrameID, FrameSeen = UIParent.GetID, UIParent.IsVisible
-function B.Copies(seen)
-    local out = {}
+-- found once for each time the dialog comes up: walking every frame there is costs too much to repeat
+local copyList
+local function CopyList()
+    if copyList and #copyList > 0 then return copyList end
+    copyList = {}
     local frame = EnumerateFrames()
     while frame do
         if not frame:IsForbidden() and FrameIsType(frame, "CheckButton") then
             local name = FrameName(frame)
-            if type(name) == "string" and name:find(DIALOG_COPIES) then
-                local slot = FrameID(frame)
-                if type(slot) == "number" and slot > 0 and (not seen or FrameSeen(frame)) then out[slot] = frame end
-            end
+            if type(name) == "string" and name:find(DIALOG_COPIES) then copyList[#copyList + 1] = frame end
         end
         frame = EnumerateFrames(frame)
+    end
+    return copyList
+end
+function B.ForgetCopies() copyList = nil end
+function B.Copies(seen)
+    local out = {}
+    for _, frame in ipairs(CopyList()) do
+        local slot = FrameID(frame)
+        if type(slot) == "number" and slot > 0 and (not seen or FrameSeen(frame)) then out[slot] = frame end
     end
     return out
 end

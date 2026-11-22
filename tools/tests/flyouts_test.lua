@@ -1568,10 +1568,17 @@ do
     -- Edit Action Bar: an ability picked up off a button is held, to be put on another
     function dialog:EnterEditMode()
         self.plain = false
+        self:TransitionToSelectActionToPickup()
         self:Show()
         self:StartListeningForButtons()
     end
-    function dialog:TransitionToSelectActionToPickup() self:ShowEditModeFrameAndBindings() end
+    function dialog:TransitionToSelectActionToPickup()
+        self.editHolding = nil
+        self:ShowEditModeFrameAndBindings()
+    end
+    function dialog:UndoEdit()
+        if self:PlaceOrClearHeldActionCapturedInputHandler(self.pickupSlot, false) then self:TransitionToSelectActionToPickup() end
+    end
     -- as the game's: the ability comes off the button and is held, and the box says what is held
     function dialog:SelectActionToPickupCapturedInputHandler(slot)
         ClearCursor()
@@ -1580,13 +1587,17 @@ do
         W.placed[slot] = false
         fire("ACTIONBAR_SLOT_CHANGED", slot)
         self.pickupFunc, self.pickupParams, self.pickupSlot = C_Spell.PickupSpell, { had }, slot
+        self.editHolding = true
         return true
     end
     -- as the game's capture: the box of the held ability comes up only after the pick up has returned
     function dialog:CapturePickup(slot)
         if self:SelectActionToPickupCapturedInputHandler(slot) then self:ShowBindingModeFrameAndBindings() end
     end
-    function dialog:ExitEditMode() self:Hide() end
+    function dialog:ExitEditMode()
+        self.editHolding = nil
+        self:Hide()
+    end
     function dialog:PlaceOrClearHeldActionCapturedInputHandler(slot, _, exitOnBind)
         local _, had = GetActionInfo(slot)
         ClearCursor()
@@ -1600,12 +1611,20 @@ do
         self.pickupFunc, self.pickupParams = C_Spell.PickupSpell, { had }
         return true
     end
-    -- a press is its own moment in time
+    -- A press is its own moment in time. It is given out as the game gives a pad press out: first to the
+    -- topmost frame that takes the pad's buttons, and on to the next only when that one passes it on.
+    -- `W.noCatch`: a client that gives a frame of ours nothing while its dialog is up.
     local function press(key, slot)
         W.clock = W.clock + 1
+        local catcher = W.frames.FallensFlyoutsPadCatcher
+        if catcher and catcher:IsVisible() and not W.noCatch and catcher.scripts.OnGamePadButtonDown(catcher, key) ~= true then
+            return
+        end
         dialog.heldSlot = slot
         dialog.scripts.OnGamePadButtonDown(dialog, key)
         dialog.heldSlot = nil
+        -- the dialog's own Cancel while it holds an ability picked up in Edit Action Bar: put back, first step
+        if key == "PAD2" and dialog.editHolding and dialog:IsShown() then dialog:UndoEdit() end
     end
     local function bind(id, slot)
         dialog.pickupFunc, dialog.pickupParams = C_Spell.PickupSpell, { id }
@@ -1760,6 +1779,19 @@ do
             dialog:CapturePickup(slot)
         end
         dialog:EnterEditMode()
+        -- His words (2026-11-21): "why is the symbols that indicate flyout going away when i go to edit action
+        -- bar??? we just force user to memorize which is the flyouts?" The dialog shows copies of the bar's
+        -- buttons, and a copy had none of our marks.
+        local marks = Pad.Marks()
+        local onSeven, onFive
+        for _, mark in ipairs(marks and marks.pool or {}) do
+            if mark.on == W.frames.GamepadActionBarEditFrameTestActionButton7 then onSeven = mark end
+            if mark.on == W.frames.GamepadActionBarEditFrameTestActionButton5 then onFive = mark end
+        end
+        check(marks ~= nil and marks:IsVisible() and onSeven ~= nil and onSeven:IsVisible() and onSeven.dots.shown == true
+            and onSeven.dots.pieces[1].dot.shown and onSeven.dots.pieces[1].dot.point[2] == W.frames.GamepadActionBarEditFrameTestActionButton7,
+            "in Edit Action Bar the dialog's copy of a button that has a flyout wears the flyout's dots, at its corner")
+        check(onFive == nil, "a copy of a button with no flyout wears none")
         pickUp(5)
         check(Pad.Picked() == nil and not up(), "a button with no flyout picked up: nothing is offered")
         dialog:TransitionToSelectActionToPickup()
@@ -1778,12 +1810,93 @@ do
             "the flyout is pictured in place: around the dialog's own copy of that button")
         check(box.BindInstructionText.alpha == 1 and (Pad.Panel() == nil or not Pad.Panel():IsShown()),
             "the box still speaks of the ability the game holds: that is what is so until A is pressed")
+        -- His words (2026-11-21), of the build that edited only after the dialog: "why am i being sent
+        -- through TWO identical instructions before getting to flyout editing? ... first i have to hit A
+        -- ... then it tells me i have to hit B ... then it tells me to hit B a-fucking-gain ... and THEN it
+        -- finally goes to what it should have fking done with the first A". And: "why the hell does it
+        -- un-dim everything and open the spellbook back up?!!? we're still editing!!" So: A, and the editor
+        -- is up there and then, inside Edit Action Bar, a frame of ours keeping the pad from the dialog.
+        local copy7 = W.frames.GamepadActionBarEditFrameTestActionButton7
+        local function dial() return table.concat(NS.Flyouts.Spots(target.entries), " ") end
+        local function slots() return table.concat({ tostring(W.placed[4]), tostring(W.placed[5]), tostring(W.placed[6]),
+            tostring(W.placed[7]) }, " ") end
+        press("PAD1")
+        local catcher = W.frames.FallensFlyoutsPadCatcher
+        local inside = Edit.Editing()
+        check(inside ~= nil and inside.inside == dialog and dialog:IsShown() and select(2, GetActionInfo(7)) == 771
+            and NS.Flyouts.At("ActionButton7") == target and ids() == "771 772 773",
+            "A: the flyout editor is up at once, inside Edit Action Bar, with no other button to press first; the ability is back on its button")
+        check(catcher ~= nil and catcher:IsVisible() and catcher:GetFrameStrata() == "TOOLTIP",
+            "a frame of ours over the dialog is up to take the pad's presses")
+        local says = Pad.Panel()
+        check(says ~= nil and says:IsShown() and says.title.text == "Edit Flyout" and says.lines[1].text == NS.Flyouts.Name(target.entries[1]) .. " is selected."
+            and says.lines[2].text == "The D-pad moves it to that side of the button."
+            and says.lines[3].text == "Press the same side again for the outer ring." and box.BindInstructionText.alpha == 0,
+            "the game's box says what is selected and what the D-pad does: " .. tostring(says.lines[1].text))
+        check(prompts.add.label == "Select Next Icon" and prompts.left.label == "Take Icon Off" and prompts.edit.label == "Use Face Buttons"
+            and prompts.back.label == "Done" and prompts.plate ~= nil and prompts.plate.label == "Hide Background"
+            and theirBar:GetAlpha() == 0 and bar.point[2] == theirBar,
+            "one hint bar, ours, where the game's stands, names every button")
+        check(Pad.View():IsShown() and Pad.View().around == copy7 and Pad.View().marked == 1,
+            "the flyout is pictured around the dialog's copy of its button, the first icon selected")
+        -- what he did then: the D-pad, to move the selected icon
+        local held = slots()
+        press("PAD1")
+        check(Edit.Editing().mark == 2 and Pad.View().marked == 2 and says.lines[1].text == NS.Flyouts.Name(target.entries[2]) .. " is selected.",
+            "A: the next icon is selected, and the box names it")
+        press("PADDUP", 4)
+        check(dial() == "2 1 3" and slots() == held and W.placed[4] == 704 and Pad.View().tokens[2].pad == "PADDUP",
+            "D-pad up: the selected icon goes up. The dialog is never given the press: every bar spot holds what it held: " .. slots())
+        press("PADDLEFT", 6)
+        check(dial() == "2 4 3" and slots() == held and W.placed[6] == false, "D-pad left: to the empty left side; the empty bar spot stays empty")
+        press("PADLTRIGGER", 5)
+        press("PADLSHOULDER", 5)
+        check(slots() == held and Edit.Editing() ~= nil, "a trigger or a shoulder button is kept from the dialog as well, and does nothing")
+        -- B: done, and the same press is the dialog's own Cancel: one press, back at Edit Action Bar's first step
+        press("PAD2")
+        check(Edit.Editing() == nil and not catcher:IsVisible() and Pad.Armed() == nil and not up(),
+            "B: done, at one press: the editor and the frame that kept the pad are gone")
+        check(dialog:IsShown() and dialog.EditActionBarsInfoFrame:IsShown() and not box:IsShown() and theirBar:GetAlpha() == 1
+            and theirFirstBar:GetAlpha() == 1 and box.BindInstructionText.alpha == 1,
+            "the dialog is back at its first step, still up and dimmed, with its own words and hint bar")
+        check(slots() == held and select(2, GetActionInfo(7)) == 771 and NS.Flyouts.At("ActionButton7") == target and dial() == "2 4 3",
+            "nothing is held, every bar spot holds what it held, and the flyout is as edited: " .. dial())
+        dialog:ExitEditMode()
+        flushAll()
+        check(Edit.Editing() == nil and not bound("PADDUP"), "the dialog left after that: nothing else opens")
+        -- as it was, for what follows
+        for _, e in ipairs(target.entries) do e.spot = nil end
+        NS.Flyouts.Apply()
+
+        -- A client that gives a frame of ours no pad press while its dialog is up. That shows at the first
+        -- press: the dialog is given it. What it set down is undone, the box says how to go on, and from
+        -- then on the editor opens after the dialog.
+        W.noCatch = true
+        dialog:EnterEditMode()
+        pickUp(7)
+        press("PAD1")
+        check(Edit.Editing() ~= nil and Edit.Editing().inside == dialog and not Pad.CannotCatch(), "there too the editor comes up in the dialog at A")
+        press("PADDUP", 4)
+        check(slots() == held and W.placed[4] == 704 and dial() == "1 2 3", "D-pad up went to the dialog there: undone at once, every bar spot as it was")
+        check(Pad.CannotCatch() and Edit.Editing() == nil and Pad.Armed() ~= nil and says:IsShown()
+            and says.lines[1].text:find("to leave Edit Action Bar", 1, true) ~= nil and prompts.back.label == "Open Flyout Editor"
+            and not prompts.add.shown,
+            "and the box now says to leave Edit Action Bar for the editor: " .. tostring(says.lines[1].text))
+        dialog:ExitEditMode()
+        flushAll()
+        check(Edit.Editing() ~= nil and Edit.Editing().inside == nil and bound("PADDUP"), "left, the editor opens after the dialog, the pad's buttons bound to it")
+        tap("PAD2")
+        check(Edit.Editing() == nil and not bound("PADDUP"), "and B ends that one")
+
+        -- on such a client, from then on: A puts the ability back and the box says how to go on
+        dialog:EnterEditMode()
+        pickUp(7)
         press("PAD1")
         check(Pad.Armed() ~= nil and Pad.Picked() == nil and select(2, GetActionInfo(7)) == 771 and NS.Flyouts.At("ActionButton7") == target
             and ids() == "771 772 773",
             "A: the ability is back on its button at once and the flyout is whole")
         check(Edit.Editing() == nil and not bound("PADDUP") and not bound("PAD1"),
-            "nothing is edited while the game's dialog is up: there the D-pad is the game's")
+            "where the pad cannot be kept from the dialog, nothing is edited while it is up")
         check(prompts.back.shown and prompts.back.label == "Open Flyout Editor" and not prompts.add.shown and not prompts.left.shown
             and not prompts.edit.shown, "the bar names the one button to press: B opens the flyout editor")
         -- His snip (2026-11-21): "after hitting edit flyout, there's stacked hint bars". Ours, of one button,
@@ -1968,6 +2081,7 @@ do
         W.placed[7] = nil
         fire("ACTIONBAR_SLOT_CHANGED", 7)
         flushAll()
+        W.noCatch = nil
     end
 
     W.combat = true
