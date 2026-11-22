@@ -624,6 +624,12 @@ C_Spell = {
     PickupSpell = function(id) W.cursor = { "spell", 7, "spell", id, id } end,
     -- W.helpful, W.harmful: the spells that are for friends, for foes; one in neither is for anyone
     IsSpellHelpful = function(id) return W.helpful ~= nil and W.helpful[id] == true end,
+    -- W.uses: a spell's charges or uses; the client answers in words, a star past the most asked for
+    GetSpellDisplayCount = function(id, most, over)
+        local n = W.uses and W.uses[id]
+        if not n then return "" end
+        return n > (most or 9999) and (over or "*") or tostring(n)
+    end,
     IsSpellHarmful = function(id) return W.harmful ~= nil and W.harmful[id] == true end,
     GetSpellTexture = function(id) return id end,
     -- W.ranks: spells that are ranks of one spell, id to its name and rank
@@ -657,7 +663,11 @@ C_Item = {
     GetItemNameByID = function(id) return "Item " .. id end,
     GetItemCooldown = function() return 0, 0, 1 end,
     -- with bags set, an item not in them is one the player has none of
+    -- W.counts: how many of an item there are; W.stacks: how many go in one stack (1: it does not stack)
+    IsConsumableItem = function(id) return W.items ~= nil and W.items[id] ~= nil end,
+    GetItemMaxStackSizeByID = function(id) return W.stacks and W.stacks[id] or 1 end,
     GetItemCount = function(id)
+        if W.counts and W.counts[id] ~= nil then return W.counts[id] end
         if not W.bags then return 1 end
         for _, held in ipairs(W.bags) do
             if held == id then return 1 end

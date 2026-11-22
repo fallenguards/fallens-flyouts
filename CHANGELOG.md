@@ -6,6 +6,7 @@
 - A first login with the addon shows a short dialog, once: one line on how a flyout is made, and the flyouts that fill themselves (Food, Drink, Potions and the rest) in a row, each ready to be dragged onto a bar from there. Okay, its x or Escape closes it for good. Anyone who already has a flyout never sees it.
 
 ### Fixed
+- A flyout's icons did not say how many of an item there are. Each icon now shows it in its corner, as a bar button does: the number in the bags for anything used up or stacked, and a spell's charges or uses.
 - The settings page was taller than the game's Options window, so its last check boxes hung out under it. The page now scrolls inside the window, with the game's own scroll bar, and a controller's cursor scrolls it too.
 
 ### Changed

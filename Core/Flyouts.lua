@@ -418,6 +418,8 @@ end
 
 -- the bar button's own numbers: the sweep's inset and shade, the dimming
 local COOL_SHADE = 0.64
+-- the most an icon's corner says in digits, and what stands for more
+local COUNT_MOST, COUNT_OVER = 999, "*"
 local READY, NO_POWER, UNUSABLE = { 1, 1, 1 }, { 0.5, 0.5, 1 }, { 0.4, 0.4, 0.4 }
 -- set when the client hid a value in a fight: then it is handed on unread
 F.hid = { cooldown = false, usable = false }
@@ -482,7 +484,34 @@ local function Dim(icon, kind, id)
     icon:SetVertexColor(color[1], color[2], color[3])
 end
 
--- every icon of one flyout: its sweep and its dimming, now
+-- whether an item's number is shown: one that is used up or comes in stacks, as on a bar button
+local function Counted(id)
+    local eaten = C_Item.IsConsumableItem and C_Item.IsConsumableItem(id)
+    if not Hidden(eaten) and eaten == true then return true end
+    local most = C_Item.GetItemMaxStackSizeByID and C_Item.GetItemMaxStackSizeByID(id)
+    return type(most) == "number" and not Hidden(most) and most > 1
+end
+
+-- How many there are, in the icon's corner as a bar button has it: of an item, those in the bags; of a
+-- spell, its charges or uses in the client's own words (hidden in a fight, so handed on unread).
+local function Count(text, kind, id)
+    local shown = ""
+    if kind == "item" and C_Item.GetItemCount then
+        local many = C_Item.GetItemCount(id, false, true)
+        if Hidden(many) then
+            shown = many
+        elseif type(many) == "number" and Counted(id) then
+            shown = many > COUNT_MOST and COUNT_OVER or tostring(many)
+        end
+    elseif kind == "spell" and C_Spell.GetSpellDisplayCount then
+        local ok, words = pcall(C_Spell.GetSpellDisplayCount, id, COUNT_MOST, COUNT_OVER)
+        if ok and words ~= nil then shown = words end
+    end
+    -- a value the client will not show for us must not stop the flyout opening
+    if not pcall(text.SetText, text, shown) then text:SetText("") end
+end
+
+-- every icon of one flyout: its sweep, its dimming and its number, now
 local function State(unit)
     if not unit.flyout then return end
     local numbers = C_CVar.GetCVar("countdownForCooldowns") == "1"
@@ -493,6 +522,7 @@ local function State(unit)
             frame.cooldown:SetHideCountdownNumbers(not numbers)
             Sweep(frame.cooldown, kind, id)
             Dim(frame.icon, kind, id)
+            Count(frame.count, kind, id)
         end
     end
 end
@@ -573,6 +603,10 @@ local function EntryButton(unit, i)
     entry.key:SetPoint("TOPRIGHT", Art.KEY_X, Art.KEY_Y)
     -- the font's own gray is darker than the one the game's bars show a key in
     if ACTIONBAR_HOTKEY_FONT_COLOR then entry.key:SetVertexColor(ACTIONBAR_HOTKEY_FONT_COLOR:GetRGB()) end
+    -- how many there are, in the game's own font for it and the corner its small buttons use
+    entry.count = entry:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    entry.count:SetPoint("BOTTOMRIGHT")
+    entry.count:SetJustifyH("RIGHT")
     -- the game's small button sweep, at the icon's own level
     local cool = CreateFrame("Cooldown", nil, entry, "CooldownFrameTemplate")
     cool:SetPoint("TOPLEFT", entry.icon, "TOPLEFT", Art.SWEEP[1], Art.SWEEP[2])
@@ -2249,9 +2283,9 @@ events:RegisterEvent("UPDATE_BINDINGS")
 for _, event in ipairs({ "GAME_PAD_ACTIVE_CHANGED", "GAME_PAD_CONNECTED", "GAME_PAD_DISCONNECTED" }) do
     pcall(events.RegisterEvent, events, event)
 end
--- what changes an open flyout's sweeps and dimming
+-- what changes an open flyout's sweeps, dimming and numbers
 local STATE_EVENTS = { SPELL_UPDATE_COOLDOWN = true, SPELL_UPDATE_USABLE = true, BAG_UPDATE_COOLDOWN = true,
-    ACTIONBAR_UPDATE_COOLDOWN = true, SPELL_UPDATE_CHARGES = true }
+    ACTIONBAR_UPDATE_COOLDOWN = true, SPELL_UPDATE_CHARGES = true, BAG_UPDATE_DELAYED = true, SPELL_UPDATE_USES = true }
 for event in pairs(STATE_EVENTS) do pcall(events.RegisterEvent, events, event) end
 events:SetScript("OnEvent", function(_, event, on)
     if event == "ACTIONBAR_SLOT_CHANGED" then

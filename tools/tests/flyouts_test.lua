@@ -2871,6 +2871,69 @@ do
     NS.Flyouts.Shut()
 end
 
+print("an icon says how many there are of its item, as a bar button does")
+do
+    -- His words (2026-11-22): "for items with quantities, their quantities aren't showing up in our flyouts.
+    -- big problem for the consumables etc"
+    login("Player-1-0000000Q")
+    local hadPlaced = W.placed
+    W.placed = W.placed or {}
+    W.placed[8] = 9301
+    fire("ACTIONBAR_SLOT_CHANGED", 8)
+    flushAll()
+    -- a potion that stacks, a stone that is neither used up nor stacked, arrows by the hundred, a spell with uses
+    W.items = { [118] = { sub = 1, level = 5 } }
+    W.bags = { 118, 6948, 2512 }
+    W.counts, W.stacks, W.uses = { [118] = 17, [6948] = 1, [2512] = 1200 }, { [118] = 20, [2512] = 200 }, { [9302] = 3 }
+    local function stackItem(host, id)
+        W.cursor = { "item", id }
+        fire("ACTIONBAR_SHOWGRID")
+        local tab = tabOf(host)
+        tab.scripts.OnReceiveDrag(tab)
+        flushAll()
+    end
+    for _, id in ipairs({ 118, 6948, 2512 }) do stackItem("ActionButton8", id) end
+    stack("ActionButton8", 9302)
+    local flyout, unit = NS.Flyouts.At("ActionButton8")
+    check(flyout ~= nil and #flyout.entries == 5, "a flyout of a spell, three items and a spell with uses")
+    NS.Flyouts.Show(unit.index)
+    local function says(i) return entry(unit.index, i).count and entry(unit.index, i).count.text end
+    check(says(2) == "17", "the potion's icon says how many are in the bags: " .. tostring(says(2)))
+    check(says(3) == "", "an item that is neither used up nor stacked says nothing: [" .. tostring(says(3)) .. "]")
+    check(says(4) == "*", "more than three digits hold: a star, as on the game's buttons: " .. tostring(says(4)))
+    check(says(1) == "" and says(5) == "3", "a plain spell says nothing, one with uses says how many: " .. tostring(says(5)))
+    local point = entry(unit.index, 2).count:GetPoint()
+    check(point == "BOTTOMRIGHT", "it stands in the icon's bottom right corner, where a bar button has it")
+    -- one drunk: the number follows while the flyout is open
+    W.counts[118] = 16
+    fire("BAG_UPDATE_DELAYED")
+    flushAll()
+    check(says(2) == "16", "one used: the open flyout says so at once: " .. tostring(says(2)))
+    -- the last one used, and items I have none of left in: a naught, as on a bar button
+    NS.Flyouts.SetHiding(false)
+    W.counts[118] = 0
+    fire("BAG_UPDATE_DELAYED")
+    flushAll()
+    flyout, unit = NS.Flyouts.At("ActionButton8")
+    NS.Flyouts.Show(unit.index)
+    check(says(2) == "0", "none left, and shown grayed: it says 0: " .. tostring(says(2)))
+    NS.Flyouts.SetHiding(true)
+    -- a number the client hides is handed on unread, and a refusal does not stop the flyout
+    local was = C_Spell.GetSpellDisplayCount
+    C_Spell.GetSpellDisplayCount = function() error("refused") end
+    W.counts[118] = 5
+    fire("BAG_UPDATE_DELAYED")
+    flushAll()
+    flyout, unit = NS.Flyouts.At("ActionButton8")
+    NS.Flyouts.Show(unit.index)
+    check(unit.menu:IsShown() and says(2) == "5", "a count the client refuses for a spell leaves the flyout open and the rest right")
+    C_Spell.GetSpellDisplayCount = was
+    NS.Flyouts.Shut()
+    W.items, W.bags, W.counts, W.stacks, W.uses = nil, nil, nil, nil, nil
+    W.placed[8] = nil
+    W.placed = hadPlaced
+end
+
 print("a first install: once, the game's own dialog says how a flyout is made and offers the flyouts that fill themselves")
 do
     -- His words (2026-11-22): "so i ran the ffdev fresh and got.. nothing? so we have no new player popup at
