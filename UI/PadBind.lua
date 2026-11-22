@@ -49,7 +49,7 @@ local TEXT = {
     note2 = "The flyout editor opens then.",
     note3 = "The D-pad moves the icons there. Pressed here it changes nothing.",
     editHint = "Editing: %s is selected. The D-pad moves it to that side of the button.",
-    noSide = "No icon is on that side to change places with.",
+    editRing = "Press the same side again for the outer ring.",
     -- the game's Unbind on a flyout's button: the flyout is kept, and that is said
     putAway = "%s is off the bars, so its flyout is put away. It comes back when %s is on a button again.",
 }
@@ -210,7 +210,8 @@ local function Picture(where, flyout, lead, entries, marked)
     v:SetFrameStrata("TOOLTIP")
     v:SetFrameLevel(PANEL_LEVEL)
     local reach = Art.BUTTON / 2 + F.RING_GAP + Art.ICON / 2
-    local radius = F.PlateReach(#entries, reach)
+    local spots = F.Spots(entries)
+    local radius = F.PlateReach(F.TopSpot(entries), reach)
     v:SetSize(2 * radius, 2 * radius)
     v:ClearAllPoints()
     if where.button then
@@ -224,7 +225,7 @@ local function Picture(where, flyout, lead, entries, marked)
     v.around = where.button
     Art.LayDisc(v.plate, v, F.Plate() and radius or nil)
     local faces = F.Faces(flyout)
-    local pads = F.RingPads(#entries, faces)
+    local pads = F.RingPads(entries, faces)
     local hub = v.tokens[0]
     hub:ClearAllPoints()
     hub:SetPoint("CENTER", v, "CENTER")
@@ -237,7 +238,8 @@ local function Picture(where, flyout, lead, entries, marked)
         token:SetShown(entry ~= nil)
         if entry then
             token:ClearAllPoints()
-            token:SetPoint("CENTER", v, "CENTER", F.RingSpot(i, reach))
+            token:SetPoint("CENTER", v, "CENTER", F.RingSpot(spots[i], reach))
+            token.spot = spots[i]
             token.icon:SetTexture(F.Icon(entry))
             token.key:SetText(F.PadText(pads[i]))
             token.pad = pads[i]
@@ -262,16 +264,31 @@ local function WouldBe(o)
 end
 
 -- the hint bar set where the game's own is, and shown
-local function Up(frame, bar)
+-- The game's own hint bar, under ours. While ours is up the game's is put out of sight: ours names
+-- every button that matters then, and where it was the shorter of the two the game's end showed
+-- beside it ("stacked hint bars", his snip of 2026-11-21). Only its alpha is set, and set back after.
+local FrameAlpha = UIParent.SetAlpha
+local veiled
+local function Veil(theirs)
+    if veiled and veiled ~= theirs then FrameAlpha(veiled, 1) end
+    veiled = theirs or nil
+    if veiled then FrameAlpha(veiled, 0) end
+end
+
+-- `selecting`: the dialog is at Edit Action Bar's first step, whose box has a hint bar of its own;
+-- otherwise the game's bar is the one under its box of the held ability.
+local function Up(frame, bar, selecting)
     bar:ApplyDefaultPromptPositioning()
-    local footer = frame.bindingModeFooter
-    local theirs = footer and footer.inputLegend
+    local footer = frame[selecting and "editModeFooter" or "bindingModeFooter"]
+    local theirs = type(footer) == "table" and footer.inputLegend or nil
+    if type(theirs) ~= "table" then theirs = nil end
     bar:ClearAllPoints()
     if theirs then
         bar:SetPoint("TOPLEFT", theirs, "TOPLEFT")
     else
         bar:SetPoint("TOPLEFT", frame.BindingInfoFrame or frame, "BOTTOMLEFT")
     end
+    Veil(theirs)
     bar:Show()
     holder:Show()
 end
@@ -411,16 +428,19 @@ local function ShowPicked(frame)
     prompts.back:Show()
     prompts.back:SetPromptText(armed and TEXT.openEditor or (FRAME_ACTION_CANCEL or TEXT.cancel))
     if prompts.plate then prompts.plate:Hide() end
-    Up(frame, bar)
-    -- the notice stands in the box that speaks of the held ability; with that box away the bar says it
+    -- Waiting to be left, the dialog is either still holding (its box of the held ability is up, and the
+    -- notice stands in it) or back at its first step, where the bar alone says it. Just picked up, the
+    -- box of the held ability is the one the game is about to put up.
     local box = frame.BindingInfoFrame
     local holding = armed ~= nil and type(box) == "table" and box:IsShown()
+    Up(frame, bar, armed ~= nil and not holding)
     Cover(frame, holding)
     if holding then Notice(frame) end
 end
 
 local function Hide()
     if watched then Cover(watched, false) end
+    Veil(nil)
     if holder then holder:Hide() end
 end
 
@@ -509,11 +529,12 @@ function G.Armed() return armed end
 function G.Picked() return picked end
 function G.View() return view end
 function G.Panel() return panel end
+function G.Veiled() return veiled end
 
 -- The flyout editor of gamepad mode. It is up only outside the game's dialog, where the pad's buttons
--- can be bound to buttons of ours: the D-pad moves the selected icon to that side of the button (it
--- and the icon there change places), and the face buttons select, take off, swap the pad's crosses
--- and end it. The flyout is pictured in place, around its own button.
+-- can be bound to buttons of ours: the D-pad puts the selected icon on that side of the button, taken
+-- or empty (an icon there changes places with it), and the face buttons select, take off, swap the
+-- pad's crosses and end it. The flyout is pictured in place, around its own button.
 local EDIT_KEYS = {
     { key = "PADDUP", act = "side", side = 1 }, { key = "PADDRIGHT", act = "side", side = 2 },
     { key = "PADDDOWN", act = "side", side = 3 }, { key = "PADDLEFT", act = "side", side = 4 },
@@ -587,9 +608,7 @@ function E.Draw()
     editor.hint:ClearAllPoints()
     editor.hint:SetPoint("BOTTOM", bar, "TOP", 0, EDIT_GAP)
     local entry = flyout.entries[e.mark]
-    local hint = TEXT.editHint:format(entry and F.Name(entry) or "")
-    if e.note then hint = hint .. "\n" .. e.note end
-    editor.hint:SetText(hint)
+    editor.hint:SetText(TEXT.editHint:format(entry and F.Name(entry) or "") .. "\n" .. TEXT.editRing)
     editor.hint:Show()
     holder:Show()
     return true
@@ -601,19 +620,21 @@ function E.Do(bind)
     if not e then return false end
     if InCombatLockdown() or bind.act == "done" then return E.Close() end
     local flyout = e.flyout
-    local count = #flyout.entries
-    e.note = nil
+    local spots = F.Spots(flyout.entries)
     if bind.act == "side" then
-        -- to that side of the button; pressed for the side it is on already, to the outer ring there
+        -- To that side of the button, taken or empty: anywhere on the dial ("why would they HAVE to swap
+        -- with an existing one?", 2026-11-21). Pressed for the side it stands on, to the other ring there.
         local to = bind.side
-        if to == e.mark then to = to + RING_SIDES end
-        if to <= count and to ~= e.mark and F.Swap(flyout, e.mark, to) then
-            e.mark = to
-        else
-            e.note = TEXT.noSide
-        end
+        if spots[e.mark] == to then to = to + RING_SIDES end
+        F.Place(flyout, e.mark, to)
     elseif bind.act == "next" then
-        e.mark = e.mark % count + 1
+        -- round the dial as it lies: the icon on the next spot on, the first after the last
+        local at, best, first = spots[e.mark], nil, nil
+        for i, spot in ipairs(spots) do
+            if spot > at and (not best or spot < spots[best]) then best = i end
+            if not first or spot < spots[first] then first = i end
+        end
+        e.mark = best or first or e.mark
     elseif bind.act == "off" then
         local ok, gone = F.Remove(flyout, e.mark)
         if ok and (gone or #flyout.entries == 0) then return E.Close() end
@@ -648,7 +669,12 @@ function E.Open(flyout)
         end
         editor.hint = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     end
-    editing = { flyout = flyout, mark = 1, width = F.UnitOf(flyout).host:GetWidth() }
+    -- the first icon round the dial is the one selected
+    local mark, low = 1, nil
+    for i, spot in ipairs(F.Spots(flyout.entries)) do
+        if not low or spot < low then mark, low = i, spot end
+    end
+    editing = { flyout = flyout, mark = mark, width = F.UnitOf(flyout).host:GetWidth() }
     editor.since = 0
     editor:Show()
     for _, bind in ipairs(EDIT_KEYS) do SetOverrideBindingClick(editor, true, bind.key, EDIT_BUTTON .. bind.key) end

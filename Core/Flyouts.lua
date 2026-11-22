@@ -779,33 +779,74 @@ end
 -- The pad button for each place of a unit's flyout. Around its button: the first four on one cross of the
 -- pad, each on its own side, any more on the other cross. As a strip: by where each lies along it. The
 -- D-pad comes first, or the face buttons where the flyout or the profile says so.
--- around a button: the first four on one cross of the pad, each on its own side, any more on the other
-local function RingPads(count, faces)
+-- Where each icon of a flyout stands around its button: a spot of the dial, 1 to 4 on the first ring
+-- (up, right, down, left) and 5 to 8 on the second. An icon stands where it was put (entry.spot, set
+-- in the pad's flyout editor); the others take the free spots in their order. Of two put on one spot
+-- the first keeps it. `entries`: the icons, or how many there are.
+local SPOTS = 2 * DPAD
+local function Spots(entries)
+    local out, taken = {}, {}
+    if type(entries) == "number" then
+        for i = 1, entries do out[i] = i end
+        return out
+    end
+    for i, entry in ipairs(entries) do
+        local spot = entry.spot
+        if type(spot) == "number" and spot >= 1 and spot <= SPOTS and spot % 1 == 0 and not taken[spot] then
+            out[i], taken[spot] = spot, true
+        end
+    end
+    local free = 1
+    for i in ipairs(entries) do
+        if not out[i] then
+            while taken[free] do free = free + 1 end
+            out[i], taken[free] = free, true
+        end
+    end
+    return out
+end
+-- the outermost spot in use
+local function TopSpot(entries)
+    local top = 0
+    for _, spot in ipairs(Spots(entries)) do top = math.max(top, spot) end
+    return top
+end
+F.Spots, F.TopSpot, F.SPOTS = Spots, TopSpot, SPOTS
+-- around a button: a spot of the first ring is picked by one cross of the pad, each button on its own
+-- side, a spot of the second ring by the other cross
+local function RingPads(entries, faces)
     local first, second = DPAD_RING, FACE_RING
     if faces then first, second = FACE_RING, DPAD_RING end
     local out = {}
-    for i = 1, count do out[i] = i <= DPAD and first[i] or second[(i - DPAD - 1) % DPAD + 1] end
+    for i, spot in ipairs(Spots(entries)) do
+        out[i] = spot <= DPAD and first[spot] or second[(spot - DPAD - 1) % DPAD + 1]
+    end
     return out
 end
 F.RingPads, F.RING_GAP = RingPads, RING_GAP
--- where icon i stands around a button: how far across and up from its middle, the first ring `reach` out
+-- where spot i of the dial is: how far across and up from the button's middle, the first ring `reach` out
 function F.RingSpot(i, reach)
     local way = RING[(i - 1) % DPAD + 1]
     local out = reach + math.floor((i - 1) / DPAD) * (Art.ICON + RING_GAP)
     return way[1] * out, way[2] * out
 end
 -- the first ring's distance from the button's middle, in the flyout's own measure; and the plate's
--- reach for that many icons
+-- reach where `top` is the outermost spot in use
 function F.RingReach() return Art.BUTTON / 2 / F.Size() + RING_GAP + Art.ICON / 2 end
-function F.PlateReach(count, reach)
-    local rings = count > DPAD and 2 or 1
+function F.PlateReach(top, reach)
+    local rings = top > DPAD and 2 or 1
     return reach + (rings - 1) * (Art.ICON + RING_GAP) + Art.ICON / 2 + PLATE_PAD
 end
 
 local function PadsOf(unit, count)
     local faces = F.Faces(unit.flyout)
     local out = {}
-    if unit.radial then return RingPads(count, faces) end
+    if unit.radial then
+        for i, pad in ipairs(RingPads(unit.flyout.entries, faces)) do
+            if i <= count then out[i] = pad end
+        end
+        return out
+    end
     for i, pad in ipairs(PadsFor(unit.way or "UP", count)) do out[i] = faces and OTHER_CROSS[pad] or pad end
     return out
 end
@@ -985,11 +1026,11 @@ function F.Put(unit, frame, out)
     frame:ClearAllPoints()
     frame:SetPoint(side.point, unit.menu, side.point, side.x * out, side.y * out)
 end
--- icon i in its place: along the strip, or around the button (up, right, down, left; a second ring past four)
+-- icon i in its place: along the strip, or on its spot around the button
 function F.Seat(unit, frame, i)
     if not unit.radial then return F.Put(unit, frame, F.Slot(i)) end
     frame:ClearAllPoints()
-    frame:SetPoint("CENTER", unit.menu, "CENTER", F.RingSpot(i, unit.reach))
+    frame:SetPoint("CENTER", unit.menu, "CENTER", F.RingSpot(unit.spots and unit.spots[i] or i, unit.reach))
 end
 
 -- a unit placed, sized and turned for its bar
@@ -1080,12 +1121,13 @@ local function Lay(unit)
     if unit.radial then
         -- the first ring a step off the button, in the menu's own measure; the frame holds two rings
         unit.reach = F.RingReach()
+        unit.spots = Spots(flyout.entries)
         local span = 2 * (unit.reach + Art.ICON + RING_GAP + Art.ICON / 2)
         menu:SetPoint("CENTER", host, "CENTER")
         menu:SetSize(span, span)
         Art.HideStrip(unit.strip)
         -- the plate, where wanted, and the button's icon at its middle, as large as the button
-        Art.LayDisc(unit.plate, menu, F.Plate() and F.PlateReach(count, unit.reach) or nil)
+        Art.LayDisc(unit.plate, menu, F.Plate() and F.PlateReach(TopSpot(flyout.entries), unit.reach) or nil)
         unit.hub:SetShown(unit.plate.radius ~= nil)
         unit.hub:SetScale(Art.BUTTON / F.Size() / Art.ICON)
         unit.hub.icon:SetTexture(flyout.icon or (flyout.main and F.Icon(flyout.main)) or nil)
@@ -1796,6 +1838,22 @@ local function Has(flyout, entry)
 end
 
 -- adds to the button's flyout, making one if needed
+-- One more icon for a flyout. Where its icons have been put on spots of the dial, the new one is held
+-- to the first free spot from the start: taking another off later must not shift it.
+local function Append(flyout, entry)
+    local full, new = Full(flyout), Copy(entry)
+    local taken, held = {}, false
+    for _, other in ipairs(full) do
+        if other.spot then taken[other.spot], held = true, true end
+    end
+    if held then
+        local free = 1
+        while taken[free] do free = free + 1 end
+        new.spot = free
+    end
+    full[#full + 1] = new
+end
+
 function F.Stack(button, entry)
     if InCombatLockdown() then return nil, TEXT.fight end
     if not list then return nil end
@@ -1818,8 +1876,7 @@ function F.Stack(button, entry)
         flyout = { host = name, main = main, entries = { Copy(main) } }
         list[#list + 1] = flyout
     end
-    local full = Full(flyout)
-    full[#full + 1] = Copy(entry)
+    Append(flyout, entry)
     F.Apply()
     return flyout
 end
@@ -1836,9 +1893,8 @@ function F.StackLed(main, entry, button)
     if flyout and flyout.auto then return nil, TEXT.auto end
     if flyout then
         if not Has(flyout, entry) then
-            local full = Full(flyout)
-            if #full >= MAX then return nil, TEXT.full end
-            full[#full + 1] = Copy(entry)
+            if #Full(flyout) >= MAX then return nil, TEXT.full end
+            Append(flyout, entry)
         end
     else
         flyout = { host = name or "", main = Copy(main), entries = { Copy(main), Copy(entry) } }
@@ -1882,16 +1938,33 @@ function F.Remove(flyout, i)
 end
 
 -- an entry to another place in its flyout; the rest close up around it
--- two icons of a flyout change places
-function F.Swap(flyout, a, b)
+-- An icon put on a spot of the dial, taken or empty. From then on every icon of the flyout is held to
+-- the spot it stands on, so nothing else shifts; an icon standing on that spot takes the one left.
+function F.Place(flyout, i, spot)
     if InCombatLockdown() then return false, TEXT.fight end
     local entries = flyout and flyout.entries
-    if not (list and entries and entries[a] and entries[b]) then return false end
+    if not (list and entries and entries[i]) then return false end
+    if type(spot) ~= "number" or spot < 1 or spot > SPOTS or spot % 1 ~= 0 then return false end
     if flyout.auto then return false, TEXT.auto end
-    if a == b then return true end
+    local spots = Spots(entries)
+    local from = spots[i]
+    local taken = {}
+    for k, entry in ipairs(entries) do
+        entry.spot = spots[k]
+        if k ~= i and spots[k] == spot then entry.spot = from end
+        if k == i then entry.spot = spot end
+        taken[entry.spot] = true
+    end
+    -- an icon out of sight just now (an item not held) gets a spot of its own too, clear of these
+    local free = 1
+    for _, entry in ipairs(Full(flyout)) do
+        if not taken[entry.spot or 0] then
+            while taken[free] do free = free + 1 end
+            entry.spot = free
+        end
+        taken[entry.spot] = true
+    end
     local shown = open ~= nil and open.flyout == flyout
-    entries[a], entries[b] = entries[b], entries[a]
-    Mirror(flyout)
     F.Apply()
     local unit = shown and Run(flyout).unit
     if unit then F.Show(unit.index) end

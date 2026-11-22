@@ -1528,6 +1528,20 @@ do
     box.BindInstructionText, box.ActionName, box.ActionIcon = box:CreateFontString(), box:CreateFontString(), box:CreateTexture()
     for _, region in ipairs({ box.TitleBox.TitleText, box.BindInstructionText, box.ActionName, box.ActionIcon }) do region.alpha = 1 end
     dialog.ActionTooltip = CreateFrame("Frame", nil, dialog)
+    -- Edit Action Bar's first box, and the game's own hint bars: one under each box, up with its box
+    dialog.EditActionBarsInfoFrame = CreateFrame("Frame", nil, dialog)
+    dialog.EditActionBarsInfoFrame:Hide()
+    dialog.bindingModeFooter = { inputLegend = CreateFrame("Frame", nil, box) }
+    dialog.editModeFooter = { inputLegend = CreateFrame("Frame", nil, dialog.EditActionBarsInfoFrame) }
+    local theirBar, theirFirstBar = dialog.bindingModeFooter.inputLegend, dialog.editModeFooter.inputLegend
+    function dialog:ShowEditModeFrameAndBindings()
+        self.EditActionBarsInfoFrame:Show()
+        self.BindingInfoFrame:Hide()
+    end
+    function dialog:ShowBindingModeFrameAndBindings()
+        self.EditActionBarsInfoFrame:Hide()
+        self.BindingInfoFrame:Show()
+    end
     dialog:Hide()
     -- As the game's: while it is up the bar itself is put away, and the dialog shows copies
     -- of the bar's buttons, each of the same slot as the button it stands for.
@@ -1557,7 +1571,7 @@ do
         self:Show()
         self:StartListeningForButtons()
     end
-    function dialog:TransitionToSelectActionToPickup() self.BindingInfoFrame:Hide() end
+    function dialog:TransitionToSelectActionToPickup() self:ShowEditModeFrameAndBindings() end
     -- as the game's: the ability comes off the button and is held, and the box says what is held
     function dialog:SelectActionToPickupCapturedInputHandler(slot)
         ClearCursor()
@@ -1566,8 +1580,11 @@ do
         W.placed[slot] = false
         fire("ACTIONBAR_SLOT_CHANGED", slot)
         self.pickupFunc, self.pickupParams, self.pickupSlot = C_Spell.PickupSpell, { had }, slot
-        self.BindingInfoFrame:Show()
         return true
+    end
+    -- as the game's capture: the box of the held ability comes up only after the pick up has returned
+    function dialog:CapturePickup(slot)
+        if self:SelectActionToPickupCapturedInputHandler(slot) then self:ShowBindingModeFrameAndBindings() end
     end
     function dialog:ExitEditMode() self:Hide() end
     function dialog:PlaceOrClearHeldActionCapturedInputHandler(slot, _, exitOnBind)
@@ -1740,7 +1757,7 @@ do
         local function bound(key) return GetBindingAction(key, true) == "CLICK FallensFlyoutsPadEdit" .. key .. ":LeftButton" end
         local function pickUp(slot)
             W.clock = W.clock + 1
-            dialog:SelectActionToPickupCapturedInputHandler(slot)
+            dialog:CapturePickup(slot)
         end
         dialog:EnterEditMode()
         pickUp(5)
@@ -1769,6 +1786,10 @@ do
             "nothing is edited while the game's dialog is up: there the D-pad is the game's")
         check(prompts.back.shown and prompts.back.label == "Open Flyout Editor" and not prompts.add.shown and not prompts.left.shown
             and not prompts.edit.shown, "the bar names the one button to press: B opens the flyout editor")
+        -- His snip (2026-11-21): "after hitting edit flyout, there's stacked hint bars". Ours, of one button,
+        -- is shorter than the game's own under it, whose end showed beside ours.
+        check(theirBar:GetAlpha() == 0 and Pad.Veiled() == theirBar and bar.point[2] == theirBar,
+            "the game's own hint bar under ours is out of sight: one bar, not two")
         local words = Pad.Panel()
         check(words ~= nil and words:IsShown() and words:GetFrameStrata() == "TOOLTIP" and words.title.text == "Edit Flyout"
             and words.lines[1].text:find("to leave Edit Action Bar", 1, true) ~= nil and words.lines[2].text == "The flyout editor opens then."
@@ -1798,9 +1819,13 @@ do
         check(Pad.Armed() ~= nil and prompts.back.shown and prompts.back.label == "Open Flyout Editor" and not words:IsShown()
             and box.BindInstructionText.alpha == 1,
             "the dialog, holding nothing now, is back at its first step: our bar still names the button that opens the editor")
+        check(theirFirstBar:IsVisible() and theirFirstBar:GetAlpha() == 0 and bar.point[2] == theirFirstBar and theirBar:GetAlpha() == 1,
+            "there our bar stands on the hint bar of that first step, which is out of sight in its turn; the other is as it was")
         -- another ability picked up there: the edit asked for is off
         pickUp(5)
         check(Pad.Armed() == nil and not up(), "another ability picked up instead: no editor is waiting any more")
+        check(theirBar:GetAlpha() == 1 and theirFirstBar:GetAlpha() == 1 and Pad.Veiled() == nil,
+            "our bar gone, the game's own hint bars are in sight again")
         dialog:TransitionToSelectActionToPickup()
         W.placed[5] = 701
         W.placed[4] = nil
@@ -1869,28 +1894,50 @@ do
             and prompts.back.label == "Done" and prompts.plate ~= nil and prompts.plate.label == "Hide Background",
             "the bar names every button: A selects, X takes off, Y swaps the pad's crosses, RB the background, B is Done")
         -- what he did: an icon selected, then D-pad for the side it should go to
+        local function spots() return table.concat(NS.Flyouts.Spots(target.entries), " ") end
+        local tokens = Pad.View().tokens
         tap("PAD1")
-        check(Edit.Editing().mark == 2 and Pad.View().marked == 2, "A: the next icon is selected (the one to the right)")
+        check(Edit.Editing().mark == 2 and Pad.View().marked == 2, "A: the next icon round the dial is selected (the one to the right)")
         tap("PADDUP")
-        check(ids() == "772 771 773" and Edit.Editing().mark == 1 and Pad.View().marked == 1 and W.placed[4] == nil
-            and select(2, GetActionInfo(7)) == 771,
-            "D-pad up: the selected icon goes up, and the one that was up takes its place; nothing on the bars is touched: " .. ids())
-        tap("PADDDOWN")
-        check(ids() == "773 771 772" and Edit.Editing().mark == 3, "D-pad down: it changes places with the one below: " .. ids())
+        check(spots() == "2 1 3" and ids() == "771 772 773" and Edit.Editing().mark == 2 and tokens[2].spot == 1 and tokens[2].pad == "PADDUP"
+            and tokens[1].pad == "PADDRIGHT" and tokens[2].ring.shown and W.placed[4] == nil and select(2, GetActionInfo(7)) == 771,
+            "D-pad up: the selected icon stands up now, and the one that was up took its side; nothing on the bars is touched: " .. spots())
+        -- His words (2026-11-21), of the first editor, which only let two icons change places: "why would
+        -- we not let users move an icon anywhere they want on the dial? why would they HAVE to swap with
+        -- an existing one?"
         tap("PADDLEFT")
-        check(ids() == "773 771 772" and Edit.Editing().mark == 3 and NS.PadEdit.Hint():find("No icon is on that side", 1, true) ~= nil,
-            "D-pad left, where no icon is: nothing moves, and the line over the bar says why")
+        check(spots() == "2 4 3" and tokens[2].spot == 4 and tokens[2].pad == "PADDLEFT" and Edit.Editing().mark == 2,
+            "D-pad left, where no icon is: it goes there, and the side it left stays empty: " .. spots())
+        local r = NS.Art.BUTTON / 2 + NS.Flyouts.RING_GAP + NS.Art.ICON / 2
+        check(tokens[2].point[4] == -r and tokens[2].point[5] == 0 and tokens[1].point[4] == r and tokens[3].point[5] == -r,
+            "the picture shows it so: one left of the button, one right, one below, none above")
+        check(NS.PadEdit.Hint():find("is selected. The D-pad moves it to that side of the button.", 1, true) ~= nil
+            and NS.PadEdit.Hint():find("Press the same side again for the outer ring.", 1, true) ~= nil,
+            "the line over the bar says what the D-pad does, with no word of what cannot be done: " .. NS.PadEdit.Hint())
+        tap("PADDLEFT")
+        check(spots() == "2 8 3" and tokens[2].pad == "PAD3" and tokens[2].point[4] < -r,
+            "the same side again: to the outer ring of that side, where the face button of that side picks it: " .. spots())
+        tap("PADDLEFT")
+        check(spots() == "2 4 3" and tokens[2].pad == "PADDLEFT", "and once more: back on the first ring")
+        tap("PADDDOWN")
+        check(spots() == "2 3 4" and Edit.Editing().mark == 2, "D-pad down, where an icon is: the two change places: " .. spots())
+        -- the bottom button goes round the dial as it lies, not as the icons were added
+        tap("PAD1")
+        check(Edit.Editing().mark == 3, "A: on to the next spot round the dial, the icon on the left")
+        tap("PAD1")
+        check(Edit.Editing().mark == 1, "A again, past the last: the first one round, the icon on the right")
         tap("PAD4")
-        check(NS.Flyouts.Faces(target) == true and prompts.edit.label == "Use D-Pad" and Pad.View().tokens[1].pad == "PAD4",
+        check(NS.Flyouts.Faces(target) == true and prompts.edit.label == "Use D-Pad" and tokens[1].pad == "PAD2",
             "Y: this flyout picks with the face buttons, the picture with it")
         tap("PAD4")
         tap("PADRSHOULDER")
         check(NS.Flyouts.Plate() == false and prompts.plate.label == "Show Background" and not Pad.View().plate.rim.shown,
             "RB: the background is off, in the picture too")
         tap("PADRSHOULDER")
+        tap("PAD1")
         tap("PAD3")
-        check(ids() == "773 771" and Edit.Editing() ~= nil and Edit.Editing().mark == 2 and Pad.View().count == 2,
-            "X: the selected icon comes off, and the editing goes on: " .. ids())
+        check(ids() == "771 773" and spots() == "2 4" and Edit.Editing() ~= nil and Edit.Editing().mark == 2 and Pad.View().count == 2,
+            "X: the selected icon, the middle one, comes off; the others stay where they stand and the editing goes on: " .. spots())
         tap("PAD2")
         check(Edit.Editing() == nil and not bound("PADDUP") and not bound("PAD2") and not up() and NS.Flyouts.At("ActionButton7") == target,
             "B: done. The pad's buttons are the game's again and the flyout stays as edited")
@@ -2239,6 +2286,68 @@ do
     local page = NS.Options and NS.Options.Page and NS.Options.Page()
     if page and page.arrange and page.arrange.around then
         check(page.arrange.around:GetChecked() == true and page.arrange.faces:GetChecked() == false, "the settings show both choices")
+    end
+    -- His words (2026-11-21): "why would we not let users move an icon anywhere they want on the dial? why
+    -- would they HAVE to swap with an existing one?" An icon stands on the spot it is put on, taken or
+    -- empty, and the flyout itself, open in play, shows it there and picks it by the pad button of that side.
+    do
+        NS.Flyouts.Shut()
+        W.placed[28] = 821
+        actionButton("GamepadMainActionBarFrameTestActionButton8", 28, padBar).id = 28
+        fire("ACTIONBAR_SLOT_CHANGED", 28)
+        flushAll()
+        local NAME2 = "GamepadMainActionBarFrameTestActionButton8"
+        stack(NAME2, 822)
+        local two, twoUnit = F2.At(NAME2)
+        local function where(i)
+            local p = entry(twoUnit.index, i).point
+            return p[1] == "CENTER" and p[2] == twoUnit.menu and math.floor(p[4] + 0.5) .. "," .. math.floor(p[5] + 0.5) or "not centered"
+        end
+        local function picks()
+            local out = {}
+            for i, pick in ipairs(F2.Picks(two)) do out[i] = pick.pad end
+            return table.concat(out, " ")
+        end
+        check(two ~= nil and #two.entries == 2 and where(1) == spot(0, r) and where(2) == spot(r, 0) and picks() == "PADDUP PADDRIGHT",
+            "a flyout of two stands up and right, as ever")
+        -- the second one to the left, where nothing is
+        check(F2.Place(two, 2, 4) == true and where(2) == spot(-r, 0) and where(1) == spot(0, r) and picks() == "PADDUP PADDLEFT",
+            "put on the left, an empty side: it stands left of the button and D-pad left picks it: " .. where(2) .. " | " .. picks())
+        check(F2.Show(twoUnit.index) == true and entry(twoUnit.index, 2):IsVisible() and where(2) == spot(-r, 0),
+            "opened in play, it is there, in view")
+        local casts = #W.casts
+        tap("PADDLEFT")
+        check(#W.casts == casts + 1 and W.casts[#W.casts] == "spell:822", "D-pad left casts it: " .. tostring(W.casts[#W.casts]))
+        NS.Flyouts.Shut()
+        -- below: both rings of one side, and the plate reaches the outer one only when one stands there
+        local near = twoUnit.plate.radius
+        check(F2.Place(two, 2, 7) == true and where(2) == spot(0, -(r + step)) and picks() == "PADDUP PAD1"
+            and twoUnit.plate.radius == near + step,
+            "put on the outer ring below: it stands a step further out, the bottom face button picks it, and the plate reaches it")
+        check(F2.Place(two, 2, 3) == true and twoUnit.plate.radius == near, "back on the first ring, the plate is as small as before")
+        -- onto a taken spot: the two change places
+        check(F2.Place(two, 2, 1) == true and where(2) == spot(0, r) and where(1) == spot(0, -r) and picks() == "PADDDOWN PADDUP",
+            "put on a taken side, the two change places: " .. picks())
+        -- a third one added takes the first free spot; one taken off leaves the others where they stand
+        stack(NAME2, 823)
+        two, twoUnit = F2.At(NAME2)
+        check(#two.entries == 3 and where(3) == spot(r, 0) and picks() == "PADDDOWN PADDUP PADDRIGHT",
+            "one more added takes the first free side: " .. picks())
+        F2.Remove(two, 2)
+        two, twoUnit = F2.At(NAME2)
+        check(#two.entries == 2 and where(1) == spot(0, -r) and where(2) == spot(r, 0) and picks() == "PADDDOWN PADDRIGHT",
+            "one taken off, the others stay where they stand: " .. picks())
+        check(F2.Place(two, 1, 9) == false and F2.Place(two, 1, 0) == false and F2.Place(two, 5, 1) == false,
+            "there are eight spots and no more; a spot that is none, or an icon that is none, moves nothing")
+        W.combat = true
+        check(F2.Place(two, 1, 2) == false and where(1) == spot(0, -r), "in a fight nothing is moved")
+        W.combat = false
+        -- kept with the flyout: laid out anew from what is saved, each icon stands where it was put
+        check(two.entries[1].spot == 3 and two.entries[2].spot == 2, "each icon's spot is kept with the flyout")
+        F2.Remove(two, 2)
+        W.placed[28] = nil
+        fire("ACTIONBAR_SLOT_CHANGED", 28)
+        flushAll()
     end
 end
 
