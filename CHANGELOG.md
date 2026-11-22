@@ -13,7 +13,7 @@
 - The settings page was taller than the game's Options window, so its last check boxes hung out under it. The page now scrolls inside the window, with the game's own scroll bar, and a controller's cursor scrolls it too.
 
 ### Changed
-- An open flyout's keys are always the flyout's. With Fallen's Modifier Keys, a key set as a modifier there used to be skipped, so icons began at 2: they begin at 1 again, and the modifier key is left alone only while it is being held down.
+- An open flyout's keys are always the flyout's. With Fallen's Modifier Keys, a key set as a modifier there used to be skipped, so icons began at 2: they begin at 1 again, and the modifier key is left alone only while it is being held down. This needs the Fallen's Modifier Keys release that comes out alongside this one.
 - A flyout now holds up to twelve, up from six, picked with the bar's own twelve keys: 1 to 9, 0, - and =. The game's Keybindings options have a row for each of the twelve spots of every flyout. In gamepad mode a ninth to twelfth icon stand on a third ring around the button; no pad button picks that ring, so there they are picked by key or by a click.
 - The settings page says, over Arrange a flyout, that none of it is needed with a mouse: a flyout is made by dragging a spell, item or macro onto a bar button, where the + appears. That section is for a controller.
 

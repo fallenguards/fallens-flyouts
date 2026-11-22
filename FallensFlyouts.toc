@@ -2,7 +2,7 @@
 ## Title: Fallen's Flyouts
 ## Notes: Drag a spell onto an action bar button to stack it into your own flyout. Press the button's key, then 1, 2 or 3.
 ## Author: justawower
-## Version: 1.1.2
+## Version: 1.1.3
 ## X-Curse-Project-ID: 1820743
 ## IconTexture: Interface\AddOns\FallensFlyouts\media\icon
 ## Category: Action Bars

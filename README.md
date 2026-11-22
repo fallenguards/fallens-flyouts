@@ -1,6 +1,6 @@
 # Fallen's Flyouts
 
-Make your own flyouts on your action bars, for World of Warcraft: Forever. Put several spells, items or macros on one button and pick the one you want when you press it.
+Make your own flyouts on your action bars, for World of Warcraft: Forever. Put up to twelve spells, items or macros on one button and pick the one you want when you press it.
 
 1. Drag a spell, an item or a macro onto the plus that appears on any action bar button that already has something on it.
 2. Press that button's key, or click it. Its flyout opens.
