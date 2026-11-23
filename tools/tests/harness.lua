@@ -90,6 +90,8 @@ function Frame:GetPoint()
     if self.point then return table.unpack(self.point) end
 end
 function Frame:GetAlpha() return self.alpha or 1 end
+-- as the client: a frame's alpha times its parents'
+function Frame:GetEffectiveAlpha() return (self.alpha or 1) * (self.parent and self.parent:GetEffectiveAlpha() or 1) end
 function Frame:GetLeft() return self.rect and self.rect[1] end
 function Frame:GetRight() return self.rect and self.rect[2] end
 function Frame:GetTop() return self.rect and self.rect[3] end
@@ -612,6 +614,8 @@ function HasAction(slot)
 end
 function GetActionInfo(slot)
     local placed = W.placed and W.placed[slot]
+    -- a toy, as "item", or a mount, as "summonmount", with its number
+    if type(placed) == "table" and placed[1] ~= "macro" then return placed[1], placed[2] end
     -- a macro: its place in the list, and no word on what it stands for (seen on Forever: "macro", 6, "")
     if type(placed) == "table" then
         local place = placed.own and macroPlace(placed.own)
@@ -622,42 +626,86 @@ function GetActionInfo(slot)
     if placed == false or not HasAction(slot) then return nil end
     return "spell", 100 + own(slot) + (char.shift or 0), "spell"
 end
--- the cursor's spell goes onto the slot; what the slot held comes onto the cursor
-function PlaceAction(slot)
-    local carried = W.cursor
-    if not (carried and (carried[1] == "spell" or carried[1] == "macro")) then return end
-    local kind, had = GetActionInfo(slot)
-    local name = GetActionText(slot)
-    W.placed = W.placed or {}
-    local was = W.placed[slot]
-    if carried[1] == "macro" then
-        W.placed[slot] = { "macro", carried[2], own = carried.own }
-    else
-        W.placed[slot] = carried[4]
+-- Toys and mounts. W.toys: the player's own toys, by number. W.mounts: the player's mounts in the mount
+-- journal's list, each { id, spell, name, icon }. As seen on Forever (/ffdev toys, 2026-11-23): the Toy Box
+-- puts a toy on the cursor as "item" and its number, the journal a mount as "mount", its number and its
+-- place in the list; a bar slot keeps a toy as "item" and a mount as "summonmount", each with its number.
+-- The bags hold no toy: W.bags says what they hold.
+do
+    local function mountBy(field, value)
+        for i, m in ipairs(W.mounts or {}) do
+            if m[field] == value then return m, i end
+        end
     end
-    if kind == "macro" then
-        W.cursor = { "macro", name, own = type(was) == "table" and was.own or nil }
-    else
-        W.cursor = had and { "spell", 7, "spell", had, had } or nil
+    function PlayerHasToy(id) return W.toys ~= nil and W.toys[id] == true end
+    C_ToyBox = {
+        GetToyInfo = function(id)
+            if W.toys and W.toys[id] then return id, "toy " .. id, id end
+        end,
+        PickupToyBoxItem = function(id)
+            if W.toys and W.toys[id] then W.cursor = { "item", id, "link" } end
+        end,
+    }
+    C_MountJournal = {
+        GetMountInfoByID = function(id)
+            local m = mountBy("id", id)
+            if m then return m.name, m.spell, m.icon, false, true, 0, false, false, nil, false, true, m.id end
+        end,
+        GetMountFromSpell = function(spell)
+            local m = mountBy("spell", spell)
+            return m and m.id or nil
+        end,
+        GetNumDisplayedMounts = function() return #(W.mounts or {}) end,
+        GetDisplayedMountInfo = function(i)
+            local m = (W.mounts or {})[i]
+            if m then return m.name, m.spell, m.icon, false, true, 0, false, false, nil, false, true, m.id, false end
+        end,
+        Pickup = function(i)
+            local m = (W.mounts or {})[i]
+            if m then W.cursor = { "mount", m.id, i } end
+        end,
+    }
+    -- what a slot held, on the cursor as picking it up puts it there
+    local function lifted(kind, had, name, was)
+        if kind == "macro" then return { "macro", name, own = type(was) == "table" and was.own or nil } end
+        if kind == "item" then return { "item", had, "link" } end
+        if kind == "summonmount" then return { "mount", had, select(2, mountBy("id", had)) } end
+        return had and { "spell", 7, "spell", had, had } or nil
     end
-    fire("ACTIONBAR_SLOT_CHANGED", slot)
-    -- the cursor left empty, the bars' empty slots hide again
-    if not W.cursor then fire("ACTIONBAR_HIDEGRID") end
-end
--- what a slot holds comes onto the cursor and the slot is left empty
-function PickupAction(slot)
-    local kind, had = GetActionInfo(slot)
-    if not kind then return end
-    local name = GetActionText(slot)
-    local was = W.placed and W.placed[slot]
-    W.placed = W.placed or {}
-    W.placed[slot] = false
-    if kind == "macro" then
-        W.cursor = { "macro", name, own = type(was) == "table" and was.own or nil }
-    else
-        W.cursor = { "spell", 7, "spell", had, had }
+    -- what is carried goes onto the slot; what the slot held comes onto the cursor
+    function PlaceAction(slot)
+        local carried = W.cursor
+        local what = carried and carried[1]
+        if not (what == "spell" or what == "macro" or what == "item" or what == "mount") then return end
+        local kind, had = GetActionInfo(slot)
+        local name = GetActionText(slot)
+        W.placed = W.placed or {}
+        local was = W.placed[slot]
+        if what == "macro" then
+            W.placed[slot] = { "macro", carried[2], own = carried.own }
+        elseif what == "item" then
+            W.placed[slot] = { "item", carried[2] }
+        elseif what == "mount" then
+            W.placed[slot] = { "summonmount", carried[2] }
+        else
+            W.placed[slot] = carried[4]
+        end
+        W.cursor = lifted(kind, had, name, was)
+        fire("ACTIONBAR_SLOT_CHANGED", slot)
+        -- the cursor left empty, the bars' empty slots hide again
+        if not W.cursor then fire("ACTIONBAR_HIDEGRID") end
     end
-    fire("ACTIONBAR_SLOT_CHANGED", slot)
+    -- what a slot holds comes onto the cursor and the slot is left empty
+    function PickupAction(slot)
+        local kind, had = GetActionInfo(slot)
+        if not kind then return end
+        local name = GetActionText(slot)
+        local was = W.placed and W.placed[slot]
+        W.placed = W.placed or {}
+        W.placed[slot] = false
+        W.cursor = lifted(kind, had, name, was)
+        fire("ACTIONBAR_SLOT_CHANGED", slot)
+    end
 end
 -- a call runs after another's, as the client lets an addon listen in
 function hooksecurefunc(holder, name, after)
@@ -671,6 +719,7 @@ end
 -- a slot's icon: a macro's own, a spell's
 function GetActionTexture(slot)
     local placed = W.placed and W.placed[slot]
+    if type(placed) == "table" and placed[1] ~= "macro" then return placed[2] end
     if type(placed) == "table" then
         local place = placed.own and macroPlace(placed.own)
         local m = macroAt(place or placed[2])
@@ -682,7 +731,7 @@ end
 -- a macro on a slot is known to the bars by its name
 function GetActionText(slot)
     local placed = W.placed and W.placed[slot]
-    return type(placed) == "table" and placed[2] or nil
+    return type(placed) == "table" and placed[1] == "macro" and placed[2] or nil
 end
 -- W.macroSpell: the spell the game names for a macro just now, by the macro's text; with none set, no macro
 -- stands for a spell

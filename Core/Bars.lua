@@ -1,6 +1,6 @@
 local _, ns = ...
 -- luacheck: read globals UIParent GetTime GetBindingAction EnumerateFrames HasAction GetActionInfo GetActionText
--- luacheck: read globals issecretvalue GetNumMacros GetMacroInfo GetMacroSpell C_Spell
+-- luacheck: read globals issecretvalue GetNumMacros GetMacroInfo GetMacroSpell C_Spell C_MountJournal PlayerHasToy
 
 -- Action buttons, whoever made them, found by what they are.
 local B = {}
@@ -407,7 +407,8 @@ function M.OnSlot(slot)
     return { kind = "macro", id = name, text = text }
 end
 
--- a slot's action as kind and id; a macro goes by its name, and by its text with it
+-- a slot's action as kind and id; a macro goes by its name, and by its text with it; a mount by the spell
+-- that summons it (the slot says "summonmount" and the mount's number)
 local function Read(slot)
     local kind, id = GetActionInfo(slot)
     if Secret(kind) or Secret(id) then return nil end
@@ -416,7 +417,51 @@ local function Read(slot)
         if not entry then return nil end
         return kind, entry.id, entry.text
     end
+    if kind == "summonmount" then
+        local spell = B.MountSpell(id)
+        if not spell then return nil end
+        return "spell", spell
+    end
     return kind, id
+end
+
+-- Toys and mounts. A player's report (2026-11-23): "I keep getting the red error message at the top of my screen that
+-- says "That is in the flyout already." when attempting to add different hearthstones to one flyout. A similar
+-- issue when trying to add a campfire toy to a 'professions' one, it vanishes from the cursor and says the
+-- same thing. The mounts have no + symbol popping up at all when one is selected."
+-- Seen on his account (/ffdev toys, 2026-11-23): the Toy Box puts a toy on the cursor as "item" and its
+-- number, and the bags hold none of it; the mount journal puts a mount there as "mount", its number and its
+-- place in the journal's list, and a bar slot keeps it as "summonmount" and that number.
+
+-- A mount goes in a flyout as the spell that summons it: by its number, that spell. The journal's random
+-- favorite has no spell of its own, and none.
+function B.MountSpell(mount)
+    local MJ = C_MountJournal
+    if type(mount) ~= "number" or Secret(mount) or not (MJ and MJ.GetMountInfoByID) then return nil end
+    local ok, _, spell = pcall(MJ.GetMountInfoByID, mount)
+    if ok and type(spell) == "number" and not Secret(spell) and spell > 0 then return spell end
+    return nil
+end
+
+-- Where the mount journal's list shows the mount a spell summons, to pick it up as the journal does; nil
+-- for a spell no mount casts, and for a mount the journal's search or filters leave out just now.
+function B.MountAt(spell)
+    local MJ = C_MountJournal
+    if not (MJ and MJ.GetMountFromSpell and MJ.GetNumDisplayedMounts and MJ.GetDisplayedMountInfo) then return nil end
+    local ok, mount = pcall(MJ.GetMountFromSpell, spell)
+    if not ok or type(mount) ~= "number" or Secret(mount) then return nil end
+    for i = 1, MJ.GetNumDisplayedMounts() or 0 do
+        local _, its = MJ.GetDisplayedMountInfo(i)
+        if its == spell then return i end
+    end
+    return nil
+end
+
+-- whether an item is a toy of the player's own: kept in the Toy Box, never in the bags
+function B.OwnToy(id)
+    if not PlayerHasToy or type(id) ~= "number" then return false end
+    local ok, own = pcall(PlayerHasToy, id)
+    return ok and not Secret(own) and own == true
 end
 
 -- what a button holds, if it can lead a flyout

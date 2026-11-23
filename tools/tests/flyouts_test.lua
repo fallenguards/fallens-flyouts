@@ -4804,6 +4804,141 @@ do
     flushAll()
 end
 
+print("toys and mounts go in a flyout and show there: each case of a player's report")
+do
+    -- A player's report (2026-11-23): "I keep getting the red error message at the top of my screen that
+    -- says "That is in the flyout already." when attempting to add different hearthstones to one flyout. A
+    -- similar issue when trying to add a campfire toy to a 'professions' one, it vanishes from the cursor and
+    -- says the same thing. The mounts have no + symbol popping up at all when one is selected. I've tried
+    -- moving them all to the bar first then moving them around, different combinations of mounts and
+    -- hearthstones, to no avail." Each case played as /ffdev toys plays it on his account.
+    login("Player-1-0000000M")
+    local F16 = NS.Flyouts
+    W.placed = W.placed or {}
+    W.bags = { 6948 }
+    W.toys = { [280740] = true, [289439] = true }
+    W.mounts = { { id = 3111, spell = 23229, name = "Cerulean Prideclaw", icon = 4000 } }
+    W.placed[9], W.placed[10] = 9301, 9302
+    fire("ACTIONBAR_SLOT_CHANGED", 9)
+    fire("ACTIONBAR_SLOT_CHANGED", 10)
+    flushAll()
+    -- what the open flyout shows, icon by icon
+    local function shows(host)
+        local _, unit = F16.At(host)
+        local out = {}
+        if unit then
+            F16.Show(unit.index)
+            for _, frame in ipairs(unit.entries) do
+                if frame:IsVisible() and frame.entry then
+                    out[#out + 1] = frame.entry.kind .. ":" .. tostring(frame.entry.id)
+                end
+            end
+            F16.Shut()
+        end
+        return table.concat(out, " ")
+    end
+    -- what is carried, dropped on a button's plus as the player drops it; false where no plus stands for it
+    local function drop(host)
+        fire("CURSOR_CHANGED")
+        flushAll()
+        local tab = tabOf(host)
+        if not (tab and tab:IsVisible()) then return false end
+        tab.scripts.OnReceiveDrag(tab)
+        flushAll()
+        return true
+    end
+    local errors = #W.errors
+    -- 1. the hearthstones: two toys into one flyout
+    C_ToyBox.PickupToyBoxItem(280740)
+    check(drop("ActionButton9") and W.cursor == nil, "a toy from the Toy Box: the plus stands for it and takes it")
+    check(shows("ActionButton9") == "spell:9301 item:280740", "the toy shows in the open flyout, the bags holding none "
+        .. "of it: " .. shows("ActionButton9"))
+    C_ToyBox.PickupToyBoxItem(289439)
+    drop("ActionButton9")
+    check(shows("ActionButton9") == "spell:9301 item:280740 item:289439" and #W.errors == errors,
+        "a second toy: both show, and no word in red: " .. shows("ActionButton9"))
+    -- 2. the campfire toy and the professions flyout: a toy into a flyout that holds an item
+    C_Item.PickupItem(6948)
+    drop("ActionButton10")
+    C_ToyBox.PickupToyBoxItem(280740)
+    drop("ActionButton10")
+    check(shows("ActionButton10") == "spell:9302 item:6948 item:280740" and #W.errors == errors and W.cursor == nil,
+        "a toy into a flyout that holds an item: it leaves the cursor and shows: " .. shows("ActionButton10"))
+    C_ToyBox.PickupToyBoxItem(280740)
+    drop("ActionButton10")
+    check(W.errors[#W.errors] == "That is in the flyout already."
+        and shows("ActionButton10") == "spell:9302 item:6948 item:280740",
+        "dropped again, a toy the flyout shows is refused as one it holds")
+    W.cursor = nil
+    errors = #W.errors
+    -- 3. on the bar first: a toy set on an empty button, another picked off a bar onto its plus
+    C_ToyBox.PickupToyBoxItem(280740)
+    PlaceAction(11)
+    C_ToyBox.PickupToyBoxItem(289439)
+    PlaceAction(12)
+    PickupAction(12)
+    check(W.cursor and W.cursor[1] == "item" and W.cursor[2] == 289439, "a toy picked off a bar is carried as an item")
+    drop("ActionButton11")
+    check(shows("ActionButton11") == "item:280740 item:289439" and #W.errors == errors,
+        "dropped on the plus of a toy's bar button: a flyout of the two, both shown: " .. shows("ActionButton11"))
+    -- 4. mounts: from the mount journal, onto a plus
+    C_MountJournal.Pickup(1)
+    check(drop("ActionButton9") and W.cursor == nil, "a mount from the mount journal: the plus stands for it and takes it")
+    check(shows("ActionButton9") == "spell:9301 item:280740 item:289439 spell:23229" and #W.errors == errors,
+        "it shows in the flyout as the spell that summons it: " .. shows("ActionButton9"))
+    -- a mount picked off a bar, onto a plus
+    C_MountJournal.Pickup(1)
+    PlaceAction(7)
+    PickupAction(7)
+    check(W.cursor and W.cursor[1] == "mount" and W.cursor[2] == 3111, "a mount picked off a bar is carried as a mount")
+    drop("ActionButton10")
+    check(shows("ActionButton10") == "spell:9302 item:6948 item:280740 spell:23229" and #W.errors == errors,
+        "and goes in as from the journal: " .. shows("ActionButton10"))
+    -- a mount on a bar button leads a flyout
+    C_MountJournal.Pickup(1)
+    PlaceAction(12)
+    C_ToyBox.PickupToyBoxItem(289439)
+    drop("ActionButton12")
+    check(shows("ActionButton12") == "spell:23229 item:289439" and #W.errors == errors,
+        "a mount on a bar button: a toy dropped on its plus makes a flyout led by the mount: " .. shows("ActionButton12"))
+    -- dragged out of a flyout, each is carried as the Toy Box and the journal carry it, and goes back in
+    local _, unit9 = F16.At("ActionButton9")
+    F16.CarryOff(unit9, 4)
+    check(W.cursor and W.cursor[1] == "mount" and W.cursor[2] == 3111, "a mount dragged out of a flyout is on the cursor")
+    drop("ActionButton9")
+    _, unit9 = F16.At("ActionButton9")
+    F16.CarryOff(unit9, 2)
+    check(W.cursor and W.cursor[1] == "item" and W.cursor[2] == 280740, "so is a toy, though the bags hold none of it")
+    drop("ActionButton9")
+    check(shows("ActionButton9") == "spell:9301 item:289439 spell:23229 item:280740" and #W.errors == errors,
+        "each goes back in, at the end: " .. shows("ActionButton9"))
+    -- the journal's random favorite summons no one mount: no flyout takes it
+    W.cursor = { "mount", 268435455, 0 }
+    drop("ActionButton9")
+    check(W.errors[#W.errors] == "Only spells, items, toys, mounts and macros go in a flyout.",
+        "the random favorite is refused, in red: " .. tostring(W.errors[#W.errors]))
+    W.cursor = nil
+    -- in combat the secure code cannot look up a mount's spell: refused in red, left on the cursor
+    W.combat = true
+    fire("PLAYER_REGEN_DISABLED")
+    flushAll()
+    C_MountJournal.Pickup(1)
+    _, unit9 = F16.At("ActionButton9")
+    DropOn(unit9.opener)
+    check(W.errors[#W.errors] == "Mounts go in a flyout out of combat." and W.cursor ~= nil,
+        "in combat a mount dropped on the arrow is refused in red and stays on the cursor")
+    W.cursor = nil
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    flushAll()
+    -- a toy not the player's own is an item they have none of, left out as before
+    W.toys[289439] = nil
+    F16.Apply()
+    flushAll()
+    check(shows("ActionButton9") == "spell:9301 spell:23229 item:280740",
+        "a toy that is not the player's own is left out, as an item they have none of: " .. shows("ActionButton9"))
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")

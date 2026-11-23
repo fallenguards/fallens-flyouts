@@ -16,7 +16,7 @@ local TEXT = {
     add = "Add to flyout",
     how = "Drop here to stack it on this button.",
     full = "Flyout is full",
-    kind = "Only spells, items and macros go in a flyout.",
+    kind = "Only spells, items, toys, mounts and macros go in a flyout.",
 }
 D.GROW_FROM, D.BADGE_OUT, D.BADGE_PAST = GROW_FROM, BADGE_OUT, BADGE_PAST
 -- While a spell is dragged the game lifts its bars to the top layer. The plus
@@ -40,6 +40,10 @@ function D.Carried()
         local entry = ns.Macros.Entry(a)
         if entry then return entry end
         id = (GetMacroInfo(a))
+    elseif kind == "mount" then
+        -- as the spell that summons it
+        local spell = Bars.MountSpell(a)
+        return spell and { kind = "spell", id = spell } or nil
     end
     if id then return { kind = kind, id = id } end
 end
@@ -271,7 +275,7 @@ local function Refresh()
     F.Carrying(kind ~= nil)
     if kind == lastKind then return end
     lastKind = kind
-    if kind == "spell" or kind == "item" or kind == "macro" then
+    if kind == "spell" or kind == "item" or kind == "macro" or kind == "mount" then
         D.Show()
     else
         D.Hide()

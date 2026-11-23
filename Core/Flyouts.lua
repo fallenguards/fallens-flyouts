@@ -6,7 +6,7 @@ local _, ns = ...
 -- luacheck: read globals PlaceAction ClearCursor GetCursorInfo GetActionInfo
 -- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding ACTIONBAR_HOTKEY_FONT_COLOR
 -- luacheck: read globals RED_FONT_COLOR RANGE_INDICATOR UnitExists C_ActionBar IsActionInRange IsUsableAction
--- luacheck: read globals RegisterStateDriver
+-- luacheck: read globals RegisterStateDriver C_ToyBox C_MountJournal
 
 -- Flyouts on bar buttons. One secure root owns every key.
 local F = {}
@@ -58,6 +58,7 @@ local TEXT = {
     noPick = "That one cannot be picked up just now.",
     noLead = "That button's action cannot lead a flyout.",
     auto = "That flyout fills itself from your bags.",
+    mount = "Mounts go in a flyout out of combat.",
     how = "Drag",
     howHeld = "%s-drag",
     remove = "%s to move it. Right-click takes it off the flyout.",
@@ -592,6 +593,10 @@ local CARRIED = [[
         id, casts, base = spell, spell, under
     elseif kind == "item" then
         casts = "item:" .. tostring(value)
+    elseif kind == "mount" then
+        -- it goes in as the spell that summons it, which the addon's own code looks up, out of a fight
+        owner:CallMethod("Refused", "mount")
+        return
     elseif kind ~= "macro" then
         return
     end
@@ -958,9 +963,16 @@ local function TakeOff(unit, i)
     return entry
 end
 
+-- A toy as the Toy Box picks it up, and a mount as the mount journal does: the bags hold no toy, and a
+-- mount is in no spellbook.
 local function Pickup(entry)
-    if entry.kind == "spell" then
+    local mount = entry.kind == "spell" and Bars.MountAt(entry.id)
+    if mount then
+        C_MountJournal.Pickup(mount)
+    elseif entry.kind == "spell" then
         (C_Spell.PickupSpell or PickupSpell)(entry.id)
+    elseif entry.kind == "item" and Bars.OwnToy(entry.id) and C_ToyBox and C_ToyBox.PickupToyBoxItem then
+        C_ToyBox.PickupToyBoxItem(entry.id)
     elseif entry.kind == "item" then
         (C_Item.PickupItem or PickupItem)(entry.id)
     else
@@ -2455,9 +2467,12 @@ end
 local function Full(flyout) return flyout.all or flyout.entries end
 F.Full = Full
 
--- an item the player has none of; a spell or a macro is never lacking
+-- An item the player has none of; a spell or a macro is never lacking, nor a toy of the player's own: it
+-- is kept in the Toy Box, and the bags hold none of it. Until 1.1.6 a toy was left out the moment it was
+-- added, and dropped again it was refused as one the flyout held already.
 local function Lacks(entry)
     if entry.kind ~= "item" or not C_Item.GetItemCount then return false end
+    if Bars.OwnToy(entry.id) then return false end
     local count = C_Item.GetItemCount(entry.id)
     if Hidden(count) or type(count) ~= "number" then return false end
     return count == 0
