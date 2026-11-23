@@ -308,6 +308,137 @@ C_Spell.GetSpellCooldownDuration = object
 issecretvalue = nil
 mouse(host)
 W.cooling, W.short, W.unusable = {}, {}, {}
+
+print("the icons show range as bar buttons do")
+do
+    local RED, KEY, FULL = "1,0.1,0.1", "0.8,0.8,0.8", "1,1,1"
+    local function keyColor(i)
+        local c = entry(one, i).key.color
+        return c and table.concat(c, ",")
+    end
+    local function gray(i) return entry(one, i).icon.gray == true end
+    -- frames drawn with no event: a third of a second of them
+    local function drawn()
+        C_Timer.After(0, function() end)
+        flushAll()
+    end
+    -- a client whose bars tint a usable button out of range, icon and all, as some are set up to
+    local function barsTint(r, g, b, grayed)
+        for slot = 1, 3 do
+            local button = W.frames["ActionButton" .. slot]
+            local far = IsActionInRange(slot) == false and C_ActionBar.IsUsableAction(slot)
+            if far and r then
+                button.icon:SetVertexColor(r, g, b)
+                button.icon:SetDesaturated(grayed)
+            else
+                button.icon:SetVertexColor(1, 1, 1)
+                button.icon:SetDesaturated(false)
+            end
+        end
+    end
+    local caught = #W.caught
+    mouse(host)
+    check(menu:IsShown() and keyColor(2) == KEY and tint(2) == FULL and label(2) == "2",
+        "no target: every key in its gray, every icon in full color")
+    -- a target the first drop does not reach
+    W.target, W.far = true, { [501] = true }
+    fire("PLAYER_TARGET_CHANGED")
+    check(keyColor(2) == RED and keyColor(1) == KEY and keyColor(3) == KEY and label(2) == "2",
+        "out of range of the target that icon's key goes red, as a bar button's does; the others stay")
+    check(tint(2) == FULL and not gray(2) and NS.Flyouts.FarTint() == nil,
+        "its icon is left as it is while no bar button has shown what the bars do out of range")
+    -- the player walks: no event tells of it, the open flyout asks by itself
+    W.far = { [502] = true }
+    drawn()
+    check(keyColor(2) == KEY and keyColor(3) == RED, "moved, with no event: the keys follow within a moment")
+    -- the game's own bars: a button out of range keeps its icon, and so do the flyout's
+    W.far = { [101] = true, [501] = true }
+    barsTint()
+    drawn()
+    check(NS.Flyouts.FarTint() == false and keyColor(1) == RED and keyColor(2) == RED and tint(1) == FULL and tint(2) == FULL,
+        "bars that leave an icon alone out of range: the flyout's icons are left alone too, the keys red")
+    -- bars set up to tint the whole icon: the flyout's icons take that very tint
+    barsTint(1, 0.3, 0.1, true)
+    drawn()
+    check(tint(1) == "1,0.3,0.1" and tint(2) == "1,0.3,0.1" and gray(1) and gray(2),
+        "bars that tint the whole icon out of range: the flyout's icons out of range take the same tint: "
+        .. tostring(tint(2)))
+    check(tint(3) == FULL and not gray(3) and keyColor(3) == KEY, "an icon in range keeps its color")
+    -- the game's own dimming stays on top: an icon that cannot be used shows that, not the range
+    W.unusable[501] = true
+    fire("SPELL_UPDATE_USABLE")
+    check(tint(2) == "0.4,0.4,0.4" and not gray(2) and keyColor(2) == RED,
+        "an icon that cannot be used keeps the game's gray, with its key red")
+    W.unusable[501] = nil
+    fire("SPELL_UPDATE_USABLE")
+    check(tint(2) == "1,0.3,0.1" and gray(2), "usable again and still out of range: the tint again")
+    -- a bar button between two looks, gray from the game's own dimming, teaches nothing
+    W.frames.ActionButton1.icon:SetVertexColor(0.4, 0.4, 0.4)
+    W.frames.ActionButton1.icon:SetDesaturated(false)
+    drawn()
+    check(tint(2) == "1,0.3,0.1", "a bar button caught in the game's own gray is not taken for the bars' range tint")
+    barsTint(1, 0.3, 0.1, true)
+    -- the flyout's own button in range, another icon not: the tint the bars showed is kept
+    W.far = { [501] = true }
+    barsTint(1, 0.3, 0.1, true)
+    drawn()
+    check(tint(1) == FULL and not gray(1) and keyColor(1) == KEY and tint(2) == "1,0.3,0.1",
+        "back in range an icon is in full color with its key gray, the one still out of range tinted")
+    -- an ability that asks no range
+    W.rangeless = { [501] = true }
+    drawn()
+    check(tint(2) == FULL and not gray(2) and keyColor(2) == KEY, "an ability that asks no range shows none")
+    W.rangeless = nil
+    -- an icon with no key: the game's dot stands for its range, gray in range and red out of it
+    local key = entry(one, 2).key
+    key:SetText("")
+    drawn()
+    check(key.text == RANGE_INDICATOR and keyColor(2) == RED, "an icon with no key shows the game's range dot, red out of range")
+    W.far = {}
+    drawn()
+    check(key.text == RANGE_INDICATOR and keyColor(2) == KEY, "in range the dot is gray")
+    W.target = nil
+    fire("PLAYER_TARGET_CHANGED")
+    check(key.text == "", "and with no target there is no dot")
+    key:SetText("2")
+    -- the bars' tint taken away (the bars' look changed): seen plain a few times, the flyout drops it
+    W.target, W.far = true, { [101] = true, [501] = true }
+    barsTint()
+    fire("PLAYER_TARGET_CHANGED")
+    check(tint(2) == "1,0.3,0.1", "one plain look at a bar button does not drop the tint")
+    drawn()
+    drawn()
+    check(tint(1) == FULL and tint(2) == FULL and not gray(2) and keyColor(2) == RED,
+        "bars seen plain out of range again and again: the flyout's icons are plain again, the keys red")
+    barsTint(1, 0.3, 0.1, true)
+    drawn()
+    check(tint(2) == "1,0.3,0.1", "and tinted again when the bars are")
+    -- a value the client hides is never compared: no red, no error
+    local SECRET = {}
+    issecretvalue = function(v) return v == SECRET end
+    W.hideRange = SECRET
+    drawn()
+    check(#W.caught == caught and NS.Flyouts.hid.range == true and keyColor(2) == KEY and tint(2) == FULL,
+        "a range the client hides is never read: the icon shows none, and nothing breaks")
+    W.hideRange, issecretvalue = nil, nil
+    NS.Flyouts.hid.range = false
+    -- in a fight the same
+    W.combat = true
+    drawn()
+    check(keyColor(2) == RED and tint(2) == "1,0.3,0.1" and #W.caught == caught, "in a fight the range shows the same")
+    W.combat = false
+    -- shut and opened: right at once
+    mouse(host)
+    W.far = { [502] = true }
+    barsTint(1, 0.3, 0.1, true)
+    mouse(host)
+    check(keyColor(2) == KEY and tint(2) == FULL and not gray(2) and keyColor(3) == RED and tint(3) == "1,0.3,0.1",
+        "an opening flyout shows the range as it is then")
+    mouse(host)
+    check(not menu:IsShown() and #W.caught == caught, "none of it raised an error")
+    W.target, W.far = nil, nil
+    barsTint()
+end
 -- an error while drawing must not stop the flyout working
 W.breakDrawing = true
 mouse(host)
@@ -1171,6 +1302,26 @@ do
     local before = #W.casts
     mouse(W.frames.ActionButton9)
     check(foodUnit ~= nil and foodUnit.menu:IsShown() and #W.casts == before, "a press on the button opens it")
+    do
+        -- an item's range: asked outside a fight, never in one (the client keeps that call from addons there)
+        local function keyColor(i)
+            local c = entry(foodUnit.index, i).key.color
+            return c and table.concat(c, ",")
+        end
+        local caught = #W.caught
+        W.target, W.farItems = true, { [4541] = true }
+        fire("PLAYER_TARGET_CHANGED")
+        check(keyColor(1) == "1,0.1,0.1" and keyColor(2) == "0.8,0.8,0.8", "an item out of range of the target has its key red too")
+        W.combat = true
+        fire("PLAYER_TARGET_CHANGED")
+        C_Timer.After(0, function() end)
+        flushAll()
+        check(#W.caught == caught and keyColor(1) == "0.8,0.8,0.8", "in a fight an item's range is not asked: no error, no red")
+        W.combat = false
+        W.target, W.farItems = nil, nil
+        fire("PLAYER_TARGET_CHANGED")
+        check(keyColor(1) == "0.8,0.8,0.8" and #W.caught == caught, "no target: its key is gray again")
+    end
     mouse(entry(foodUnit.index, 1))
     check(W.casts[#W.casts] == "item:item:4541" and not foodUnit.menu:IsShown(), "a pick eats that food and shuts it")
     bags({ 4540, 159, 118, 4542 })

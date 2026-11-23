@@ -146,6 +146,14 @@ function Frame:SetTexture(v) self.texture = v end
 function Frame:GetTexture() return self.texture end
 function Frame:SetText(v) self.text = v end
 function Frame:SetVertexColor(r, g, b) self.color = { r, g, b } end
+-- a texture's color as it was last set, full color until then; and whether it is drawn in gray
+function Frame:GetVertexColor()
+    local c = self.color
+    if not c then return 1, 1, 1, 1 end
+    return c[1], c[2], c[3], 1
+end
+function Frame:SetDesaturated(v) self.gray = v == true end
+function Frame:IsDesaturated() return self.gray == true end
 -- a slider tells its script each value it is given
 function Frame:SetMinMaxValues(low, high) self.low, self.high = low, high end
 function Frame:SetValue(v)
@@ -404,7 +412,7 @@ local function flush()
     -- drawn frames between timers: a third of a second of them
     for _ = 1, 6 do
         for _, f in ipairs(W.all) do
-            if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, 0.05) end
+            if f.scripts.OnUpdate and f:IsVisible() then f.scripts.OnUpdate(f, 0.05) end
         end
     end
 end
@@ -427,6 +435,9 @@ local ART_SIZE = {
 RING_W, RING_H = 46, 45
 -- the gray the game's bar buttons show a key in; the key font's own is 0.6
 ACTIONBAR_HOTKEY_FONT_COLOR = { GetRGB = function() return 0.8, 0.8, 0.8 end }
+-- the red the game writes a bar key in out of range, and its dot for the range of a button with no key
+RED_FONT_COLOR = { GetRGB = function() return 1, 0.1, 0.1 end }
+RANGE_INDICATOR = "\226\151\143"
 C_Texture = { GetAtlasInfo = function(atlas)
     if W.noArt == atlas then return nil end
     local size = ART_SIZE[atlas]
@@ -725,6 +736,14 @@ C_Spell = {
         assert(not W.breakDrawing, "TEST: drawing breaks")
         return not (W.short[id] or W.unusable[id]), W.short[id] or false
     end,
+    -- W.target: there is one; W.far: the spells that do not reach it; W.rangeless: those that ask no
+    -- range; W.hideRange: a value the client hands out in place of the answer
+    IsSpellInRange = function(id, unit)
+        assert(unit == "target", "TEST: range asked of " .. tostring(unit))
+        if not W.target or (W.rangeless and W.rangeless[id]) then return nil end
+        if W.hideRange ~= nil then return W.hideRange end
+        return not (W.far and W.far[id])
+    end,
 }
 -- plain numbers inside, never read by the addon
 function C_Spell.GetSpellCooldownDuration(id)
@@ -741,6 +760,13 @@ C_Item = {
     -- with bags set, an item not in them is one the player has none of
     -- W.counts: how many of an item there are; W.stacks: how many go in one stack (1: it does not stack)
     IsConsumableItem = function(id) return W.items ~= nil and W.items[id] ~= nil end,
+    -- an item's range to the target; in a fight the client keeps this call from addons
+    IsItemInRange = function(id, unit)
+        assert(not W.combat, "TEST: an item's range asked in a fight")
+        assert(unit == "target", "TEST: range asked of " .. tostring(unit))
+        if not W.target then return nil end
+        return not (W.farItems and W.farItems[id])
+    end,
     GetItemMaxStackSizeByID = function(id) return W.stacks and W.stacks[id] or 1 end,
     GetItemCount = function(id)
         if W.counts and W.counts[id] ~= nil then return W.counts[id] end
@@ -789,7 +815,21 @@ function SmartNavigation_ClearIgnoreStatus(frame) frame.smartNavigationIgnored =
 -- picking up: the bars' lock, the pick up key, and what lands on the cursor
 Settings = { GetValue = function(name) return name == "lockActionBars" and W.locked == true end }
 -- the unit under the mouse, where a test puts one there
-function UnitExists(unit) return unit == "player" or (unit == "mouseover" and W.mouseover ~= nil) end
+function UnitExists(unit)
+    return unit == "player" or (unit == "mouseover" and W.mouseover ~= nil) or (unit == "target" and W.target ~= nil)
+end
+-- A bar slot's range to the target and whether it can be used, as the game tells its own bar buttons.
+function IsActionInRange(slot)
+    local kind, id = GetActionInfo(slot)
+    if not W.target or kind ~= "spell" or (W.rangeless and W.rangeless[id]) then return nil end
+    if W.hideRange ~= nil then return W.hideRange end
+    return not (W.far and W.far[id])
+end
+C_ActionBar = { IsUsableAction = function(slot)
+    local kind, id = GetActionInfo(slot)
+    if kind ~= "spell" then return true, false end
+    return not (W.short[id] or W.unusable[id]), W.short[id] or false
+end }
 -- the keys the game's modified clicks want: Mouseover Cast wants none unless a test sets one
 function IsModifiedClick(what)
     if what == "PICKUPACTION" then return W.shift == true end
@@ -894,6 +934,8 @@ local function actionButton(name, slot, parent)
     -- where the game writes a macro's name on a bar button, in its own lettering
     b.Name = b:CreateFontString()
     b.Name.font = "GameFontHighlightSmallOutline"
+    -- its icon: the game dims it short of power or unusable, and leaves it alone out of range
+    b.icon = b:CreateTexture()
     return b
 end
 

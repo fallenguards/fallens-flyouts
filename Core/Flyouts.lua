@@ -5,6 +5,7 @@ local _, ns = ...
 -- luacheck: read globals Settings IsModifiedClick GetModifiedClick PickupSpell PickupItem PickupMacro IsMouseButtonDown
 -- luacheck: read globals PlaceAction ClearCursor GetCursorInfo GetActionInfo
 -- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding ACTIONBAR_HOTKEY_FONT_COLOR
+-- luacheck: read globals RED_FONT_COLOR RANGE_INDICATOR UnitExists C_ActionBar IsActionInRange IsUsableAction
 
 -- Flyouts on bar buttons. One secure root owns every key.
 local F = {}
@@ -650,8 +651,11 @@ local COOL_SHADE = 0.64
 -- the most an icon's corner says in digits, and what stands for more
 local COUNT_MOST, COUNT_OVER = 999, "*"
 local READY, NO_POWER, UNUSABLE = { 1, 1, 1 }, { 0.5, 0.5, 1 }, { 0.4, 0.4, 0.4 }
+-- how often an open flyout asks its icons' range, as the bars asked theirs; the dot the game shows
+-- for the range of a bar button with no key
+local RANGE_EVERY, RANGE_DOT = 0.2, RANGE_INDICATOR or "\226\151\143"
 -- set when the client hid a value in a fight: then it is handed on unread
-F.hid = { cooldown = false, usable = false }
+F.hid = { cooldown = false, usable = false, range = false }
 
 local function Hidden(v) return issecretvalue ~= nil and issecretvalue(v) end
 
@@ -695,7 +699,7 @@ local function Sweep(cool, kind, id)
     end
 end
 
--- dimmed as a bar button: blue short of power, gray unusable
+-- dimmed as a bar button: blue short of power, gray unusable; says whether it is neither
 local function Dim(icon, kind, id)
     local usable, short = true, false
     if kind == "spell" then
@@ -711,6 +715,108 @@ local function Dim(icon, kind, id)
         color = short and NO_POWER or UNUSABLE
     end
     icon:SetVertexColor(color[1], color[2], color[3])
+    return color == READY
+end
+
+-- Whether an ability is out of range of the target, as a bar button knows it: true or false, and nil
+-- where it asks no range or there is no target. An item's range is asked outside a fight only: in
+-- one the client keeps that call from addons.
+local function Far(kind, id)
+    if not UnitExists("target") then return nil end
+    local near
+    if kind == "spell" and C_Spell.IsSpellInRange then
+        near = C_Spell.IsSpellInRange(id, "target")
+    elseif kind == "item" and C_Item.IsItemInRange and not InCombatLockdown() then
+        near = C_Item.IsItemInRange(id, "target")
+    end
+    if Hidden(near) then
+        F.hid.range = true
+        return nil
+    end
+    if near == nil then return nil end
+    return near == false or near == 0
+end
+
+-- What this client's bars do to the icon of a usable ability out of range. The game leaves the icon as
+-- it is and reddens the key; where the bars are made to tint the icon as well, a flyout's icons take
+-- the same tint. It is read off a bar button that is out of range right now: nil until one was seen,
+-- false once the bars were seen to leave theirs alone.
+local farTint, farPlain = nil, 0
+local PLAIN_TIMES, SAME = 3, 0.01
+local function Like(r, g, b, color)
+    return math.abs(r - color[1]) < SAME and math.abs(g - color[2]) < SAME and math.abs(b - color[3]) < SAME
+end
+-- `ours`: a texture of the addon's own, for its plain calls. Says whether the button had a word on it.
+local function Sample(button, ours)
+    local slot, icon = Bars.Slot(button), button.icon
+    if not slot or type(icon) ~= "table" or not UIParent.IsVisible(button) then return false end
+    local inRange = C_ActionBar and C_ActionBar.IsActionInRange or IsActionInRange
+    local usableAt = C_ActionBar and C_ActionBar.IsUsableAction or IsUsableAction
+    if not inRange or not usableAt then return false end
+    local near = inRange(slot)
+    if Hidden(near) or not (near == false or near == 0) then return false end
+    local usable = usableAt(slot)
+    if Hidden(usable) or not usable then return false end
+    local r, g, b = ours.GetVertexColor(icon)
+    local gray = ours.IsDesaturated(icon)
+    if Hidden(r) or Hidden(g) or Hidden(b) or Hidden(gray) or type(r) ~= "number" then return false end
+    -- the game's own dimming, caught between two of its looks: no word on the range
+    if Like(r, g, b, NO_POWER) or Like(r, g, b, UNUSABLE) then return false end
+    if Like(r, g, b, READY) and not gray then
+        farPlain = farPlain + 1
+        if farTint == nil or farPlain >= PLAIN_TIMES then farTint = false end
+    else
+        farTint, farPlain = { r, g, b, gray == true }, 0
+    end
+    return true
+end
+function F.FarTint() return farTint end
+
+-- One icon's range on its key, as a bar button shows it: the key red out of range, and with no key
+-- the game's dot for an ability that asks a range.
+local function Ranged(frame, kind, id)
+    local far = Far(kind, id)
+    local key = frame.key
+    local text = key:GetText()
+    if text == nil or text == "" or text == RANGE_DOT then key:SetText(far ~= nil and RANGE_DOT or "") end
+    local color = far and RED_FONT_COLOR or ACTIONBAR_HOTKEY_FONT_COLOR
+    if color then key:SetVertexColor(color:GetRGB()) end
+    frame.far = far == true
+    return frame.far
+end
+-- and on its icon, where this client's bars tint theirs: never over the game's own dimming
+local function Tinted(frame)
+    local tint = frame.far and frame.clear and farTint or nil
+    if tint then
+        frame.icon:SetVertexColor(tint[1], tint[2], tint[3])
+        frame.icon:SetDesaturated(tint[4])
+        frame.tinted = true
+    elseif frame.tinted then
+        frame.tinted = nil
+        frame.icon:SetDesaturated(false)
+        if frame.clear then frame.icon:SetVertexColor(READY[1], READY[2], READY[3]) end
+    end
+end
+-- every icon of one flyout: its range, now
+local function Ranges(unit)
+    if not unit.flyout then return end
+    local any, ours = false, nil
+    for _, frame in ipairs(unit.entries) do
+        local entry = frame.entry
+        if entry then
+            ours = ours or frame.icon
+            if Ranged(frame, Casts(entry)) then any = true end
+        end
+    end
+    -- the flyout's own button first: it is the one next to these icons
+    if any and not (unit.host and Sample(unit.host, ours)) and farTint == nil then
+        for _, button in ipairs(Bars.Known() or {}) do
+            if Sample(button, ours) then break end
+        end
+    end
+    for _, frame in ipairs(unit.entries) do
+        if frame.entry then Tinted(frame) end
+    end
 end
 
 -- whether an item's number is shown: one that is used up or comes in stacks, as on a bar button
@@ -740,7 +846,7 @@ local function Count(text, kind, id)
     if not pcall(text.SetText, text, shown) then text:SetText("") end
 end
 
--- every icon of one flyout: its sweep, its dimming and its number, now
+-- every icon of one flyout: its sweep, its dimming, its number and its range, now
 local function State(unit)
     if not unit.flyout then return end
     local numbers = C_CVar.GetCVar("countdownForCooldowns") == "1"
@@ -750,10 +856,11 @@ local function State(unit)
             local kind, id = Casts(entry)
             frame.cooldown:SetHideCountdownNumbers(not numbers)
             Sweep(frame.cooldown, kind, id)
-            Dim(frame.icon, kind, id)
+            frame.clear = Dim(frame.icon, kind, id)
             Count(frame.count, kind, id)
         end
     end
+    Ranges(unit)
 end
 
 -- Whether an ability is one for friends, one for foes, or neither (a spell that is neither counts as
@@ -876,6 +983,15 @@ local function Unit(f)
     unit.hub:SetPoint("CENTER", menu, "CENTER")
     unit.hub:Hide()
     root:SetFrameRef("menu" .. f, menu)
+    -- an open flyout asks its icons' range a few times a second; a frame in it runs only while it shows
+    local tick, waited = CreateFrame("Frame", nil, menu), 0
+    local function Pass() Ranges(unit) end
+    tick:SetScript("OnUpdate", function(_, elapsed)
+        waited = waited + elapsed
+        if waited < RANGE_EVERY then return end
+        waited = 0
+        xpcall(Pass, geterrorhandler())
+    end)
 
     local opener = CreateFrame("Button", OPENER .. f, UIParent, "SecureActionButtonTemplate")
     opener:Hide()
@@ -2730,9 +2846,10 @@ events:RegisterEvent("UPDATE_BINDINGS")
 for _, event in ipairs({ "GAME_PAD_ACTIVE_CHANGED", "GAME_PAD_CONNECTED", "GAME_PAD_DISCONNECTED" }) do
     pcall(events.RegisterEvent, events, event)
 end
--- what changes an open flyout's sweeps, dimming and numbers
+-- what changes an open flyout's sweeps, dimming, numbers and range
 local STATE_EVENTS = { SPELL_UPDATE_COOLDOWN = true, SPELL_UPDATE_USABLE = true, BAG_UPDATE_COOLDOWN = true,
-    ACTIONBAR_UPDATE_COOLDOWN = true, SPELL_UPDATE_CHARGES = true, BAG_UPDATE_DELAYED = true, SPELL_UPDATE_USES = true }
+    ACTIONBAR_UPDATE_COOLDOWN = true, SPELL_UPDATE_CHARGES = true, BAG_UPDATE_DELAYED = true, SPELL_UPDATE_USES = true,
+    PLAYER_TARGET_CHANGED = true }
 for event in pairs(STATE_EVENTS) do pcall(events.RegisterEvent, events, event) end
 events:SetScript("OnEvent", function(_, event, on)
     if event == "ACTIONBAR_SLOT_CHANGED" then
