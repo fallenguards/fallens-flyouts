@@ -3167,8 +3167,15 @@ do
     flushAll()
     carry(503)
     tab = NS.Drop.Tab("ActionButton1")
-    check(tab:IsShown() and tab.mouse == false and tab.point[2] == grip,
-        "in a fight the plus stands on the arrow of a flyout with room, and lets the drop through to it")
+    -- His snips (2026-11-23): "'+' still getting compressed lower in combat". It stands where it does out of
+    -- a fight, past the arrow's tip, and the arrow takes a drop that far out: the plus's middle and more.
+    local _, plusUnit = NS.Flyouts.At("ActionButton1")
+    local plusSide = NS.Art.SIDES[plusUnit.side]
+    check(tab:IsShown() and tab.mouse == false and tab.point[2] == W.frames.ActionButton1
+        and tab.point[4] == plusSide.x * NS.Drop.BADGE_PAST and tab.point[5] == plusSide.y * NS.Drop.BADGE_PAST
+        and grip.hit ~= nil and grip.hit[3] == -NS.Flyouts.GRIP_REACH and NS.Flyouts.GripReach() >= NS.Drop.BADGE_PAST + 4,
+        "in a fight the plus stands where it does out of one, past the arrow's tip, inside where the arrow takes a "
+        .. "drop, and lets the drop through to it")
     local other = NS.Drop.Tab("ActionButton2")
     check(other == nil or not other:IsShown(), "and on no button without a flyout")
     local warned, caught = #W.errors, #W.caught

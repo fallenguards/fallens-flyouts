@@ -278,6 +278,8 @@ function Frame:SetAttribute(k, v)
     if onstate then RunAttributeWrap(self, { before = onstate }, stateid, v) end
 end
 function Frame:GetAttribute(k) return self.attrs[k] end
+-- the mouse area's insets: left, right, top, bottom (a negative one reaches past the frame)
+function Frame:SetHitRectInsets(l, r, t, b) self.hit = { l, r, t, b } end
 -- as the client: a frame kept for the snippets under an attribute of its own
 function Frame:SetFrameRef(label, frame) self.attrs["frameref-" .. label] = frame end
 function Frame:GetFrameRef(label) return self.attrs["frameref-" .. label] end

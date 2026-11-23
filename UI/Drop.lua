@@ -219,8 +219,10 @@ function D.Hide()
 end
 
 -- In a fight addon code may add nothing to a flyout: the flyout's own secure code does, at a drop on
--- its arrow. The plus is then a mark and no more: it stands on the arrow of each flyout that takes one
--- more, and lets the drop through to it.
+-- its arrow. The plus is then a mark and no more: it stands where it stands out of a fight, past the tip
+-- of the arrow of each flyout that takes one more, and lets the drop through to the arrow, which takes a
+-- drop that far out (F.GripReach). It stood on the arrow itself, pulled down onto the button's edge (his
+-- snips, 2026-11-23: "'+' still getting compressed lower in combat").
 local function ShowInFight()
     local shown = 0
     for _, unit in ipairs(F.Roomy()) do
@@ -232,7 +234,12 @@ local function ShowInFight()
         if ok and Bars.Plain(scale) then tab:SetScale(scale) end
         tab:ClearAllPoints()
         tab:SetSize(BADGE_HIT, BADGE_HIT)
-        tab:SetPoint("CENTER", unit.opener, "CENTER")
+        local side = Art.SIDES[unit.side]
+        if side then
+            tab:SetPoint("CENTER", button, side.to, side.x * BADGE_PAST, side.y * BADGE_PAST)
+        else
+            tab:SetPoint("CENTER", unit.opener, "CENTER")
+        end
         tab.badge:Show()
         tab:Show()
         shown = shown + 1

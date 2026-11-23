@@ -65,6 +65,8 @@ local TEXT = {
     it = "It",
 }
 F.MAX, F.KEYS, F.PADS, F.CLOSE_KEYS, F.TEXT = MAX, KEYS, PADS, CLOSE_KEYS, TEXT
+-- how much further out than its own size the arrow takes a drop (the plus stands there in a fight)
+F.GRIP_REACH = 8
 
 -- the open one hides; every key goes back to its opener
 local SHUT = [[
@@ -1923,6 +1925,8 @@ end
 
 -- where the icon in place i starts, along the flyout from the bar button
 function F.Slot(i) return Art.FIRST + (i - 1) * (Art.ICON + Art.NEXT) end
+-- how far past its button's edge the arrow takes a drop
+function F.GripReach() return GRIP_OUT + GRIP_H / 2 + F.GRIP_REACH end
 
 -- an icon frame that far along its flyout; out of a fight only
 function F.Put(unit, frame, out)
@@ -2047,6 +2051,12 @@ local function Lay(unit)
     opener:ClearAllPoints()
     opener:SetSize(edge and GRIP_W or GRIP_H, edge and GRIP_H or GRIP_W)
     opener:SetPoint("CENTER", host, side.to, side.x * GRIP_OUT, side.y * GRIP_OUT)
+    -- In a fight only the arrow may take a drop that adds to the flyout, and the plus stands past its tip,
+    -- where it stands out of one: the arrow takes a drop that far out. His snips (2026-11-23): "'+' still
+    -- getting compressed lower in combat". A click there opens the flyout, as one on the arrow does.
+    local reach = F.GRIP_REACH
+    opener:SetHitRectInsets(side.x < 0 and -reach or 0, side.x > 0 and -reach or 0, side.y > 0 and -reach or 0,
+        side.y < 0 and -reach or 0)
     unit.arrow:ClearAllPoints()
     unit.arrow:SetPoint(side.to, host, side.to, side.x * ARROW_OUT, side.y * ARROW_OUT)
     unit.glow:ClearAllPoints()
