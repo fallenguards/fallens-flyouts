@@ -1012,6 +1012,7 @@ local function boot(alone)
         IsModifiedClick = function(what) return IsModifiedClick(what) end,
         strmatch = string.match,
         strfind = string.find,
+        strsub = string.sub,
         tostring = tostring,
         tonumber = tonumber,
         select = select,
@@ -1056,14 +1057,20 @@ for _, m in ipairs({ "SetAttribute", "SetPoint", "ClearAllPoints", "SetParent", 
 end
 -- What secure code may put on the cursor, as the client's own (PickupAny): an ability by its kind, or
 -- the cursor emptied.
-local function pickupAny(kind, value)
+-- "clear" empties it first, and what is named after it is then picked up. An item is known by its number
+-- or its item string, and is on the cursor by its number.
+local function pickupAny(kind, value, more)
     if kind == "clear" then
         W.cursor = nil
         fire("ACTIONBAR_HIDEGRID")
-    elseif kind == "macro" then
+        kind, value = value, more
+    end
+    if kind == "macro" then
         PickupMacro(value)
     elseif kind == "spell" then
         C_Spell.PickupSpell(value)
+    elseif kind == "item" then
+        W.cursor = { "item", tonumber(value) or tonumber(tostring(value):match("^item:(%d+)")), "link" }
     elseif kind then
         W.cursor = { kind, value }
     end
@@ -1098,20 +1105,20 @@ local function secureDrop(frame, body, header, ...)
     local fn = assert(load("local owner = ...\nreturn (function(self, button, kind, value, ...)\n" .. body
         .. "\nend)(select(2, ...))", frame.name, "t", W.env))
     W.secure = true
-    local ok, a, b = pcall(fn, header, frame, nil, ...)
+    local ok, a, b, c = pcall(fn, header, frame, nil, ...)
     W.secure = false
     if not ok then error(a, 0) end
-    return a, b
+    return a, b, c
 end
 function DropOn(frame)
     local wrapped, message = frame.wraps and frame.wraps.OnReceiveDrag, nil
     if wrapped and wrapped.before then
-        local kind, value = secureDrop(frame, wrapped.before, wrapped.header, GetCursorInfo())
+        local kind, value, more = secureDrop(frame, wrapped.before, wrapped.header, GetCursorInfo())
         if kind == false then return end
         if kind == "message" then
             message = value
         elseif kind then
-            return pickupAny(kind, value)
+            return pickupAny(kind, value, more)
         end
     end
     if frame.action then

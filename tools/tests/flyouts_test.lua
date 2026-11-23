@@ -1325,6 +1325,11 @@ do
     do
         -- a flyout that fills itself takes nothing by hand, in a fight as out of one
         local held = #food.entries
+        C_Spell.PickupSpell(501)
+        DropOn(entry(foodUnit.index, 1))
+        check(#food.entries == held and W.cursor ~= nil and W.errors[#W.errors] == "That flyout fills itself from your bags.",
+            "a drop on an icon of a flyout that fills itself is refused in red")
+        W.cursor = nil
         W.combat = true
         C_Spell.PickupSpell(501)
         DropOn(foodUnit.opener)
@@ -3067,14 +3072,14 @@ do
     DropOn(grip)
     check(ids() == "101 501 502 503" and W.cursor ~= nil and W.errors[#W.errors] == "That is in the flyout already.",
         "one the flyout holds already is refused in red and stays on the cursor")
-    -- on an icon of the open flyout
+    -- with the flyout open
     carry(504)
     tap("1")
     check(unit.menu:IsShown(), "the flyout is open")
-    DropOn(entry(f, 2))
+    DropOn(grip)
     flushAll()
     check(W.cursor == nil and ids() == "101 501 502 503 504" and entry(f, 5):IsShown() and entry(f, 5).attrs.spell == 504,
-        "dropped on an icon of the open flyout: added too, at the end: " .. ids())
+        "dropped on the arrow of the open flyout: added at the end: " .. ids())
     check(unit.menu:IsShown(), "the flyout stays open")
     before = #W.casts
     tap("5")
@@ -3095,7 +3100,8 @@ do
     DropOn(grip)
     check(#flyout.entries == 7 and W.errors[#W.errors] == "That is in the flyout already.", "a macro it holds already is refused")
     empty()
-    -- an icon lifted earlier and let go on nothing does not make the next drop a move
+    -- An icon lifted earlier and let go on nothing does not make the next drop a move: a spell from
+    -- elsewhere dropped on an icon takes that icon's place, as on a bar slot, and hands back what was there.
     tap("1")
     DragOff(entry(f, 2))
     W.cursor = nil
@@ -3103,13 +3109,18 @@ do
     carry(505)
     DropOn(entry(f, 3))
     flushAll()
-    check(ids() == "101 501 502 503 504 4540 Mend 505",
-        "an icon lifted and let go on nothing, then a spell dropped on an icon: that spell is added, and nothing moved: " .. ids())
+    check(ids() == "101 501 505 503 504 4540 Mend" and W.cursor ~= nil and W.cursor[4] == 502,
+        "an icon lifted and let go on nothing, then a spell dropped on an icon: it takes that icon's place, nothing moved, "
+        .. "and what was there is on the cursor: " .. ids())
+    DropOn(grip)
+    flushAll()
+    check(ids() == "101 501 505 503 504 4540 Mend 502" and W.cursor == nil,
+        "what came off is added again by a drop on the arrow: " .. ids())
     -- an added icon moves like any other
     DragOff(entry(f, 4))
     DropOn(entry(f, 2))
     flushAll()
-    check(ids() == "101 503 501 502 504 4540 Mend 505" and W.cursor == nil, "an added icon is moved in the fight like any other: " .. ids())
+    check(ids() == "101 503 501 505 504 4540 Mend 502" and W.cursor == nil, "an added icon is moved in the fight like any other: " .. ids())
     -- to the twelfth, and no further
     for id = 506, 509 do
         carry(id)
@@ -3134,7 +3145,7 @@ do
     fire("PLAYER_REGEN_ENABLED")
     for _ = 1, 4 do flushAll() end
     local after, afterUnit = F12.At("ActionButton1")
-    check(after == flyout and ids() == "101 503 501 502 504 4540 Mend 505 506 507 508 509",
+    check(after == flyout and ids() == "101 503 501 505 504 4540 Mend 502 506 507 508 509",
         "the fight over: the flyout holds all that was added, in its order: " .. ids())
     local laid = true
     for i = 1, F12.MAX do
@@ -3156,6 +3167,120 @@ do
     local all = F12.List()
     for i = #all, 1, -1 do table.remove(all, i) end
     F12.Apply()
+    flushAll()
+    check(not opens("1"), "none left behind for what follows")
+end
+
+print("an ability dropped on an icon takes its place, as on a bar slot")
+do
+    -- His words (2026-11-23): "flyouts not allowing me to drop and replace spells like how we can on normal
+    -- action bar slots."
+    login("Player-1-0000000X")
+    local F13 = NS.Flyouts
+    stack("ActionButton1", 501)
+    stack("ActionButton1", 502)
+    flushAll()
+    local flyout, unit = F13.At("ActionButton1")
+    local f, r = unit.index, root()
+    local function ids()
+        local out = {}
+        for i, held in ipairs(flyout.entries) do out[i] = tostring(held.id) end
+        return table.concat(out, " ")
+    end
+    local function carry(id)
+        C_Spell.PickupSpell(id)
+        fire("CURSOR_CHANGED")
+    end
+    local function empty()
+        W.cursor = nil
+        fire("CURSOR_CHANGED")
+    end
+    local function carries(id) return W.cursor ~= nil and W.cursor[1] == "spell" and W.cursor[4] == id end
+    -- a key set for one icon belongs to its place, as a key belongs to a bar slot
+    flyout.entries[2].key = "G"
+    F13.Apply()
+    flushAll()
+    tap("1")
+    check(unit.menu:IsShown() and ids() == "101 501 502", "a flyout of three, open")
+    local warned, caught = #W.errors, #W.caught
+    carry(503)
+    DropOn(entry(f, 2))
+    flushAll()
+    check(ids() == "101 503 502" and carries(501),
+        "dropped on an icon: it takes the icon's place, and what the icon held is on the cursor: " .. ids())
+    check(entry(f, 2).attrs.spell == 503 and entry(f, 2).icon.texture == F13.Icon({ kind = "spell", id = 503 })
+        and r.attrs["count" .. f] == 3, "the icon casts it and shows its picture, and the flyout holds as many as before")
+    check(flyout.entries[2].key == "G", "the key set for that icon stays with its place")
+    check(unit.menu:IsShown(), "the flyout stays open")
+    check(#W.errors == warned and #W.caught == caught, "with no word of refusal and no error")
+    DropOn(entry(f, 3))
+    flushAll()
+    check(ids() == "101 503 501" and carries(502), "what came off, dropped on another icon: the same again: " .. ids())
+    empty()
+    carry(501)
+    DropOn(entry(f, 2))
+    check(ids() == "101 503 501" and carries(501) and W.errors[#W.errors] == "That is in the flyout already.",
+        "one the flyout holds on another icon is refused in red and stays on the cursor")
+    DropOn(entry(f, 3))
+    check(W.cursor == nil and ids() == "101 503 501", "dropped on the icon that holds it: let go of, and nothing changes")
+    -- set down by a click, as a bar slot takes one
+    carry(504)
+    local before = #W.casts
+    mouse(entry(f, 3))
+    flushAll()
+    check(#W.casts == before and ids() == "101 503 504" and carries(501),
+        "set down by a click on an icon: nothing is cast, it takes the place, and the old one is on the cursor: " .. ids())
+    empty()
+    flushAll()
+    if not unit.menu:IsShown() then tap("1") end
+    before = #W.casts
+    mouse(entry(f, 3))
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:504", "with nothing carried a click on the icon casts as ever")
+    -- in a fight the same, by the secure code
+    W.guard = true
+    fire("PLAYER_REGEN_DISABLED")
+    W.combat = true
+    flushAll()
+    tap("1")
+    carry(505)
+    DropOn(entry(f, 2))
+    flushAll()
+    check(ids() == "101 505 504" and carries(503), "in a fight the same: in its place, the old one on the cursor: " .. ids())
+    check(entry(f, 2).attrs.spell == 505 and entry(f, 2).attrs.ffmark == "spell:505"
+        and entry(f, 2).icon.texture == F13.Icon({ kind = "spell", id = 505 })
+        and r.attrs["holds" .. f] == ";spell:101;spell:504;spell:505;" and r.attrs["count" .. f] == 3,
+        "the icon casts it and shows it, and the secure code knows what the flyout holds now: " .. tostring(r.attrs["holds" .. f]))
+    check(flyout.entries[2].key == "G" and unit.menu:IsShown(), "its place keeps its key, and the flyout stays open")
+    before = #W.casts
+    tap("G")
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:505", "that key casts the new one: " .. tostring(W.casts[#W.casts]))
+    DropOn(unit.opener)
+    flushAll()
+    check(ids() == "101 505 504 503" and W.cursor == nil, "what came off, dropped on the flyout's arrow, is added again: " .. ids())
+    carry(504)
+    DropOn(entry(f, 2))
+    check(ids() == "101 505 504 503" and carries(504) and W.errors[#W.errors] == "That is in the flyout already.",
+        "in a fight too, one the flyout holds already is refused and stays on the cursor")
+    empty()
+    if not unit.menu:IsShown() then tap("1") end
+    DragOff(entry(f, 4))
+    DropOn(entry(f, 2))
+    flushAll()
+    check(ids() == "101 503 505 504" and W.cursor == nil, "an icon of the flyout dragged onto another is still moved, not swapped: " .. ids())
+    check(#W.caught == caught, "none of it raised an error")
+    if unit.menu:IsShown() then tap("1") end
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    for _ = 1, 4 do flushAll() end
+    local after, afterUnit = F13.At("ActionButton1")
+    local order = {}
+    for i = 1, 4 do order[i] = tostring(afterUnit.entries[i].attrs.spell) end
+    check(after == flyout and table.concat(order, " ") == "101 503 505 504" and r.attrs["holds" .. afterUnit.index] == ";spell:101;spell:503;spell:505;spell:504;",
+        "the fight over: laid afresh as saved: " .. table.concat(order, " "))
+    W.guard = nil
+    local all = F13.List()
+    for i = #all, 1, -1 do table.remove(all, i) end
+    F13.Apply()
     flushAll()
     check(not opens("1"), "none left behind for what follows")
 end

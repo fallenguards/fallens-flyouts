@@ -339,11 +339,15 @@ local LIFT = [[
 -- cant add to a flyout in combat still." Addon code may not touch an icon in a fight; this may. Every
 -- flyout has its twelve icons made and each spot's place told beforehand (Lay), and the keys an added
 -- icon would get (Rebind). What is carried is dropped on the flyout's arrow, where the plus stands in a
--- fight, or on an icon of the open flyout: the next free icon is given the ability, shown on its spot,
--- the strip made one icon longer, and its keys bound. The addon is then told (Added), to save it and
--- draw it. Refused, with a word in red: one the flyout holds already, a full flyout, and a flyout that
--- fills itself or whose icons stand around its button. `f`: the flyout.
-local ADD = [[
+-- fight: the next free icon is given the ability, shown on its spot, the strip made one icon longer, and
+-- its keys bound. The addon is then told (Added), to save it and draw it. Refused, with a word in red:
+-- one the flyout holds already, a full flyout, and a flyout that fills itself or whose icons stand around
+-- its button.
+-- What a drop in a fight carries, for ADD and SWAP below (`f`: the flyout): `id` (a spell's or an
+-- item's, or a macro's place in the list), `casts` (what an icon is given to cast it), `mark` (its name
+-- in holds<f>), whom the game's Mouseover Cast sends it to, and `has` (what the flyout holds). One the
+-- flyout holds already is refused here.
+local CARRIED = [[
     lifted = nil
     if not f then return end
     local id, casts, base = value, value, nil
@@ -355,16 +359,27 @@ local ADD = [[
     elseif kind ~= "macro" then
         return
     end
-    -- a number, or it is nothing this can add
+    -- a number, or it is nothing a flyout takes
     if not id or tonumber(id) ~= id then return end
-    if owner:GetAttribute("still" .. f) then
-        owner:CallMethod("Refused", owner:GetAttribute("auto" .. f) and "auto" or "fight")
-        return
+    local mark = kind .. ":" .. id
+    -- dropped on the icon that holds it: nothing to do but let go of it
+    if self:GetAttribute("ffmark") == mark then return "clear" end
+    local help, harm
+    if kind == "spell" then
+        help, harm = IsSpellHelpful(id), IsSpellHarmful(id)
+        if not help and not harm then help, harm = true, true end
+    elseif kind == "item" then
+        help, harm = IsHelpfulItem(id), IsHarmfulItem(id)
     end
     local has = owner:GetAttribute("holds" .. f) or ";"
-    local mark = kind .. ":" .. id .. ";"
-    if strfind(has, ";" .. mark, 1, true) or (base and strfind(has, ";spell:" .. base .. ";", 1, true)) then
+    if strfind(has, ";" .. mark .. ";", 1, true) or (base and strfind(has, ";spell:" .. base .. ";", 1, true)) then
         owner:CallMethod("Refused", "twice")
+        return
+    end
+]]
+local ADD = CARRIED .. [[
+    if owner:GetAttribute("still" .. f) then
+        owner:CallMethod("Refused", owner:GetAttribute("auto" .. f) and "auto" or "fight")
         return
     end
     local room, n = owner:GetAttribute("room" .. f) or 0, (owner:GetAttribute("count" .. f) or 0) + 1
@@ -379,11 +394,12 @@ local ADD = [[
     icon:SetAttribute("item", nil)
     icon:SetAttribute("macro", nil)
     icon:SetAttribute(kind, casts)
-    icon:SetAttribute("fhelp", nil)
-    icon:SetAttribute("fharm", nil)
+    icon:SetAttribute("ffmark", mark)
+    icon:SetAttribute("fhelp", help or nil)
+    icon:SetAttribute("fharm", harm or nil)
     owner:SetAttribute("count" .. f, n)
     owner:SetAttribute("room" .. f, room - 1)
-    owner:SetAttribute("holds" .. f, has .. mark)
+    owner:SetAttribute("holds" .. f, has .. mark .. ";")
     -- its keys: those its spot was given beforehand. One that is a key of the flyout's button too
     -- stays the button's while it is held down.
     local listed = owner:GetAttribute("pkeys" .. f) or 0
@@ -411,21 +427,40 @@ local ADD = [[
         if owner:GetAttribute("mup" .. f) then strip:SetHeight(long) else strip:SetWidth(long) end
         owner:SetAttribute("mlong" .. f, long)
     end
-    -- whom the game's Mouseover Cast sends it to, as every icon is told when it is laid
-    local help, harm
-    if kind == "spell" then
-        help, harm = IsSpellHelpful(id), IsSpellHarmful(id)
-        if not help and not harm then help, harm = true, true end
-    elseif kind == "item" then
-        help, harm = IsHelpfulItem(id), IsHarmfulItem(id)
-    end
-    icon:SetAttribute("fhelp", help or nil)
-    icon:SetAttribute("fharm", harm or nil)
     return "clear"
 ]]
+-- An ability dropped on an icon takes that icon's place, as one dropped on a bar slot takes the slot:
+-- his words (2026-11-23): "flyouts not allowing me to drop and replace spells like how we can on normal
+-- action bar slots." The icon (`self`) casts what was dropped from then on, on its spot and with its
+-- keys, and what it held goes onto the cursor in its stead. The addon is told (Swapped), to save and
+-- draw it. Not in a flyout that fills itself.
+local SWAP = CARRIED .. [[
+    if owner:GetAttribute("auto" .. f) then
+        owner:CallMethod("Refused", "auto")
+        return
+    end
+    local was, gone = self:GetAttribute("type"), self:GetAttribute("ffmark")
+    local back = was and self:GetAttribute(was)
+    if not back then return end
+    if gone then
+        local from, to = strfind(has, ";" .. gone .. ";", 1, true)
+        if from then has = strsub(has, 1, from) .. strsub(has, to + 1) end
+    end
+    self:SetAttribute("type", kind)
+    self:SetAttribute("spell", nil)
+    self:SetAttribute("item", nil)
+    self:SetAttribute("macro", nil)
+    self:SetAttribute(kind, casts)
+    self:SetAttribute("ffmark", mark)
+    self:SetAttribute("fhelp", help or nil)
+    self:SetAttribute("fharm", harm or nil)
+    owner:SetAttribute("holds" .. f, has .. mark .. ";")
+    owner:CallMethod("Swapped", self:GetName(), kind, id)
+    return "clear", was, back
+]]
 -- A drop on an icon in a fight. The icon lifted off this flyout, still on the cursor, is being moved.
--- Anything else on the cursor comes from the spellbook, the bags or a bar: it is being added. An icon
--- lifted earlier and let go elsewhere is told from what is carried now by its ability.
+-- Anything else on the cursor comes from the spellbook, the bags or a bar: it takes this icon's place.
+-- An icon lifted earlier and let go elsewhere is told from what is carried now by its ability.
 local LAND = [[
     if not (kind and PlayerInCombat()) then return end
     local f = self:GetAttribute("fffly")
@@ -445,7 +480,7 @@ local LAND = [[
         end
     end
     if not moving then
-]] .. ADD .. [[
+]] .. SWAP .. [[
     end
     local from, to = mover:GetAttribute("ffspot"), self:GetAttribute("ffspot")
     if from == to then return "clear" end
@@ -502,6 +537,9 @@ local MOUSECAST = [[
 
 local ENTRY_WRAP = [[
     if button == "RightButton" then return false end
+    -- out of a fight a mouse click with something carried sets it down on this icon, as on a bar slot,
+    -- and casts nothing (in a fight nothing says what the cursor holds)
+    if button == "LeftButton" and owner:GetAttribute("carrying") and not PlayerInCombat() then return false end
 ]] .. MOUSECAST .. [[
     if button == "LeftButton" then
         if down then
@@ -745,6 +783,7 @@ local function Build()
     root.Shifted = function(_, ...) xpcall(Shifted, geterrorhandler(), ...) end
     root.Added = function(_, ...) xpcall(F.Added, geterrorhandler(), ...) end
     root.Refused = function(_, ...) xpcall(F.Refused, geterrorhandler(), ...) end
+    root.Swapped = function(_, ...) xpcall(F.Swapped, geterrorhandler(), ...) end
     for i, key in ipairs(CLOSE_KEYS) do root:SetAttribute("ckey" .. i, key) end
     root:SetAttribute("ckeys", #CLOSE_KEYS)
     root:SetAttribute("units", 0)
@@ -1023,6 +1062,7 @@ local function EntryButton(unit, i)
     entry:SetScript("PostClick", function(self, button, down)
         Tell("pick", unit, self.entryIndex, button, down)
         if button == "RightButton" and not down then TakeOff(unit, self.entryIndex) end
+        if button == "LeftButton" and not down and GetCursorInfo() then xpcall(F.Dropped, geterrorhandler(), self) end
     end)
     -- never a field called unit: the client takes that for a unit name
     entry.flyoutUnit, entry.entryIndex = unit, i
@@ -1034,6 +1074,8 @@ local function EntryButton(unit, i)
     entry.made = i
     root:SetFrameRef(name, entry)
     root:WrapScript(entry, "OnDragStart", LIFT)
+    -- what is dropped on an icon out of a fight is the addon's to deal with; in a fight the secure code's
+    entry:SetScript("OnReceiveDrag", function(self) xpcall(F.Dropped, geterrorhandler(), self) end)
     root:WrapScript(entry, "OnReceiveDrag", LAND)
     entry:HookScript("OnEnter", EntryTip)
     entry:HookScript("OnLeave", HideTip)
@@ -1868,6 +1910,10 @@ local function Lay(unit)
         local help, harm = Leaning(entry)
         frame:SetAttribute("fhelp", help)
         frame:SetAttribute("fharm", harm)
+        -- its name in what the flyout holds, for the secure code (a macro by its place in the list)
+        local marked = entry and entry.id
+        if entry and entry.kind == "macro" then marked = Macros.Find(entry) end
+        frame:SetAttribute("ffmark", marked and (entry.kind .. ":" .. tostring(marked)) or nil)
         frame:SetShown(entry ~= nil)
     end
     Face(unit)
@@ -2772,6 +2818,76 @@ function F.Added(f, n, kind, id)
 end
 -- and refused to: said in red, as out of a fight
 function F.Refused(why) ns.Warn(TEXT[why] or TEXT.fight) end
+
+-- An ability takes the place of the icon at `i`, as on a bar slot: on its spot, with the keys the icon
+-- had there. Returns the one that gave way, and the new one. `done`: the secure code has made the icon
+-- cast it already, in a fight, and this only saves it.
+function F.Replace(flyout, i, entry, done)
+    if not done and InCombatLockdown() then return nil, TEXT.fight end
+    local old = list and flyout and flyout.entries[i]
+    if not old then return nil end
+    if not done then
+        if flyout.auto then return nil, TEXT.auto end
+        if Has(flyout, entry) then return nil, TEXT.twice end
+    end
+    local new = Copy(entry)
+    new.spot, new.key, new.pad = old.spot, old.key, old.pad
+    flyout.entries[i] = new
+    for place, other in ipairs(flyout.all or {}) do
+        if other == old then flyout.all[place] = new end
+    end
+    if done then return old, new end
+    local shown = open ~= nil and open.flyout == flyout
+    F.Apply()
+    -- still open, as it was
+    local unit = shown and Run(flyout).unit
+    if unit then F.Show(unit.index) end
+    return old, new
+end
+
+-- Something carried was let go on an icon, out of a fight: it takes the icon's place, and what the icon
+-- held is on the cursor in its stead.
+function F.Dropped(frame)
+    if InCombatLockdown() or not GetCursorInfo() then return end
+    local unit, i = frame.flyoutUnit, frame.entryIndex
+    local flyout = unit and unit.flyout
+    local old = flyout and flyout.entries[i]
+    if not old then return end
+    -- an icon dragged out of this flyout and let go on one of its icons: it stays in
+    if ns.Move and ns.Move.PutBack(flyout) then return ClearCursor() end
+    local entry = ns.Drop and ns.Drop.Carried()
+    if not entry then return end
+    if Same(old, entry) then return ClearCursor() end
+    local was, why = F.Replace(flyout, i, entry)
+    if not was then
+        if why then ns.Warn(why) end
+        return
+    end
+    ClearCursor()
+    Pickup(was)
+    ns.Log(("%s took the place of %s in the flyout on %s"):format(Name(entry), Name(was), tostring(flyout.host)))
+    Tell("swapped", Run(flyout).unit, i)
+end
+
+-- The secure code did the same in a fight: saved, and drawn. `name`: the icon's frame.
+function F.Swapped(name, kind, id)
+    local frame = _G[name]
+    local unit, i = frame and frame.flyoutUnit, frame and frame.entryIndex
+    local flyout = unit and unit.flyout
+    if not (flyout and flyout.entries[i]) then return end
+    local entry = { kind = kind, id = id }
+    if kind == "macro" then entry = Macros.Entry(id) or { kind = kind, id = (GetMacroInfo(id)) } end
+    local old, new = F.Replace(flyout, i, entry, true)
+    if not new then return end
+    frame.entry = new
+    frame.icon:SetTexture(F.Icon(new))
+    pending = true
+    if not InCombatLockdown() then return F.Settle() end
+    State(unit)
+    ns.Log(("in a fight %s took the place of %s in the flyout on %s"):format(Name(new), Name(old),
+        tostring(flyout.host)))
+    Tell("swapped", unit, i)
+end
 
 local function Forget(flyout)
     for i = #list, 1, -1 do
