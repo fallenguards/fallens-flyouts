@@ -6,6 +6,7 @@ local _, ns = ...
 -- luacheck: read globals PlaceAction ClearCursor GetCursorInfo GetActionInfo
 -- luacheck: read globals IsBindingForGamePad GetBindingKey GetNumBindings GetBinding ACTIONBAR_HOTKEY_FONT_COLOR
 -- luacheck: read globals RED_FONT_COLOR RANGE_INDICATOR UnitExists C_ActionBar IsActionInRange IsUsableAction
+-- luacheck: read globals RegisterStateDriver
 
 -- Flyouts on bar buttons. One secure root owns every key.
 local F = {}
@@ -321,14 +322,32 @@ local CLICK_AFTER = [[
 -- delay on showing the flyout symbol, and in fact even acting as a flyout"; "cant be having delays like
 -- that". Seen on his druid (/ffdev forms): every shift left a button of the bar wrong for 0.4 to 0.9 s,
 -- until the addon's once-a-second pass came round; in a fight nothing followed at all. The game turns
--- the bar by setting its "actionpage" (its ActionBarController, in a fight too); this runs as that is
--- set (the bar's OnAttributeChanged, wrapped), before the bar's buttons are drawn anew. On each button of
--- the bar, the flyout of what it stands for now (`page-<slot>`, written by Apply for every page, those
--- out of view as much as the one in view) is hung as a drop in a fight hangs one (HOME). The one there
--- before is taken off when the button no longer holds its ability, and kept for that page.
+-- the bar by setting its "actionpage" (its ActionBarController, in a fight too). A wrap of the bar's own
+-- OnAttributeChanged never ran: the game runs a wrapped body only for a frame that is protected itself
+-- (SecureHandler_Other_Execute asks GetFrameHandle(frame, true), which only an explicitly protected
+-- frame answers), and the bar is protected only through its buttons. So a state driver of the addon's own
+-- (F.PageWrap), on the conditions the game turns the bar by, runs this as the root's own snippet. The page
+-- is worked out by the game's own rule (ActionBarController_UpdateAll), from what secure code may ask in a
+-- fight too, not read off the bar, which secure code may read only while the bar counts as protected. On
+-- each button of the bar, the flyout of what it stands for now
+-- (`page-<slot>`, written by Apply for every page, those out of view as much as the one in view) is hung
+-- as a drop in a fight hangs one (HOME). The one there before is taken off, and kept for its page.
 F.PAGE = [[
-    if name ~= "actionpage" or not owner:GetAttribute("paging") then return end
-    local page = tonumber(value)
+    local owner = self
+    if not owner:GetAttribute("paging") then return end
+    local page
+    if HasVehicleActionBar() then
+        page = GetVehicleBarIndex()
+    elseif HasOverrideActionBar() then
+        page = GetOverrideBarIndex()
+    elseif HasTempShapeshiftActionBar() then
+        page = GetTempShapeshiftBarIndex()
+    elseif HasBonusActionBar() and GetActionBarPage() == 1 then
+        page = GetBonusBarIndex()
+    else
+        page = GetActionBarPage()
+    end
+    page = tonumber(page)
     if not page then return end
     local changed, shut
     for i = 1, owner:GetAttribute("mainbuttons") or 0 do
@@ -2723,15 +2742,15 @@ function F.Sleeps(flyout)
     return held ~= nil and Bars.Slot(held) ~= slots[1]
 end
 
--- The bar's turns are followed by F.PAGE, wrapped once on the bar out of a fight, with the bar's
--- buttons it hangs flyouts on.
+-- The bar's turns are followed by F.PAGE, run by a state driver of the addon's own on the conditions the
+-- game turns the bar by (Bars.PAGE_STATES): set up once, out of a fight, with the bar and its buttons
+-- known to the root. The driver's frame is hidden: a state driver runs on a hidden frame as on one shown.
 do
-    local paging
+    local PAGER, pager = "FallensFlyoutsPager", nil
     function F.PageWrap()
-        if paging ~= nil or InCombatLockdown() or not root then return end
+        if pager or InCombatLockdown() or not root then return end
         local bar = _G[Bars.MAIN_BAR]
         if type(bar) ~= "table" then return end
-        paging = pcall(root.WrapScript, root, bar, "OnAttributeChanged", F.PAGE)
         local count = 0
         for i = 1, Bars.MAIN_COUNT do
             local button = _G[Bars.MAIN_BUTTON .. i]
@@ -2741,7 +2760,14 @@ do
             end
         end
         root:SetAttribute("mainbuttons", count)
-        ns.Log(("pages: Action Bar 1's turns are followed: %s, over %d buttons"):format(tostring(paging), count))
+        root:SetAttribute("ffpage", F.PAGE)
+        pager = CreateFrame("Frame", PAGER, UIParent, "SecureHandlerStateTemplate")
+        pager:Hide()
+        pager:SetFrameRef("root", root)
+        pager:SetAttribute("_onstate-ffpage", [[self:GetFrameRef("root"):RunAttribute("ffpage")]])
+        local ok = pcall(RegisterStateDriver, pager, "ffpage", Bars.PAGE_STATES)
+        ns.Log(("pages: Action Bar 1's turns are followed by a state driver: %s, over %d buttons"):format(
+            tostring(ok), count))
     end
 end
 

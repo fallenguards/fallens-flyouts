@@ -272,6 +272,10 @@ function Frame:SetAttribute(k, v)
     -- (the client's Wrapped_Attribute)
     local wrapped = self.wraps and self.wraps.OnAttributeChanged
     if wrapped and type(k) == "string" and not k:find("^_") then RunAttributeWrap(self, wrapped, k, v) end
+    -- a state handler frame (SecureHandler_StateOnAttributeChanged): its snippet for that state
+    local stateid = type(k) == "string" and k:match("^state%-(.+)")
+    local onstate = stateid and self.protected and self.attrs["_onstate-" .. stateid]
+    if onstate then RunAttributeWrap(self, { before = onstate }, stateid, v) end
 end
 function Frame:GetAttribute(k) return self.attrs[k] end
 -- as the client: a frame kept for the snippets under an attribute of its own
@@ -1090,6 +1094,14 @@ local function boot(alone)
         IsHarmfulItem = function(id) return C_Item.IsHarmfulItem(id) end,
         -- what a slot holds, and whether the player is in a fight
         GetActionInfo = function(slot) return GetActionInfo(slot) end,
+        -- Action Bar 1's page as the game works it out: a form's bar (W.bonus) over the bar's own page
+        -- (W.barPage, TurnPage); no vehicle, override bar or passing shapeshift here
+        HasVehicleActionBar = function() return false end,
+        HasOverrideActionBar = function() return false end,
+        HasTempShapeshiftActionBar = function() return false end,
+        HasBonusActionBar = function() return (W.bonus or 0) > 0 end,
+        GetBonusBarIndex = function() return 6 + (W.bonus or 0) end,
+        GetActionBarPage = function() return W.barPage or 1 end,
         PlayerInCombat = function() return W.combat == true end,
     }
     W.env = setmetatable({}, { __index = function(t, k)
@@ -1145,22 +1157,69 @@ end
 -- a wrap's body, run as secure code
 local function secureRun(frame, body, signature, ...)
     local fn = assert(load("local " .. signature .. " = ...; " .. body, frame.name, "t", W.env))
+    -- secure code run from secure code (RunAttribute): the outer run is still secure after
+    local outer = W.secure
     W.secure = true
     local ok, a, b = pcall(fn, ...)
-    W.secure = false
+    W.secure = outer
     if not ok then error(a, 0) end
     return a, b
 end
--- a frame's OnAttributeChanged wrap (Frame:SetAttribute): its body, run as secure code
+-- A frame's OnAttributeChanged wrap (Frame:SetAttribute): its body, run as secure code, and only for a
+-- frame protected itself (made from a secure template), as the client does: its SecureHandler_Other_Execute
+-- asks GetFrameHandle(frame, true), which a frame protected only through its children does not answer,
+-- and then runs nothing. (A wrap on the game's own Action Bar 1 never ran on his client, 2026-11-23.)
 function RunAttributeWrap(frame, wrapped, name, value)
-    local was = W.secure
+    if not frame.protected then return end
     secureRun(frame, wrapped.before, "self, name, value, owner", frame, name, value, wrapped.header)
-    W.secure = was
+end
+-- a frame's own snippet, run by secure code (the client's RunAttribute)
+function Frame:RunAttribute(attribute)
+    local body = self.attrs[attribute]
+    assert(type(body) == "string", "RunAttribute of no snippet")
+    return secureRun(self, body, "self", self)
+end
+-- The game's state drivers (SecureStateDriver.lua): a frame's "state-<id>" set to the value of the first of
+-- its conditions that holds, as they are looked at again after the events that change them; a frame made
+-- from the state handler template runs its "_onstate-<id>" then. Of the conditions only those a bar's page
+-- goes by are known here: [bonusbar:N] (W.bonus) and [bar:N] (W.barPage); any other never holds.
+function RegisterStateDriver(frame, id, conditions)
+    W.drivers = W.drivers or {}
+    W.drivers[#W.drivers + 1] = { frame = frame, id = id, conditions = conditions }
+    ResolveDrivers()
+end
+function ResolveDrivers()
+    local function holds(cond)
+        local n = cond:match("^bonusbar:(%d)$")
+        if n then return (W.bonus or 0) == tonumber(n) end
+        n = cond:match("^bar:(%d)$")
+        if n then return (W.barPage or 1) == tonumber(n) end
+        return cond == ""
+    end
+    for _, driver in ipairs(W.drivers or {}) do
+        local value
+        for clause in driver.conditions:gmatch("[^;]+") do
+            local cond, v = clause:match("^%[(.-)%](.*)$")
+            if not cond then cond, v = "", clause end
+            if value == nil and holds(cond) then value = v end
+        end
+        -- set by the game's own manager: secure, in a fight too
+        if driver.frame.attrs["state-" .. driver.id] ~= value then
+            local was = W.secure
+            W.secure = true
+            driver.frame:SetAttribute("state-" .. driver.id, value)
+            W.secure = was
+        end
+    end
 end
 -- The game turning Action Bar 1 to another page (a druid's form, a stance): its ActionBarController sets
 -- the bar's "actionpage", in a fight too, and then each of the bar's buttons takes its slot off it anew
 -- (CalculateAction: (page - 1) * 12 + the button's number). Then the events the client sends with it.
+-- A form's page is a bonus bar's (7 to 11), the bar's own pages are 1 to 6. The state drivers are looked
+-- at again after the events, as the game's manager does at its next pass.
 function TurnPage(page)
+    W.bonus = (page >= 7 and page <= 11) and (page - 6) or 0
+    W.barPage = page <= 6 and page or 1
     local bar = W.frames.MainActionBar
     local was = W.secure
     W.secure = true
@@ -1172,6 +1231,7 @@ function TurnPage(page)
     end
     fire("UPDATE_SHAPESHIFT_FORM")
     fire("UPDATE_BONUS_ACTIONBAR")
+    ResolveDrivers()
 end
 -- A drag begun on a frame, as the client runs it: the wrap's body first, which may refuse it or put
 -- something on the cursor; else the frame's own handler.

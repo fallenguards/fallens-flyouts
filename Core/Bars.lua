@@ -460,6 +460,11 @@ local MAIN_BAR, MAIN_BUTTON, MAIN_COUNT = "MainActionBar", "ActionButton", 12
 -- passing shapeshift's and an override bar's
 local MAIN_PAGES = 14
 B.MAIN_BAR, B.MAIN_BUTTON, B.MAIN_COUNT = MAIN_BAR, MAIN_BUTTON, MAIN_COUNT
+-- What the game turns the bar's page by (its ActionBarController: a vehicle's bar, an override bar, a
+-- passing shapeshift, the bar's own page, a form's or stance's bar), as a state driver's conditions: the
+-- state changes whenever the page may have. The page itself is read off the bar.
+B.PAGE_STATES = "[vehicleui]v;[overridebar]o;[shapeshift]t;[possessbar]p;[bar:2]2;[bar:3]3;[bar:4]4;[bar:5]5;"
+    .. "[bar:6]6;[bonusbar:1]b1;[bonusbar:2]b2;[bonusbar:3]b3;[bonusbar:4]b4;[bonusbar:5]b5;1"
 
 -- the bar, while it turns its buttons by its page
 function B.MainBar()
