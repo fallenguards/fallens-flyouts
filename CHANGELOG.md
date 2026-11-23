@@ -10,6 +10,7 @@
 
 ### Changed
 - The Fallen's Flyouts section of the game's Keybindings options is now only the twelve rows for the spots of every flyout. The heading and six rows it had for each of eight flyouts, used or not, are gone: they made eight look like a limit, which it is not. A key for one icon of one flyout is set in the addon's settings, under Flyout keys, or as before by hovering the icon in Quick Keybind Mode, and the section says so. A key already set on one of the old rows goes on working: it is that icon's own key now.
+- The window someone sees after a first install says that a right-click on a flyout's bar button gives the flyout an icon and a name of its own.
 
 ### Fixed
 - A flyout's bar button dragged to another bar slot in combat takes its flyout along at once: its arrow, its keys and a click on the button all open it there. Until now the flyout stayed on the old button until combat ended. A flyout whose button was dropped on, its ability left on the cursor, follows that ability to the button it is set down on.

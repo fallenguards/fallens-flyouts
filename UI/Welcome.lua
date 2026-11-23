@@ -25,6 +25,9 @@ local TEXT = {
     make = "To make a flyout, drag a spell, item or macro onto a bar button and drop it on the +.",
     -- in the game's gamepad mode nothing is dragged
     makePad = "To make a flyout, bind an ability onto a button that already holds one and choose Add to Flyout.",
+    -- His words (2026-11-23): "why does our initial user popout not mention the right click to change
+    -- flyout icon? ppl literally won't even know."
+    icon = "Right-click a flyout's bar button to give it an icon and a name of its own.",
     auto = "You can also use these preset flyouts. Each one keeps itself filled with that kind of item from "
         .. "your bags. Drag one onto an action bar, or click it and then a bar button.",
     more = "More in the settings: /ff",
@@ -88,7 +91,9 @@ local function Build()
         return line
     end
     frame.make = Line("GameFontHighlight")
-    frame.auto = Line("GameFontHighlight", frame.make, GAP)
+    frame.icon = Line("GameFontHighlight", frame.make, GAP)
+    frame.icon:SetText(TEXT.icon)
+    frame.auto = Line("GameFontHighlight", frame.icon, GAP)
     frame.auto:SetText(TEXT.auto)
     -- the flyouts that fill themselves, as on their settings page: picked up by a drag or a click
     frame.icons = {}
@@ -114,7 +119,8 @@ end
 
 -- as high as its words run to at this client's size of text
 local function Fit()
-    local words = (frame.make:GetStringHeight() or 0) + GAP + (frame.auto:GetStringHeight() or 0)
+    local words = (frame.make:GetStringHeight() or 0) + GAP + (frame.icon:GetStringHeight() or 0) + GAP
+        + (frame.auto:GetStringHeight() or 0)
     frame:SetSize(frame.wide + EDGE * 2, TITLE + words + GAP + Art.ICON + NAME_H + GAP + OKAY_H + FOOT)
 end
 

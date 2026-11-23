@@ -357,9 +357,14 @@ local function iconWindow(f)
         GetIconTexture = function(self) return self.v end,
     }
     -- as the game's template: the words and the box for a name, the words over the list, the list of kinds
-    f.BorderBox = { EditBoxHeaderText = region(), OkayButton = region(), CancelButton = region(),
+    -- (a frame of the window's own, as in the game: what is made on it is in view while the window is)
+    f.BorderBox = region()
+    f.BorderBox.parent = f
+    for k, v in pairs({ EditBoxHeaderText = region(), OkayButton = region(), CancelButton = region(),
         IconSelectorEditBox = region(), SelectedIconArea = { SelectedIconButton = chosen },
-        IconSelectionText = region(), IconTypeDropdown = region() }
+        IconSelectionText = region(), IconTypeDropdown = region() }) do
+        f.BorderBox[k] = v
+    end
     f.IconSelector = {
         SetSelectedCallback = function(self, fn) self.picked = fn end,
         SetSelectedIndex = function(self, i) self.index = i end,
@@ -426,11 +431,22 @@ local function flush()
         end
     end
 end
+-- The game's tooltip. SetAction fills it with what a bar slot holds and shows it (tip.action). An addon
+-- listening in on that call does so from its load on: here each login loads the addon again, so the
+-- listeners of earlier logins listen still, each to its own copy of the addon.
+local function setAction(self, slot)
+    self.action, self.shown = slot, true
+    return HasAction(slot)
+end
 GameTooltip = {
     SetOwner = function(self, owner) self.owner = owner end,
+    GetOwner = function(self) return self.owner end,
     IsOwned = function(self, owner) return self.owner == owner end,
-    Hide = function(self) self.owner = nil end,
-    SetText = noop, AddLine = noop, Show = noop, SetItemByID = noop,
+    IsShown = function(self) return self.shown == true end,
+    Hide = function(self) self.owner, self.shown, self.action = nil, false, nil end,
+    Show = function(self) self.shown = true end,
+    SetAction = setAction,
+    SetText = noop, AddLine = noop, SetItemByID = noop,
     -- the spell asked for, and whether its rank was asked for with it
     SetSpellByID = function(_, id, _, subtext) W.tip = { id = id, rank = subtext == true } end,
 }
@@ -946,6 +962,14 @@ local function actionButton(name, slot, parent)
     b.Name.font = "GameFontHighlightSmallOutline"
     -- its icon: the game dims it short of power or unusable, and leaves it alone out of range
     b.icon = b:CreateTexture()
+    -- a hover shows the tooltip of what it holds, as the game's bar button does (ActionButton.lua:
+    -- SetTooltip, which a refresh of the tooltip runs again); the mouse off it puts the tooltip away
+    function b:SetTooltip()
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetAction(self.action)
+    end
+    b.scripts.OnEnter = function(self) self:SetTooltip() end
+    b.scripts.OnLeave = function() GameTooltip:Hide() end
     return b
 end
 
@@ -962,6 +986,7 @@ end
 -- a new session: the bars, then the addon (and a driver, when a test names one) and a login
 local unplaced = false
 local function boot(alone)
+    GameTooltip:Hide()
     -- the last session's frames are gone
     for name in pairs(W and W.frames or {}) do _G[name] = nil end
     W = { frames = {}, all = {}, overrides = {}, queue = {}, casts = {}, chat = {}, errors = {}, keyDown = {}, held = {},

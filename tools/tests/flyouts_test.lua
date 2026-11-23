@@ -4256,6 +4256,11 @@ do
         "it is made of the game's own flat panel, the one its Loot Rolls window is made of, with that panel's title, x and button")
     check(up.make.text == "To make a flyout, drag a spell, item or macro onto a bar button and drop it on the +.",
         "it says in a line how a flyout is made: " .. tostring(up.make.text))
+    -- His words (2026-11-23): "why does our initial user popout not mention the right click to change flyout
+    -- icon? ppl literally won't even know."
+    check(up.icon.text == "Right-click a flyout's bar button to give it an icon and a name of its own."
+        and up.icon.point[2] == up.make and up.auto.point[2] == up.icon,
+        "under it, a line on the right-click that gives a flyout an icon and a name: " .. tostring(up.icon.text))
     check(up.auto.text:find("You can also use these preset flyouts.", 1, true) == 1
         and up.auto.text:find("keeps itself filled with that kind of item from your bags", 1, true) ~= nil
         and up.auto.text:find("These fill themselves", 1, true) == nil,
@@ -4275,7 +4280,8 @@ do
     Welcome.Show()
     check(up.point == where, "shown again while it is up, it is not put back where it first stood")
     -- as high as its words run to
-    check(up.h == 34 + up.make:GetStringHeight() + 12 + up.auto:GetStringHeight() + 12 + NS.Art.ICON + 16 + 12 + 22 + 14,
+    check(up.h == 34 + up.make:GetStringHeight() + 12 + up.icon:GetStringHeight() + 12 + up.auto:GetStringHeight() + 12
+        + NS.Art.ICON + 16 + 12 + 22 + 14,
         "it is as high as its words and its row need: " .. tostring(up.h))
     -- dragged out of it onto a bar: the flyout is there, and the window is still up for the next one
     local food = up.icons[1]
