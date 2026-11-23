@@ -3171,6 +3171,43 @@ do
     check(not opens("1"), "none left behind for what follows")
 end
 
+print("the plus stands on the side its button's flyout opens from")
+do
+    login("Player-1-0000000Z")
+    stack("ActionButton1", 501)
+    flushAll()
+    local flyout = NS.Flyouts.At("ActionButton1")
+    local function carry()
+        C_Spell.PickupSpell(502)
+        fire("CURSOR_CHANGED")
+    end
+    local function empty()
+        W.cursor = nil
+        fire("CURSOR_CHANGED")
+    end
+    carry()
+    local mine, other = NS.Drop.Tab("ActionButton1"), NS.Drop.Tab("ActionButton2")
+    check(mine ~= nil and other ~= nil and mine.way == "UP" and other.way == "UP" and mine.point[3] == "TOP",
+        "on a bar at the foot of the screen the plus is over each button, where a flyout opens by itself")
+    empty()
+    NS.Flyouts.SetShape(flyout, "DOWN")
+    flushAll()
+    carry()
+    check(mine.way == "DOWN" and mine.point[3] == "BOTTOM" and other.way == "UP" and other.point[3] == "TOP",
+        "a flyout turned to open downward has its plus under its button, and the other buttons keep theirs over them")
+    empty()
+    NS.Flyouts.SetShape(flyout, "UP")
+    flushAll()
+    carry()
+    check(mine.way == "UP" and mine.point[3] == "TOP", "turned to open upward again, its plus is over its button again")
+    empty()
+    local all = NS.Flyouts.List()
+    for i = #all, 1, -1 do table.remove(all, i) end
+    NS.Flyouts.Apply()
+    flushAll()
+    check(not opens("1"), "none left behind for what follows")
+end
+
 print("an ability dropped on an icon takes its place, as on a bar slot")
 do
     -- His words (2026-11-23): "flyouts not allowing me to drop and replace spells like how we can on normal

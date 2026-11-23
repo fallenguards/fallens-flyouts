@@ -199,9 +199,13 @@ local function Tab(button, name)
     return tab
 end
 
--- a tab on its button's outer edge, the way its flyout grows
+-- A tab on its button's outer edge, the way its flyout grows: for a button with a flyout the side that
+-- flyout opens from, which may be one the player turned it to; for any other, where a flyout opens by
+-- itself. (It went by the bar alone: a flyout turned to open upward kept its plus under its button. His
+-- words with a snip, 2026-11-23: "it didnt update either after changing the orientation up".)
 local function Place(tab, button)
-    tab.way = Bars.Way(button)
+    local _, unit = F.At(button:GetName())
+    tab.way = unit and Art.SIDES[unit.side] and unit.side or Bars.Way(button)
     tab.side = Art.SIDES[tab.way]
     tab:SetScale(Bars.Scale(button))
     Reach(tab, false)
