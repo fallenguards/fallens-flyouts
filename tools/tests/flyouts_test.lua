@@ -3298,11 +3298,17 @@ do
     local box = W.focus
     check(box ~= nil and K.Waiting() ~= nil and K.Waiting().flyout == flyout and K.Waiting().i == 2 and text(2) == "Press a key"
         and row(2).key.waiting == true, "a click on a key waits for the next key pressed: a typing box holds the keyboard, and the key says so")
+    check(w.keysNote.text == NS.Arrange.TEXT.keysNote and under(one) == w.keysWait and w.keysWait.h == 14
+        and w.keysWait.text == "Press a key for " .. F14.Name(flyout.entries[2]) .. ". Escape leaves it as it is.",
+        "the words over the list stay as they are while it waits; the line under them says what key is waited for, "
+        .. "on a line as high as it always is, so nothing on the page moves: " .. tostring(w.keysWait.text))
     box.scripts.OnKeyDown(box, "LSHIFT")
     check(K.Waiting() ~= nil and flyout.entries[2].key == nil, "a modifier alone sets nothing, and the wait goes on")
     W.shiftKey = true
     box.scripts.OnKeyDown(box, "R")
     W.shiftKey = nil
+    check(w.keysWait.text == "" and w.keysWait.h == 14 and under(one) == w.keysWait,
+        "the key set, that line is empty again and keeps its height")
     check(flyout.entries[2].key == "SHIFT-R" and K.Waiting() == nil and W.focus ~= box and text(2) == "s-R"
         and row(2).key.waiting == false,
         "the key pressed, with its modifier, is that icon's own in this flyout; the page shows it and the keyboard is let go: "
@@ -3375,7 +3381,7 @@ do
     F14.Apply()
     flushAll()
     Arrange.Refresh()
-    check(not opens("1") and banners() == 0 and w.foot.point[2] == w.keysNote and w.keysNote.text == "No flyout is on the bars.",
+    check(not opens("1") and banners() == 0 and w.foot.point[2] == w.keysWait and w.keysNote.text == "No flyout is on the bars.",
         "none left behind for what follows, and with no flyout the page says so in place of banners")
 end
 

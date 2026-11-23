@@ -18,6 +18,8 @@ local BANNER = { left = "Options_ListExpand_Left", middle = "_Options_ListExpand
 local BANNER_H, BANNER_IN, BANNER_UP, BANNER_ICON = 30, 21, 2, 18
 local ROW_H, ROW_IN, ROW_TOP, LABEL_W, KEY_W, KEY_H, ROW_ICON, FOOT = 25, 37, 6, 170, 160, 22, 18, 1
 local KEY_BUTTON = "KeyBindingFrameBindingButtonTemplate"
+-- the line under the words over the list that says what key is waited for: one line high always
+local WAIT_H = 14
 -- how much the picked icon grows, as a held one does
 local GROW = 1.25
 local TEXT = {
@@ -107,7 +109,7 @@ function A.KeysRefresh()
     if not (w and w.banners) then return end
     local waiting = ns.Keys and ns.Keys.Waiting()
     local list = Flyouts()
-    local last, drop = w.keysNote, -GAP * 2
+    local last, drop = w.keysWait, -GAP
     local function Under(frame, down)
         frame:ClearAllPoints()
         frame:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, down)
@@ -154,8 +156,15 @@ function A.KeysRefresh()
         banner:Hide()
         for _, row in pairs(banner.rows) do row:Hide() end
     end
+    -- The words over the list stay as they are while a key is waited for; what is waited for is said on a
+    -- line of its own under them, as high when empty as when not, so that nothing under it moves. Words of
+    -- another length in their place moved the very rows being set. His words (2026-11-23): "can you stop
+    -- hiding the \"The game's Keybindings options set a key for ....\" message when i click a bind to set
+    -- in the settings? it's moving the page around and is a pain in the ass", and "you can just have the
+    -- 2nd message show underneath or something idk... but you're moving the region i'm keybinding".
+    w.keysNote:SetText(#list == 0 and TEXT.keysNone or TEXT.keysNote)
     local name = waiting and waiting.flyout.entries[waiting.i] and F.Name(waiting.flyout.entries[waiting.i])
-    w.keysNote:SetText(name and TEXT.keysWait:format(name) or (#list == 0 and TEXT.keysNone or TEXT.keysNote))
+    w.keysWait:SetText(name and TEXT.keysWait:format(name) or "")
     -- what stands under the list hangs on its last line
     w.foot:ClearAllPoints()
     w.foot:SetPoint("TOPLEFT", last, "BOTTOMLEFT")
@@ -409,12 +418,18 @@ function A.Build(page, above, scrolled)
     w.keysNote:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)
     w.keysNote:SetJustifyH("LEFT")
     w.keysNote:SetText(TEXT.keysNote)
+    w.keysWait = holder:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    w.keysWait:SetPoint("TOPLEFT", w.keysNote, "BOTTOMLEFT", 0, -GAP)
+    w.keysWait:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)
+    w.keysWait:SetHeight(WAIT_H)
+    w.keysWait:SetJustifyH("LEFT")
+    w.keysWait:SetWordWrap(false)
     -- a banner for each flyout, made as there are flyouts (A.KeysRefresh); what follows the list hangs
     -- on this, set under its last line
     w.banners = {}
     w.foot = CreateFrame("Frame", nil, holder)
     w.foot:SetSize(FOOT, FOOT)
-    w.foot:SetPoint("TOPLEFT", w.keysNote, "BOTTOMLEFT")
+    w.foot:SetPoint("TOPLEFT", w.keysWait, "BOTTOMLEFT")
     -- the page put away ends a wait for a key
     holder:HookScript("OnHide", function() if ns.Keys then ns.Keys.Stop() end end)
     local head = holder:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
