@@ -58,7 +58,7 @@ local TEXT = {
     noPick = "That one cannot be picked up just now.",
     noLead = "That button's action cannot lead a flyout.",
     auto = "That flyout fills itself from your bags.",
-    mount = "Mounts go in a flyout out of combat.",
+    mount = "Mounts and pets go in a flyout out of combat.",
     how = "Drag",
     howHeld = "%s-drag",
     remove = "%s to move it. Right-click takes it off the flyout.",
@@ -570,6 +570,8 @@ local LIFT = [[
         owner:CallMethod("Lifted", f, from, gone or nil)
     end
     lifted = self:GetName()
+    -- a toy onto the cursor as an item by its number, which the game picks up from the Toy Box
+    if kind == "toy" then return "item", what end
     return kind, what
 ]]
 -- An ability added to a flyout in a fight. His words (2026-11-23): "flyout swaps in combat work. but i
@@ -587,14 +589,17 @@ local LIFT = [[
 local CARRIED = [[
     lifted = nil
     if not f then return end
-    local id, casts, base = value, value, nil
+    local id, casts, base, how = value, value, nil, kind
     if kind == "spell" then
         local _, spell, under = ...
         id, casts, base = spell, spell, under
     elseif kind == "item" then
         casts = "item:" .. tostring(value)
-    elseif kind == "mount" then
-        -- it goes in as the spell that summons it, which the addon's own code looks up, out of a fight
+        -- a toy of the player's own, used as the Toy Box uses it (told beforehand: those in the flyouts
+        -- and on the bars)
+        if owner:GetAttribute("toy" .. tostring(value)) then how, casts = "toy", value end
+    elseif kind == "mount" or kind == "battlepet" then
+        -- its name and its line to cast it are the addon's own code to look up, out of a fight
         owner:CallMethod("Refused", "mount")
         return
     elseif kind ~= "macro" then
@@ -635,11 +640,13 @@ local ADD = CARRIED .. [[
         icon:SetAttribute("ffkey", nil)
         icon:SetAttribute("ffpad", nil)
     end
-    icon:SetAttribute("type", kind)
+    icon:SetAttribute("type", how)
     icon:SetAttribute("spell", nil)
     icon:SetAttribute("item", nil)
     icon:SetAttribute("macro", nil)
-    icon:SetAttribute(kind, casts)
+    icon:SetAttribute("toy", nil)
+    icon:SetAttribute("macrotext", nil)
+    icon:SetAttribute(how, casts)
     icon:SetAttribute("ffmark", mark)
     icon:SetAttribute("fhelp", help or nil)
     icon:SetAttribute("fharm", harm or nil)
@@ -672,16 +679,20 @@ local SWAP = CARRIED .. [[
         local from, to = strfind(has, ";" .. gone .. ";", 1, true)
         if from then has = strsub(has, 1, from) .. strsub(has, to + 1) end
     end
-    self:SetAttribute("type", kind)
+    self:SetAttribute("type", how)
     self:SetAttribute("spell", nil)
     self:SetAttribute("item", nil)
     self:SetAttribute("macro", nil)
-    self:SetAttribute(kind, casts)
+    self:SetAttribute("toy", nil)
+    self:SetAttribute("macrotext", nil)
+    self:SetAttribute(how, casts)
     self:SetAttribute("ffmark", mark)
     self:SetAttribute("fhelp", help or nil)
     self:SetAttribute("fharm", harm or nil)
     owner:SetAttribute("holds" .. f, has .. mark .. ";")
     owner:CallMethod("Swapped", self:GetName(), kind, id)
+    -- a toy comes onto the cursor as an item by its number, which the game picks up from the Toy Box
+    if was == "toy" then return "clear", "item", back end
     return "clear", was, back
 ]]
 -- A drop on an icon in a fight. The icon lifted off this flyout, still on the cursor, goes back in on
@@ -694,14 +705,14 @@ local LAND = [[
     local mover = lifted and owner:GetFrameRef(lifted)
     lifted = nil
     local moving = mover and f and not mover:IsShown() and mover:GetAttribute("fffly") == f
-        and mover:GetAttribute("type") == kind
+        and (mover:GetAttribute("type") == kind or (kind == "item" and mover:GetAttribute("type") == "toy"))
     if moving then
         local what = mover:GetAttribute(kind)
         if kind == "spell" then
             local _, spell, under = ...
             moving = what == spell or what == under
         elseif kind == "item" then
-            moving = what == "item:" .. tostring(value)
+            moving = mover:GetAttribute("ffmark") == "item:" .. tostring(value)
         else
             -- a macro's icon runs it by its name while no other macro has that name: no telling then
             moving = tonumber(what) ~= what or what == value
@@ -844,6 +855,7 @@ end
 function F.Icon(entry)
     if entry.kind == "spell" then return (C_Spell.GetSpellTexture(entry.id)) end
     if entry.kind == "item" then return C_Item.GetItemIconByID(entry.id) end
+    if Bars.Kinds[entry.kind] then return Bars.Kinds[entry.kind].Icon(entry.id) end
     local _, icon = GetMacroInfo(Macros.Ref(entry))
     return icon
 end
@@ -893,8 +905,13 @@ local function EntryTip(self)
     if entry.kind == "spell" then
         -- with its rank, as the spellbook and the bars show it
         GameTooltip:SetSpellByID(entry.id, false, true)
+    elseif entry.kind == "item" and Bars.OwnToy(entry.id) and GameTooltip.SetToyByItemID then
+        -- as the Toy Box and a bar button show a toy: what it does, not the item that teaches it
+        GameTooltip:SetToyByItemID(entry.id)
     elseif entry.kind == "item" then
         GameTooltip:SetItemByID(entry.id)
+    elseif Bars.Kinds[entry.kind] then
+        Bars.Kinds[entry.kind].Tip(GameTooltip, entry.id)
     else
         -- as a bar button shows a macro: the spell or the item it stands for just now, else its name
         local ref = Macros.Ref(entry)
@@ -935,6 +952,18 @@ function F.BarsLocked()
     return C_CVar.GetCVar("lockActionBars") == "1"
 end
 
+-- How an icon casts what it holds, as the game's own buttons do: its type, the attribute that names what it
+-- casts, and that. A toy of the player's own is used as the Toy Box uses it (the item calls take it for one
+-- in the bags: the game's item tooltip, "Use: Adds this toy to your Toy Box."); a mount and a battle pet by
+-- the slash command the game has for each.
+function F.Casting(entry)
+    if entry.kind == "item" and Bars.OwnToy(entry.id) then return "toy", "toy", entry.id end
+    if entry.kind == "item" then return "item", "item", "item:" .. entry.id end
+    if entry.kind == "macro" then return "macro", "macro", Macros.Run(entry) end
+    if Bars.Kinds[entry.kind] then return "macro", "macrotext", Bars.Kinds[entry.kind].Macro(entry.id) end
+    return entry.kind, entry.kind, entry.id
+end
+
 -- an entry's name for a chat line
 local function Name(entry)
     local name = entry.id
@@ -944,6 +973,8 @@ local function Name(entry)
         name = C_Item.GetItemNameByID and C_Item.GetItemNameByID(entry.id)
     elseif entry.kind == "macro" then
         name = Macros.Name(entry)
+    elseif Bars.Kinds[entry.kind] then
+        name = Bars.Kinds[entry.kind].Name(entry.id)
     end
     if issecretvalue and issecretvalue(name) then return TEXT.it end
     if type(name) == "string" and name ~= "" then return name end
@@ -963,12 +994,11 @@ local function TakeOff(unit, i)
     return entry
 end
 
--- A toy as the Toy Box picks it up, and a mount as the mount journal does: the bags hold no toy, and a
--- mount is in no spellbook.
+-- A toy as the Toy Box picks it up, a mount and a battle pet as their journals do: the bags hold no toy,
+-- and neither a mount nor a pet is in a spellbook.
 local function Pickup(entry)
-    local mount = entry.kind == "spell" and Bars.MountAt(entry.id)
-    if mount then
-        C_MountJournal.Pickup(mount)
+    if Bars.Kinds[entry.kind] then
+        Bars.Kinds[entry.kind].Pickup(entry.id)
     elseif entry.kind == "spell" then
         (C_Spell.PickupSpell or PickupSpell)(entry.id)
     elseif entry.kind == "item" and Bars.OwnToy(entry.id) and C_ToyBox and C_ToyBox.PickupToyBoxItem then
@@ -1076,9 +1106,14 @@ local function Dim(icon, kind, id)
     local usable, short = true, false
     if kind == "spell" then
         usable, short = C_Spell.IsSpellUsable(id)
+    elseif kind == "item" and Bars.OwnToy(id) then
+        -- the item calls take a toy for one in the bags, and say it is unusable
+        usable = Bars.ToyUsable(id)
     elseif kind == "item" then
         local ask = C_Item.IsUsableItem or IsUsableItem
         if ask then usable, short = ask(id) end
+    elseif Bars.Kinds[kind] then
+        usable = Bars.Kinds[kind].Usable(id)
     end
     local color = READY
     if Hidden(usable) or Hidden(short) then
@@ -1250,10 +1285,12 @@ local function Leaning(entry)
         help, harm = C_Spell.IsSpellHelpful(entry.id), C_Spell.IsSpellHarmful(entry.id)
         if Hidden(help) or Hidden(harm) then return nil, nil end
         if not help and not harm then return true, true end
-    else
+    elseif entry.kind == "item" then
         if not (C_Item.IsHelpfulItem and C_Item.IsHarmfulItem) then return nil, nil end
         help, harm = C_Item.IsHelpfulItem(entry.id), C_Item.IsHarmfulItem(entry.id)
         if Hidden(help) or Hidden(harm) then return nil, nil end
+    else
+        return nil, nil
     end
     if help ~= true then help = nil end
     if harm ~= true then harm = nil end
@@ -2144,18 +2181,16 @@ local function Lay(unit)
         frame.entry, frame.flyout = entry, flyout
         F.Seat(unit, frame, i)
         Spotted(unit, frame, i)
-        frame:SetAttribute("type", entry and entry.kind or nil)
+        local how, attribute, casts
+        if entry then how, attribute, casts = F.Casting(entry) end
+        frame:SetAttribute("type", how)
         frame:SetAttribute("spell", nil)
         frame:SetAttribute("item", nil)
         frame:SetAttribute("macro", nil)
+        frame:SetAttribute("toy", nil)
+        frame:SetAttribute("macrotext", nil)
         if entry then
-            local casts = entry.id
-            if entry.kind == "item" then
-                casts = "item:" .. entry.id
-            elseif entry.kind == "macro" then
-                casts = Macros.Run(entry)
-            end
-            frame:SetAttribute(entry.kind, casts)
+            frame:SetAttribute(attribute, casts)
             frame.icon:SetTexture(F.Icon(entry))
         end
         local help, harm = Leaning(entry)
@@ -2181,6 +2216,9 @@ local function Lay(unit)
     end
     holds[#holds + 1] = ""
     root:SetAttribute("holds" .. unit.index, table.concat(holds, ";"))
+    for _, entry in ipairs(whole) do
+        if entry.kind == "item" and Bars.OwnToy(entry.id) then root:SetAttribute("toy" .. entry.id, true) end
+    end
     root:SetAttribute("room" .. unit.index, MAX - #whole)
     root:SetAttribute("mup" .. unit.index, upright or nil)
     root:SetAttribute("mlong" .. unit.index, long)
@@ -2467,9 +2505,9 @@ end
 local function Full(flyout) return flyout.all or flyout.entries end
 F.Full = Full
 
--- An item the player has none of; a spell or a macro is never lacking, nor a toy of the player's own: it
--- is kept in the Toy Box, and the bags hold none of it. Until 1.1.6 a toy was left out the moment it was
--- added, and dropped again it was refused as one the flyout held already.
+-- An item the player has none of; a spell, a macro, a mount or a pet is never lacking, nor a toy of the
+-- player's own: it is kept in the Toy Box, and the bags hold none of it. Until 1.1.6 a toy was left out
+-- the moment it was added, and dropped again it was refused as one the flyout held already.
 local function Lacks(entry)
     if entry.kind ~= "item" or not C_Item.GetItemCount then return false end
     if Bars.OwnToy(entry.id) then return false end

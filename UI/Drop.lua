@@ -40,10 +40,9 @@ function D.Carried()
         local entry = ns.Macros.Entry(a)
         if entry then return entry end
         id = (GetMacroInfo(a))
-    elseif kind == "mount" then
-        -- as the spell that summons it
-        local spell = Bars.MountSpell(a)
-        return spell and { kind = "spell", id = spell } or nil
+    elseif Bars.Kinds[kind] then
+        -- a mount by its number, a battle pet by its GUID; the journal's random favorite is no one mount
+        if Bars.Kinds[kind].Known(a) then id = a end
     end
     if id then return { kind = kind, id = id } end
 end
@@ -275,7 +274,7 @@ local function Refresh()
     F.Carrying(kind ~= nil)
     if kind == lastKind then return end
     lastKind = kind
-    if kind == "spell" or kind == "item" or kind == "macro" or kind == "mount" then
+    if kind == "spell" or kind == "item" or kind == "macro" or Bars.Kinds[kind] then
         D.Show()
     else
         D.Hide()

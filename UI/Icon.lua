@@ -77,6 +77,8 @@ local function Named(flyout)
             name = C_Spell.GetSpellName and C_Spell.GetSpellName(entry.id)
         elseif entry.kind == "item" then
             name = C_Item.GetItemNameByID(entry.id)
+        elseif ns.Bars.Kinds[entry.kind] then
+            name = ns.Bars.Kinds[entry.kind].Name(entry.id)
         end
         Add(name, F.Icon(entry))
     end

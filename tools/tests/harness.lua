@@ -466,7 +466,12 @@ GameTooltip = {
     Hide = function(self) self.owner, self.shown, self.action = nil, false, nil end,
     Show = function(self) self.shown = true end,
     SetAction = setAction,
-    SetText = noop, AddLine = noop, SetItemByID = noop,
+    SetText = noop, AddLine = noop,
+    -- what the tooltip was asked to show, by which of the game's calls
+    SetItemByID = function(_, id) W.tip = { item = id } end,
+    SetToyByItemID = function(_, id) W.tip = { toy = id } end,
+    SetMountBySpellID = function(_, id) W.tip = { mount = id } end,
+    SetCompanionPet = function(_, guid) W.tip = { pet = guid } end,
     -- the spell asked for, and whether its rank was asked for with it
     SetSpellByID = function(_, id, _, subtext) W.tip = { id = id, rank = subtext == true } end,
 }
@@ -642,6 +647,7 @@ do
         GetToyInfo = function(id)
             if W.toys and W.toys[id] then return id, "toy " .. id, id end
         end,
+        IsToyUsable = function(id) return W.toys ~= nil and W.toys[id] == true and not (W.toyUnusable and W.toyUnusable[id]) end,
         PickupToyBoxItem = function(id)
             if W.toys and W.toys[id] then W.cursor = { "item", id, "link" } end
         end,
@@ -649,7 +655,7 @@ do
     C_MountJournal = {
         GetMountInfoByID = function(id)
             local m = mountBy("id", id)
-            if m then return m.name, m.spell, m.icon, false, true, 0, false, false, nil, false, true, m.id end
+            if m then return m.name, m.spell, m.icon, false, m.usable ~= false, 0, false, false, nil, false, true, m.id end
         end,
         GetMountFromSpell = function(spell)
             local m = mountBy("spell", spell)
@@ -665,18 +671,43 @@ do
             if m then W.cursor = { "mount", m.id, i } end
         end,
     }
+    -- W.pets: the player's battle pets, each { guid, name, icon }. The Pet Journal puts one on the cursor as
+    -- "battlepet" and its GUID; a bar slot keeps it as "summonpet" and the GUID (seen on his client).
+    local function petBy(guid)
+        for _, p in ipairs(W.pets or {}) do
+            if p.guid == guid then return p end
+        end
+    end
+    C_PetJournal = {
+        GetPetInfoByPetID = function(guid)
+            local p = petBy(guid)
+            if p then return 1, p.custom, 25, 0, 0, 1, false, p.name, p.icon end
+        end,
+        PetIsSummonable = function(guid) return petBy(guid) ~= nil end,
+        GetNumPets = function() return #(W.pets or {}), #(W.pets or {}) end,
+        GetPetInfoByIndex = function(i)
+            local p = (W.pets or {})[i]
+            if p then return p.guid end
+        end,
+        PickupPet = function(guid)
+            if petBy(guid) then W.cursor = { "battlepet", guid } end
+        end,
+    }
     -- what a slot held, on the cursor as picking it up puts it there
     local function lifted(kind, had, name, was)
         if kind == "macro" then return { "macro", name, own = type(was) == "table" and was.own or nil } end
         if kind == "item" then return { "item", had, "link" } end
         if kind == "summonmount" then return { "mount", had, select(2, mountBy("id", had)) } end
+        if kind == "summonpet" then return { "battlepet", had } end
         return had and { "spell", 7, "spell", had, had } or nil
     end
     -- what is carried goes onto the slot; what the slot held comes onto the cursor
     function PlaceAction(slot)
         local carried = W.cursor
         local what = carried and carried[1]
-        if not (what == "spell" or what == "macro" or what == "item" or what == "mount") then return end
+        if not (what == "spell" or what == "macro" or what == "item" or what == "mount" or what == "battlepet") then
+            return
+        end
         local kind, had = GetActionInfo(slot)
         local name = GetActionText(slot)
         W.placed = W.placed or {}
@@ -687,6 +718,8 @@ do
             W.placed[slot] = { "item", carried[2] }
         elseif what == "mount" then
             W.placed[slot] = { "summonmount", carried[2] }
+        elseif what == "battlepet" then
+            W.placed[slot] = { "summonpet", carried[2] }
         else
             W.placed[slot] = carried[4]
         end
@@ -912,7 +945,11 @@ C_Item = {
         if item.drink then return "Drink", 430 end
         return "Food", 433
     end,
-    IsUsableItem = function() return true, false end,
+    -- a toy is not in the bags: the item calls take it for unusable (seen on his client, /ffdev kinds)
+    IsUsableItem = function(id)
+        if W.toys and W.toys[id] then return false, false end
+        return true, false
+    end,
     -- the game's names for its kinds of consumable; one it keeps only for old items says so
     GetItemSubClassInfo = function(class, sub)
         local names = { [0] = "Explosives and Devices", [1] = "Potions", [2] = "Elixirs", [3] = "Flasks", [4] = "Scrolls",
@@ -1209,6 +1246,9 @@ local function pickupAny(kind, value, more)
         C_Spell.PickupSpell(value)
     elseif kind == "item" then
         W.cursor = { "item", tonumber(value) or tonumber(tostring(value):match("^item:(%d+)")), "link" }
+    elseif kind == "toy" or kind == "mount" or kind == "battlepet" or kind == "macrotext" then
+        -- the client's PickupAny knows no such kind: nothing comes onto the cursor
+        return
     elseif kind then
         W.cursor = { kind, value }
     end

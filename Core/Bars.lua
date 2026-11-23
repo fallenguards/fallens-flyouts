@@ -1,6 +1,7 @@
 local _, ns = ...
 -- luacheck: read globals UIParent GetTime GetBindingAction EnumerateFrames HasAction GetActionInfo GetActionText
 -- luacheck: read globals issecretvalue GetNumMacros GetMacroInfo GetMacroSpell C_Spell C_MountJournal PlayerHasToy
+-- luacheck: read globals C_PetJournal C_ToyBox
 
 -- Action buttons, whoever made them, found by what they are.
 local B = {}
@@ -407,8 +408,12 @@ function M.OnSlot(slot)
     return { kind = "macro", id = name, text = text }
 end
 
--- a slot's action as kind and id; a macro goes by its name, and by its text with it; a mount by the spell
--- that summons it (the slot says "summonmount" and the mount's number)
+-- the kinds of their own a flyout holds besides spells, items and macros: mounts and battle pets (below)
+local KINDS = {}
+B.Kinds = KINDS
+
+-- a slot's action as kind and id; a macro goes by its name, and by its text with it; a mount and a battle
+-- pet as kinds of their own (the slot says "summonmount" and the mount's number, "summonpet" and the pet's)
 local function Read(slot)
     local kind, id = GetActionInfo(slot)
     if Secret(kind) or Secret(id) then return nil end
@@ -418,44 +423,94 @@ local function Read(slot)
         return kind, entry.id, entry.text
     end
     if kind == "summonmount" then
-        local spell = B.MountSpell(id)
-        if not spell then return nil end
-        return "spell", spell
+        kind = "mount"
+    elseif kind == "summonpet" then
+        kind = "battlepet"
     end
+    if KINDS[kind] and not KINDS[kind].Known(id) then return nil end
     return kind, id
 end
 
--- Toys and mounts. A player's report (2026-11-23): "I keep getting the red error message at the top of my screen that
--- says "That is in the flyout already." when attempting to add different hearthstones to one flyout. A similar
--- issue when trying to add a campfire toy to a 'professions' one, it vanishes from the cursor and says the
--- same thing. The mounts have no + symbol popping up at all when one is selected."
--- Seen on his account (/ffdev toys, 2026-11-23): the Toy Box puts a toy on the cursor as "item" and its
--- number, and the bags hold none of it; the mount journal puts a mount there as "mount", its number and its
--- place in the journal's list, and a bar slot keeps it as "summonmount" and that number.
+-- Toys, mounts and battle pets. A player's report (2026-11-23): "I keep getting the red error message at
+-- the top of my screen that says "That is in the flyout already." when attempting to add different
+-- hearthstones to one flyout. A similar issue when trying to add a campfire toy to a 'professions' one, it
+-- vanishes from the cursor and says the same thing. The mounts have no + symbol popping up at all when one
+-- is selected." His words (2026-11-23): "we should support literally any item that can go on an action
+-- bar". Seen on his account (/ffdev toys and /ffdev kinds, 2026-11-23): the Toy Box puts a toy on the
+-- cursor as "item" and its number, the bags hold none of it, and the item calls take it for one in the
+-- bags (C_Item.IsUsableItem false where C_ToyBox.IsToyUsable is true); the mount journal puts a mount there
+-- as "mount", its number and its place in the journal's list, a bar slot keeps it as "summonmount" and the
+-- number, and the spell calls take its spell for unusable; the Pet Journal puts a battle pet there as
+-- "battlepet" and its GUID, a bar slot keeps it as "summonpet" and the GUID. So each by its own calls:
+-- `Known`, `Name`, `Icon`, `Usable`, `Tip` (the tooltip the game gives it), `Macro` (the line that casts
+-- it from a flyout's icon, as the game's own slash command does) and `Pickup` (onto the cursor as its
+-- journal puts it there).
 
--- A mount goes in a flyout as the spell that summons it: by its number, that spell. The journal's random
--- favorite has no spell of its own, and none.
-function B.MountSpell(mount)
+-- a mount by its number: its name, its spell, its picture and whether it can be summoned here and now
+local function MountInfo(id)
     local MJ = C_MountJournal
-    if type(mount) ~= "number" or Secret(mount) or not (MJ and MJ.GetMountInfoByID) then return nil end
-    local ok, _, spell = pcall(MJ.GetMountInfoByID, mount)
-    if ok and type(spell) == "number" and not Secret(spell) and spell > 0 then return spell end
-    return nil
+    if type(id) ~= "number" or Secret(id) or not (MJ and MJ.GetMountInfoByID) then return nil end
+    local ok, name, spell, icon, _, usable = pcall(MJ.GetMountInfoByID, id)
+    if not ok or type(name) ~= "string" or Secret(name) or name == "" then return nil end
+    return name, spell, icon, usable
 end
+KINDS.mount = {
+    Known = function(id) return MountInfo(id) ~= nil end,
+    Name = function(id) return (MountInfo(id)) end,
+    Icon = function(id) return (select(3, MountInfo(id))) end,
+    Usable = function(id)
+        local _, _, _, usable = MountInfo(id)
+        return Secret(usable) or usable ~= false
+    end,
+    Tip = function(tip, id)
+        local name, spell = MountInfo(id)
+        if spell and not Secret(spell) and tip.SetMountBySpellID then return tip:SetMountBySpellID(spell) end
+        if name then tip:SetText(name) end
+    end,
+    Macro = function(id)
+        local name = MountInfo(id)
+        return name and ("/cast " .. name) or nil
+    end,
+    -- by its place in the journal's list; none while the journal's search or filters leave it out
+    Pickup = function(id)
+        local MJ = C_MountJournal
+        if not (MJ and MJ.GetNumDisplayedMounts and MJ.GetDisplayedMountInfo and MJ.Pickup) then return end
+        for i = 1, MJ.GetNumDisplayedMounts() or 0 do
+            if select(12, MJ.GetDisplayedMountInfo(i)) == id then return MJ.Pickup(i) end
+        end
+    end,
+}
 
--- Where the mount journal's list shows the mount a spell summons, to pick it up as the journal does; nil
--- for a spell no mount casts, and for a mount the journal's search or filters leave out just now.
-function B.MountAt(spell)
-    local MJ = C_MountJournal
-    if not (MJ and MJ.GetMountFromSpell and MJ.GetNumDisplayedMounts and MJ.GetDisplayedMountInfo) then return nil end
-    local ok, mount = pcall(MJ.GetMountFromSpell, spell)
-    if not ok or type(mount) ~= "number" or Secret(mount) then return nil end
-    for i = 1, MJ.GetNumDisplayedMounts() or 0 do
-        local _, its = MJ.GetDisplayedMountInfo(i)
-        if its == spell then return i end
-    end
-    return nil
+-- a battle pet by its GUID: the name it goes by (one given it, else its own) and its picture
+local function PetInfo(guid)
+    local PJ = C_PetJournal
+    if type(guid) ~= "string" or Secret(guid) or not (PJ and PJ.GetPetInfoByPetID) then return nil end
+    local ok, _, custom, _, _, _, _, _, name, icon = pcall(PJ.GetPetInfoByPetID, guid)
+    if not ok then return nil end
+    if type(custom) == "string" and not Secret(custom) and custom ~= "" then name = custom end
+    if type(name) ~= "string" or Secret(name) or name == "" then return nil end
+    return name, icon
 end
+KINDS.battlepet = {
+    Known = function(guid) return PetInfo(guid) ~= nil end,
+    Name = function(guid) return (PetInfo(guid)) end,
+    Icon = function(guid) return (select(2, PetInfo(guid))) end,
+    Usable = function(guid)
+        local PJ = C_PetJournal
+        if not (PJ and PJ.PetIsSummonable) then return true end
+        local ok, can = pcall(PJ.PetIsSummonable, guid)
+        return not ok or Secret(can) or can ~= false
+    end,
+    Tip = function(tip, guid)
+        if tip.SetCompanionPet then return tip:SetCompanionPet(guid) end
+        local name = PetInfo(guid)
+        if name then tip:SetText(name) end
+    end,
+    Macro = function(guid) return "/summonpet " .. guid end,
+    Pickup = function(guid)
+        if C_PetJournal and C_PetJournal.PickupPet then C_PetJournal.PickupPet(guid) end
+    end,
+}
 
 -- whether an item is a toy of the player's own: kept in the Toy Box, never in the bags
 function B.OwnToy(id)
@@ -464,12 +519,19 @@ function B.OwnToy(id)
     return ok and not Secret(own) and own == true
 end
 
+-- whether a toy of the player's own can be used here and now, as the Toy Box asks it
+function B.ToyUsable(id)
+    if not (C_ToyBox and C_ToyBox.IsToyUsable) then return true end
+    local ok, usable = pcall(C_ToyBox.IsToyUsable, id)
+    return not ok or Secret(usable) or usable ~= false
+end
+
 -- what a button holds, if it can lead a flyout
 function B.Action(button)
     local slot = B.Slot(button)
     if not slot or not HasAction(slot) then return nil end
     local kind, id, text = Read(slot)
-    if (kind == "spell" or kind == "item" or kind == "macro") and id then
+    if (kind == "spell" or kind == "item" or kind == "macro" or KINDS[kind]) and id then
         return { kind = kind, id = id, text = text }
     end
 end
@@ -478,7 +540,7 @@ end
 function B.ActionAt(slot)
     if type(slot) ~= "number" or not HasAction(slot) then return nil end
     local kind, id, text = Read(slot)
-    if (kind == "spell" or kind == "item" or kind == "macro") and id then
+    if (kind == "spell" or kind == "item" or kind == "macro" or KINDS[kind]) and id then
         return { kind = kind, id = id, text = text }
     end
 end

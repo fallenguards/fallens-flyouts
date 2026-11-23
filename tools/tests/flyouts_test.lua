@@ -4804,20 +4804,25 @@ do
     flushAll()
 end
 
-print("toys and mounts go in a flyout and show there: each case of a player's report")
+print("toys, mounts and battle pets go in a flyout and work there as on a bar: each case reported")
 do
     -- A player's report (2026-11-23): "I keep getting the red error message at the top of my screen that
     -- says "That is in the flyout already." when attempting to add different hearthstones to one flyout. A
     -- similar issue when trying to add a campfire toy to a 'professions' one, it vanishes from the cursor and
     -- says the same thing. The mounts have no + symbol popping up at all when one is selected. I've tried
     -- moving them all to the bar first then moving them around, different combinations of mounts and
-    -- hearthstones, to no avail." Each case played as /ffdev toys plays it on his account.
+    -- hearthstones, to no avail." Each case played as /ffdev toys plays it on his account. Then his words
+    -- (2026-11-23), with a snip of a toy's tooltip on a bar and in a flyout: "toys seem to be showing their
+    -- like.... bag version of tooltip/action instead of their real version?", and "we should support
+    -- literally any item that can go on an action bar": the two buttons he marked held battle pets.
     login("Player-1-0000000M")
     local F16 = NS.Flyouts
     W.placed = W.placed or {}
     W.bags = { 6948 }
     W.toys = { [280740] = true, [289439] = true }
     W.mounts = { { id = 3111, spell = 23229, name = "Cerulean Prideclaw", icon = 4000 } }
+    local PET = "BattlePet-0-00000007348A"
+    W.pets = { { guid = PET, name = "Whelpling", icon = 5000 } }
     W.placed[9], W.placed[10] = 9301, 9302
     fire("ACTIONBAR_SLOT_CHANGED", 9)
     fire("ACTIONBAR_SLOT_CHANGED", 10)
@@ -4884,22 +4889,22 @@ do
     -- 4. mounts: from the mount journal, onto a plus
     C_MountJournal.Pickup(1)
     check(drop("ActionButton9") and W.cursor == nil, "a mount from the mount journal: the plus stands for it and takes it")
-    check(shows("ActionButton9") == "spell:9301 item:280740 item:289439 spell:23229" and #W.errors == errors,
-        "it shows in the flyout as the spell that summons it: " .. shows("ActionButton9"))
+    check(shows("ActionButton9") == "spell:9301 item:280740 item:289439 mount:3111" and #W.errors == errors,
+        "it shows in the flyout: " .. shows("ActionButton9"))
     -- a mount picked off a bar, onto a plus
     C_MountJournal.Pickup(1)
     PlaceAction(7)
     PickupAction(7)
     check(W.cursor and W.cursor[1] == "mount" and W.cursor[2] == 3111, "a mount picked off a bar is carried as a mount")
     drop("ActionButton10")
-    check(shows("ActionButton10") == "spell:9302 item:6948 item:280740 spell:23229" and #W.errors == errors,
+    check(shows("ActionButton10") == "spell:9302 item:6948 item:280740 mount:3111" and #W.errors == errors,
         "and goes in as from the journal: " .. shows("ActionButton10"))
     -- a mount on a bar button leads a flyout
     C_MountJournal.Pickup(1)
     PlaceAction(12)
     C_ToyBox.PickupToyBoxItem(289439)
     drop("ActionButton12")
-    check(shows("ActionButton12") == "spell:23229 item:289439" and #W.errors == errors,
+    check(shows("ActionButton12") == "mount:3111 item:289439" and #W.errors == errors,
         "a mount on a bar button: a toy dropped on its plus makes a flyout led by the mount: " .. shows("ActionButton12"))
     -- dragged out of a flyout, each is carried as the Toy Box and the journal carry it, and goes back in
     local _, unit9 = F16.At("ActionButton9")
@@ -4910,7 +4915,7 @@ do
     F16.CarryOff(unit9, 2)
     check(W.cursor and W.cursor[1] == "item" and W.cursor[2] == 280740, "so is a toy, though the bags hold none of it")
     drop("ActionButton9")
-    check(shows("ActionButton9") == "spell:9301 item:289439 spell:23229 item:280740" and #W.errors == errors,
+    check(shows("ActionButton9") == "spell:9301 item:289439 mount:3111 item:280740" and #W.errors == errors,
         "each goes back in, at the end: " .. shows("ActionButton9"))
     -- the journal's random favorite summons no one mount: no flyout takes it
     W.cursor = { "mount", 268435455, 0 }
@@ -4925,7 +4930,7 @@ do
     C_MountJournal.Pickup(1)
     _, unit9 = F16.At("ActionButton9")
     DropOn(unit9.opener)
-    check(W.errors[#W.errors] == "Mounts go in a flyout out of combat." and W.cursor ~= nil,
+    check(W.errors[#W.errors] == "Mounts and pets go in a flyout out of combat." and W.cursor ~= nil,
         "in combat a mount dropped on the arrow is refused in red and stays on the cursor")
     W.cursor = nil
     W.combat = false
@@ -4935,8 +4940,94 @@ do
     W.toys[289439] = nil
     F16.Apply()
     flushAll()
-    check(shows("ActionButton9") == "spell:9301 spell:23229 item:280740",
+    check(shows("ActionButton9") == "spell:9301 mount:3111 item:280740",
         "a toy that is not the player's own is left out, as an item they have none of: " .. shows("ActionButton9"))
+    -- each icon as the game's own button for it: its tooltip, its use, and gray only where it cannot be used
+    W.toys[289439] = true
+    F16.Apply()
+    flushAll()
+    local function icon(host, kind, id)
+        local _, unit = F16.At(host)
+        for _, frame in ipairs(unit and unit.entries or {}) do
+            if frame.entry and frame.entry.kind == kind and frame.entry.id == id then return frame end
+        end
+    end
+    local toy = icon("ActionButton9", "item", 280740)
+    W.tip = nil
+    toy.scripts.OnEnter(toy)
+    check(W.tip and W.tip.toy == 280740, "a toy's tooltip is the toy's, as on a bar, not the item's that teaches it")
+    check(toy:GetAttribute("type") == "toy" and toy:GetAttribute("toy") == 280740 and toy:GetAttribute("item") == nil,
+        "a click uses it as the Toy Box does")
+    check(toy.icon.color == nil or toy.icon.color[1] == 1, "in color: the item calls say a toy is unusable, the toy's do not")
+    W.toyUnusable = { [280740] = true }
+    F16.Apply()
+    flushAll()
+    toy = icon("ActionButton9", "item", 280740)
+    check(toy.icon.color ~= nil and toy.icon.color[1] < 1, "gray where the Toy Box says it cannot be used")
+    W.toyUnusable = nil
+    F16.Apply()
+    flushAll()
+    local horse = icon("ActionButton9", "mount", 3111)
+    W.tip = nil
+    horse.scripts.OnEnter(horse)
+    check(W.tip and W.tip.mount == 23229, "a mount's tooltip is the mount's")
+    check(horse:GetAttribute("type") == "macro" and horse:GetAttribute("macrotext") == "/cast Cerulean Prideclaw",
+        "a click summons it, as /cast does: " .. tostring(horse:GetAttribute("macrotext")))
+    W.mounts[1].usable = false
+    F16.Apply()
+    flushAll()
+    horse = icon("ActionButton9", "mount", 3111)
+    check(horse.icon.color ~= nil and horse.icon.color[1] < 1, "gray where the journal says it cannot be summoned")
+    W.mounts[1].usable = nil
+    F16.Apply()
+    flushAll()
+    -- 5. battle pets, as on the two buttons he marked: from the Pet Journal, off a bar, and leading a flyout
+    errors = #W.errors
+    C_PetJournal.PickupPet(PET)
+    check(drop("ActionButton10") and W.cursor == nil, "a battle pet from the Pet Journal: the plus stands for it and takes it")
+    check(shows("ActionButton10") == "spell:9302 item:6948 item:280740 mount:3111 battlepet:" .. PET,
+        "it shows in the flyout: " .. shows("ActionButton10"))
+    local pet = icon("ActionButton10", "battlepet", PET)
+    W.tip = nil
+    pet.scripts.OnEnter(pet)
+    check(W.tip and W.tip.pet == PET and pet:GetAttribute("macrotext") == "/summonpet " .. PET,
+        "its tooltip is the pet's, and a click summons it as /summonpet does")
+    C_PetJournal.PickupPet(PET)
+    PlaceAction(8)
+    check(GetActionInfo(8) == "summonpet", "a pet set on a bar is kept there as the game keeps it")
+    C_ToyBox.PickupToyBoxItem(280740)
+    drop("ActionButton8")
+    check(shows("ActionButton8") == "battlepet:" .. PET .. " item:280740" and #W.errors == errors,
+        "a pet on a bar button leads a flyout: " .. shows("ActionButton8"))
+    local _, unit8 = F16.At("ActionButton8")
+    F16.CarryOff(unit8, 2)
+    PickupAction(8)
+    check(W.cursor and W.cursor[1] == "battlepet" and W.cursor[2] == PET, "a pet picked off a bar is carried as a pet")
+    drop("ActionButton11")
+    check(shows("ActionButton11") == "item:280740 item:289439 battlepet:" .. PET, "and goes in as from the journal: "
+        .. shows("ActionButton11"))
+    -- in combat: a toy lifted out comes onto the cursor as the item the game picks up from the Toy Box, and
+    -- dropped on the arrow goes back in as a toy; a mount stays where it is
+    W.combat = true
+    fire("PLAYER_REGEN_DISABLED")
+    flushAll()
+    _, unit9 = F16.At("ActionButton9")
+    toy = icon("ActionButton9", "item", 280740)
+    DragOff(toy)
+    check(W.cursor and W.cursor[1] == "item" and W.cursor[2] == 280740, "in combat a toy dragged out is on the cursor")
+    DropOn(unit9.opener)
+    local back
+    for _, frame in ipairs(unit9.entries) do
+        if frame:IsShown() and frame:GetAttribute("ffmark") == "item:280740" then back = frame end
+    end
+    check(back and back:GetAttribute("type") == "toy" and W.cursor == nil,
+        "dropped on the arrow it goes back in, used as a toy")
+    horse = icon("ActionButton9", "mount", 3111)
+    DragOff(horse)
+    check(W.cursor == nil and horse:IsShown(), "a mount stays in its flyout in combat")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    flushAll()
 end
 
 -- what ships names nobody else's addon and nothing of the dev folder

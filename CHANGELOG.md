@@ -3,10 +3,10 @@
 ## [1.1.6] - 2026-11-23
 
 ### Added
-- Mounts go in a flyout. Drag one from the Mounts tab of the Collections window, or off a bar, onto a bar button's plus, as you would a spell: its icon in the flyout summons it. A mount on a bar button can be the first of a flyout too. In combat a mount is refused with a word in red; add it out of combat.
+- Mounts and battle pets go in a flyout. Drag one from the Mounts or Pet Journal tab of the Collections window, or off a bar, onto a bar button's plus, as you would a spell: its icon in the flyout summons it, shows its tooltip, and grays out where it cannot be used, as on a bar. A mount or a pet on a bar button can be the first of a flyout too. In combat they are refused with a word in red; add them out of combat.
 
 ### Fixed
-- A toy added to a flyout (a hearthstone toy, say) vanished from it at once, and dropped again it was refused with "That is in the flyout already." Toys are kept in the Toy Box, never in the bags, and "Hide items I have none of" took them for items you had none of. A toy of your own now shows in its flyout like any item you have, and dragged out of a flyout it is picked up as from the Toy Box.
+- Toys work in flyouts as on a bar. A toy added to a flyout (a hearthstone toy, say) vanished from it at once, and dropped again it was refused with "That is in the flyout already.": "Hide items I have none of" took it for an item you had none of, since toys are kept in the Toy Box, never in the bags. A toy of your own now shows in its flyout, in color where it can be used, with the toy's own tooltip, and a click uses it as from the Toy Box. Until now it showed the tooltip of the item that teaches the toy ("Use: Adds this toy to your Toy Box."). Dragged out of a flyout, a toy is picked up as from the Toy Box.
 
 ## [1.1.5] - 2026-11-23
 
