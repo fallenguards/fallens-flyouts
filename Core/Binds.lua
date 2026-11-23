@@ -3,8 +3,9 @@ local _, ns = ...
 
 -- The addon's section of the game's key menu (Bindings.xml): a row for each of the twelve spots of an
 -- open flyout, the same for every flyout. A key set on a row picks that spot while a flyout is open.
--- A key for one icon of one flyout is no row here: it is set by a hover in the game's Quick Keybind
--- Mode (UI/Keys.lua), and the section's last lines say so.
+-- A key for one icon of one flyout is no row here: it is set on the addon's own settings page
+-- (Options/Arrange.lua), or by a hover in the game's Quick Keybind Mode (UI/Keys.lua), and the section's
+-- last lines say so.
 -- Before 1.1.4 the section also had a heading and six rows for each of eight flyouts, used or not.
 -- His words (2026-11-22): "why have empty flyouts here? that makes no sense. ... this makes it seem
 -- like 8 is max". The game lists a section's rows once and none can be added or hidden while playing,
@@ -27,8 +28,8 @@ local TEXT = {
     help2 = "They work while a flyout is open. With none set here they are 1 to 9, 0, - and =.",
     pick = "Spot %d of every flyout",
     -- the game's own name for its mode goes in where the game gives one
-    one = "For a key on one icon of one flyout, use %s at the top of this page:",
-    one2 = "open the flyout, hover the icon and press the key.",
+    one = "For keys of one flyout rather than this general set, see the addon's settings (/ff).",
+    one2 = "Or use %s above: open the flyout, hover an icon, press the key.",
     quick = "Quick Keybind Mode",
 }
 B.TEXT = TEXT
@@ -41,8 +42,8 @@ B.Command = Command
 _G[B.CATEGORY] = TEXT.header
 _G.PREFACE_FALLENSFLYOUTS_HELP = TEXT.help
 _G.PREFACE_FALLENSFLYOUTS_HELP2 = TEXT.help2
-_G.PREFACE_FALLENSFLYOUTS_ONE = TEXT.one:format(SETTINGS_QUICK_KEYBIND_BUTTON or TEXT.quick)
-_G.PREFACE_FALLENSFLYOUTS_ONE2 = TEXT.one2
+_G.PREFACE_FALLENSFLYOUTS_ONE = TEXT.one
+_G.PREFACE_FALLENSFLYOUTS_ONE2 = TEXT.one2:format(SETTINGS_QUICK_KEYBIND_BUTTON or TEXT.quick)
 for i = 1, B.PICKS do _G["BINDING_NAME_" .. PICK .. i] = TEXT.pick:format(i) end
 
 local function IsPad(key)

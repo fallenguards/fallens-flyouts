@@ -949,9 +949,10 @@ do
     check(texts[1] == "Keys for the icons inside your flyouts, the same for every flyout."
         and texts[2]:find("1 to 9, 0, - and =", 1, true) ~= nil,
         "over the rows it says what they are, and what the keys are with none set: " .. tostring(texts[2]))
-    check(texts[3] == "For a key on one icon of one flyout, use Quick Keybind Mode at the top of this page:"
-        and texts[4] == "open the flyout, hover the icon and press the key.",
-        "under them it says where a key for one icon of one flyout is set: " .. tostring(texts[3]) .. " " .. tostring(texts[4]))
+    check(texts[3] == "For keys of one flyout rather than this general set, see the addon's settings (/ff)."
+        and texts[4] == "Or use Quick Keybind Mode above: open the flyout, hover an icon, press the key.",
+        "under them it says where the keys of one flyout are set: the addon's settings first, as he worded it: "
+        .. tostring(texts[3]) .. " " .. tostring(texts[4]))
     check(NS.KeyMenu == nil and NS.Flyouts.Point == nil and Binds.Head == nil and Binds.Number == nil,
         "nothing is left of the headings: no names for them, and no hover that lit a flyout's button from its rows")
 end
@@ -3169,6 +3170,112 @@ do
     F12.Apply()
     flushAll()
     check(not opens("1"), "none left behind for what follows")
+end
+
+print("keys of one flyout, set on the settings page")
+do
+    -- His words (2026-11-23): "we seem to have completely removed the ability for people to rebind flyouts
+    -- individually without using the quick keybind mode....???? why does our settings menu not allow for
+    -- this?...."
+    login("Player-1-0000000K")
+    stack("ActionButton1", 501)
+    stack("ActionButton1", 502)
+    flushAll()
+    NS.ProfileUI.Build()
+    NS.ProfileUI.Refresh()
+    local keysPage = NS.ProfileUI.panel
+    local w, K, F14 = keysPage.arrange, NS.Keys, NS.Flyouts
+    local flyout = F14.At("ActionButton1")
+    local function press(i, button) w.rows[i].key.scripts.OnClick(w.rows[i].key, button or "LeftButton") end
+    local function rows()
+        local n = 0
+        for _, row in ipairs(w.rows) do
+            if row:IsShown() then n = n + 1 end
+        end
+        return n
+    end
+    local function text(i) return w.rows[i].key.text end
+    check(#w.rows == 12 and rows() == 3 and w.rows[2].icon.texture == F14.Icon(flyout.entries[2]) and text(1) == "1"
+        and text(2) == "2" and text(3) == "3", "the page lists the flyout's icons, each with the key that picks it")
+    check(w.foot.point[2] == w.rows[3] and keysPage.arrange.keysNote.text:find("Keybindings options", 1, true) ~= nil,
+        "what stands under the list hangs on its last row, and over it the page says what the list is for")
+    W.focus = nil
+    local caught = #W.caught
+    press(2)
+    local box = W.focus
+    check(box ~= nil and K.Waiting() ~= nil and K.Waiting().i == 2 and text(2) == "Press a key",
+        "a click on a key waits for the next key pressed: a typing box holds the keyboard, and the key says so")
+    box.scripts.OnKeyDown(box, "LSHIFT")
+    check(K.Waiting() ~= nil and flyout.entries[2].key == nil, "a modifier alone sets nothing, and the wait goes on")
+    W.shiftKey = true
+    box.scripts.OnKeyDown(box, "R")
+    W.shiftKey = nil
+    check(flyout.entries[2].key == "SHIFT-R" and K.Waiting() == nil and W.focus ~= box and text(2) == "s-R",
+        "the key pressed, with its modifier, is that icon's own in this flyout; the page shows it and the keyboard is let go: "
+        .. tostring(text(2)))
+    check(W.base["SHIFT-R"] == nil and GetBindingAction("SHIFT-R", false) == "", "the game's own bindings stay as they were")
+    tap("1")
+    local before = #W.casts
+    tap("SHIFT-R")
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:501", "with the flyout open that key picks the icon: "
+        .. tostring(W.casts[#W.casts]))
+    press(2, "RightButton")
+    check(flyout.entries[2].key == nil and text(2) == "2", "a right-click on the key gives the icon its spot's key back")
+    press(3)
+    box = W.focus
+    box.scripts.OnEscapePressed(box)
+    check(K.Waiting() == nil and flyout.entries[3].key == nil and text(3) == "3", "Escape leaves the key as it was")
+    press(3)
+    press(3)
+    check(K.Waiting() == nil and text(3) == "3", "a second click on the waiting key stops the wait")
+    press(3)
+    press(1)
+    check(K.Waiting() ~= nil and K.Waiting().i == 1 and text(3) == "3" and text(1) == "Press a key",
+        "a click on another key waits for that one instead")
+    box = W.focus
+    box.scripts.OnKeyDown(box, "F")
+    check(flyout.entries[1].key == "F" and text(1) == "F", "and the key pressed is its key")
+    press(1)
+    box = W.focus
+    box.scripts.OnKeyDown(box, "BACKSPACE")
+    check(flyout.entries[1].key == nil and text(1) == "1", "Backspace while waiting gives the icon its spot's key back")
+    -- a click anywhere else ends a wait, so that no key pressed later is taken for it
+    press(3)
+    w.rows[3].key.over = true
+    fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+    check(K.Waiting() ~= nil, "a press of the mouse on the waiting key itself does not end the wait")
+    w.rows[3].key.over = nil
+    fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+    box = W.focus
+    check(K.Waiting() == nil and box == nil and flyout.entries[3].key == nil and text(3) == "3",
+        "a click anywhere else ends it: the keyboard is let go and nothing is set")
+    -- the page put away, and a fight, end a wait; in a fight nothing is set
+    press(3)
+    keysPage.content.scripts.OnHide(keysPage.content)
+    check(K.Waiting() == nil, "the page put away ends the wait")
+    press(3)
+    fire("PLAYER_REGEN_DISABLED")
+    check(K.Waiting() == nil, "so does a fight")
+    W.combat = true
+    press(3)
+    check(K.Waiting() == nil and W.errors[#W.errors] == "Flyouts change only out of a fight.", "in a fight a click on a key is refused in red")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    flushAll()
+    -- another flyout: its own icons and keys
+    stack("ActionButton2", 601)
+    for _ = 1, 3 do flushAll() end
+    NS.Arrange.Step(1)
+    check(rows() == 2 and w.foot.point[2] == w.rows[2] and w.keyWhich.text == w.which.text,
+        "Next shows the next flyout's icons and keys, and what stands under the list moves up to its last row")
+    check(#W.caught == caught, "none of it raised an error")
+    local all = F14.List()
+    for i = #all, 1, -1 do table.remove(all, i) end
+    F14.Apply()
+    flushAll()
+    NS.Arrange.Refresh()
+    check(not opens("1") and rows() == 0 and w.foot.point[2] == w.keyPrev,
+        "none left behind for what follows, and with no flyout the list is empty")
 end
 
 print("the plus stands on the side its button's flyout opens from")

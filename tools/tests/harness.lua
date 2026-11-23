@@ -36,7 +36,8 @@ end
 local Frame = {}
 Frame.__index = Frame
 local function noop() end
-for _, m in ipairs({ "ClearAllPoints", "RegisterForClicks", "EnableMouse",
+for _, m in ipairs({ "ClearAllPoints", "RegisterForClicks", "EnableMouse", "SetWordWrap", "LockHighlight",
+    "UnlockHighlight", "SetNormalFontObject",
     "SetHighlightTexture", "SetAllPoints", "SetColorTexture",
     "SetJustifyH", "HighlightText", "SetHorizTile", "SetVertTile",
     "SetDrawBling", "SetDrawEdge", "SetSwipeColor", "SetHideCountdownNumbers", "SetUsingParentLevel",
@@ -165,6 +166,7 @@ end
 function Frame:GetValue() return self.value end
 -- a typing box: one holds the focus at a time, and a hidden one cannot
 function Frame:SetFocus() W.focus = self end
+function Frame:HasFocus() return W.focus == self end
 function Frame:ClearFocus()
     if W.focus ~= self then return end
     W.focus = nil

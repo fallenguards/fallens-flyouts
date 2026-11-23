@@ -2695,6 +2695,14 @@ function F.Picks(flyout)
     local unit = Run(flyout).unit
     return unit and unit.picks
 end
+-- the key and the pad button icon i of a flyout on the bars is picked with, and whether either is the
+-- icon's own (set for it in this flyout) and not its spot's
+function F.Picked(flyout, i)
+    local unit, entry = Run(flyout).unit, flyout.entries[i]
+    local pick = unit and unit.picks and unit.picks[i]
+    if not (pick and entry) then return nil end
+    return pick.key, pick.pad, entry.key ~= nil or entry.pad ~= nil
+end
 function F.Moved() moved = true end
 
 -- the flyout shown on a button
