@@ -666,9 +666,59 @@ local SWAP = CARRIED .. [[
 -- this icon's spot: this one and those after it move down a spot. Anything else on the cursor comes from
 -- the spellbook, the bags, a bar or another flyout: it takes this icon's place. An icon lifted earlier
 -- and let go elsewhere is told from what is carried now by its ability.
-local LAND = [[
-    if not (kind and PlayerInCombat()) then return end
+-- An icon moved inside its flyout in a fight, as out of one: lifted, it is off its flyout at once (LIFT);
+-- brought back over the flyout, a gap opens where the cursor is and goes with it from icon to icon, and it
+-- lands in the gap. His words (2026-11-23): "moving icons within a flyout to diff order doesnt work"; "do
+-- you not see the flyout re-ordering preview not being possible in combat??". His log: Healing Touch was
+-- lifted in a fight and let go of on the world, the flyout closed up behind it with nowhere left to put
+-- it. The gap is the lifted icon itself, hidden, slid along the spots (`gapf`: its flyout, `gap`: its
+-- spot). A mouse that comes over an icon in motion is told to the secure code; an icon slid under a still
+-- mouse is not, so the gap does not run back and forth.
+-- The gap closes (the lifted icon back at the end, out of sight, the strip one shorter): `f`, `mover`.
+F.GAPCLOSE = [[
+    do
+        local from, to = gap, (owner:GetAttribute("count" .. f) or 0) + 1
+        gapf, gap = nil, nil
+        owner:GetFrameRef("menu" .. f):EnableMouse(false)
+        if from and from ~= to then
+]] .. SLIDE .. [[
+        end
+        local by = -1
+]] .. GROW .. [[
+    end
+]]
+-- the mouse comes over an icon: the lifted icon of its flyout makes a gap there
+F.PREVIEW = [[
+    if not (lifted and PlayerInCombat()) then return end
     local f = self:GetAttribute("fffly")
+    local mover = owner:GetFrameRef(lifted)
+    if not (f and mover) or mover == self or mover:IsShown() or mover:GetAttribute("fffly") ~= f then return end
+    local to = self:GetAttribute("ffspot")
+    if not to or to > (owner:GetAttribute("count" .. f) or 0) + 1 then return end
+    local from = gap
+    if gapf ~= f then
+        -- the gap opens: the strip one icon longer, and taking a drop in the gap
+        from = mover:GetAttribute("ffspot")
+        local by = 1
+]] .. GROW .. [[
+        owner:GetFrameRef("menu" .. f):EnableMouse(true)
+    end
+    if from and from ~= to then
+]] .. SLIDE .. [[
+    end
+    gapf, gap = f, to
+]]
+-- the mouse leaves an icon or the strip: off the flyout altogether, the gap closes
+F.GAPLEAVE = [[
+    if not (gapf and lifted and PlayerInCombat()) then return end
+    if owner:GetFrameRef("menu" .. gapf):IsUnderMouse(true) then return end
+    local f, mover = gapf, owner:GetFrameRef(lifted)
+    if not mover then return end
+]] .. F.GAPCLOSE
+-- What a drop in a fight on an icon of flyout `f`, or on its strip, is: the lifted icon of that flyout
+-- (`moving`), or anything else. With a gap open in the flyout the lifted icon lands in it; anything else
+-- closes the gap first.
+F.LIFTED = [[
     local mover = lifted and owner:GetFrameRef(lifted)
     lifted = nil
     local moving = mover and f and not mover:IsShown() and mover:GetAttribute("fffly") == f
@@ -685,6 +735,33 @@ local LAND = [[
             moving = tonumber(what) ~= what or what == value
         end
     end
+    if gapf and gapf == f and mover then
+        if moving then
+            local to = gap
+            gapf, gap = nil, nil
+            owner:GetFrameRef("menu" .. f):EnableMouse(false)
+            mover:Show()
+            local n = (owner:GetAttribute("count" .. f) or 0) + 1
+            owner:SetAttribute("count" .. f, n)
+            owner:SetAttribute("room" .. f, (owner:GetAttribute("room" .. f) or 1) - 1)
+            local mark = mover:GetAttribute("ffmark")
+            if mark then owner:SetAttribute("holds" .. f, (owner:GetAttribute("holds" .. f) or ";") .. mark .. ";") end
+]] .. KEYS_OF .. BIND .. [[
+            owner:CallMethod("Landed", f, to)
+            return "clear"
+        end
+]] .. F.GAPCLOSE .. [[
+    end
+]]
+-- a drop on the strip itself: it takes one only while a gap is open in it
+F.MENUDROP = [[
+    if not (kind and PlayerInCombat()) then return end
+    local f = self:GetAttribute("ffmenu")
+]] .. F.LIFTED
+local LAND = [[
+    if not (kind and PlayerInCombat()) then return end
+    local f = self:GetAttribute("fffly")
+]] .. F.LIFTED .. [[
     if not moving then
 ]] .. SWAP .. [[
     end
@@ -1269,6 +1346,8 @@ local function EntryButton(unit, i)
     -- what is dropped on an icon out of a fight is the addon's to deal with; in a fight the secure code's
     entry:SetScript("OnReceiveDrag", function(self) xpcall(F.Dropped, geterrorhandler(), self) end)
     root:WrapScript(entry, "OnReceiveDrag", LAND)
+    root:WrapScript(entry, "OnEnter", F.PREVIEW)
+    root:WrapScript(entry, "OnLeave", F.GAPLEAVE)
     entry:HookScript("OnEnter", EntryTip)
     entry:HookScript("OnLeave", HideTip)
     -- the game's dark slot, seen at the icon's cut corners
@@ -1331,6 +1410,12 @@ local function Unit(f)
     unit.hub:SetPoint("CENTER", menu, "CENTER")
     unit.hub:Hide()
     root:SetFrameRef("menu" .. f, menu)
+    -- the strip takes the mouse only while a gap is open in it in a fight (F.PREVIEW): a drop in the gap, and
+    -- the mouse leaving it (a leave is told to secure code only where an enter was wrapped too)
+    menu:SetAttribute("ffmenu", f)
+    root:WrapScript(menu, "OnEnter", "return")
+    root:WrapScript(menu, "OnLeave", F.GAPLEAVE)
+    root:WrapScript(menu, "OnReceiveDrag", F.MENUDROP)
     -- an open flyout asks its icons' range a few times a second; a frame in it runs only while it shows
     local tick, waited = CreateFrame("Frame", nil, menu), 0
     local function Pass() Ranges(unit) end
@@ -2495,10 +2580,13 @@ function F.Apply()
             end
         end
     end
-    for _, unit in ipairs(units) do unit.menu:Hide() end
+    for _, unit in ipairs(units) do
+        unit.menu:Hide()
+        unit.menu:EnableMouse(false)
+    end
     root:SetAttribute("open", nil)
-    -- no key counts as held or pressed across a layout
-    root:Execute("armed, held, picked = nil, nil, nil")
+    -- no key counts as held or pressed across a layout, and nothing is lifted with a gap kept for it
+    root:Execute("armed, held, picked, lifted, gapf, gap = nil, nil, nil, nil, nil, nil")
     local taken, leads, pages, sleeping = {}, {}, {}, {}
     used = 0
     local ranked, hiding = F.Ranked(), F.Hiding()

@@ -5,6 +5,7 @@
 ### Fixed
 - A flyout on Action Bar 1 follows the bar at once when a druid's form, a stance or stealth turns the bar to another page, in combat too. Each page is a bar of its own: a flyout made out of form is on its button only out of form, even where the form's page holds the same ability in that place, and one made in Bear Form only in Bear Form. Until now a flyout caught up only about a second after each shift, and in combat not until the fight was over: in between, a click on its button cast the button's ability, or opened the other page's flyout.
 - In combat the plus for adding to a flyout stands where it does out of combat, past the tip of the flyout's arrow, and a drop there adds to the flyout. It stood on the arrow itself, pulled down onto the button's edge.
+- Icons can be moved around inside a flyout in combat the way they are out of combat. An icon dragged off its flyout and brought back over it opens a gap where the cursor is, the others making room, and the gap follows the cursor from icon to icon; let go, and the icon lands in the gap, the last place too. Until now the flyout closed up behind the dragged icon and gave no sign of where it would go, it could only be dropped onto another icon's place, and never at the end.
 
 ## [1.1.4] - 2026-11-23
 
