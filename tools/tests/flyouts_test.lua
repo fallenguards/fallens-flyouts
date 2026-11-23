@@ -2895,12 +2895,15 @@ do
     check(not opens("1") and not opens("2") and not opens("5"), "none left behind for what follows")
 end
 
-print("an icon moved to another spot of its flyout in a fight")
+print("an icon dragged in a fight: off its flyout at once, back in where it is let go")
 do
     -- His words (2026-11-22): "we need to fix not being able to move flyouts in a fight. it's extremely annoying."
     -- Asked which move, he named the bar button dragged to another slot and the icon moved inside its flyout.
+    -- And (2026-11-23): "if i drag an ability out of a flyout mid combat, it does let me do so now thankfully,
+    -- but it doesn't actually disappear from the flyout itself. even worse, it NEVER does unless i repeat it
+    -- out of combat. ... i want it in real time anyway".
     login("Player-1-0000000U")
-    local F11 = NS.Flyouts
+    local F11, Art11 = NS.Flyouts, NS.Art
     for id = 501, 504 do stack("ActionButton1", id) end
     local flyout, unit = F11.At("ActionButton1")
     local f = unit.index
@@ -2911,67 +2914,98 @@ do
         return table.concat(out, " ")
     end
     local function stands(frame) return table.concat({ tostring(frame.point[1]), tostring(frame.point[4]), tostring(frame.point[5]) }, ",") end
+    local function long() return math.max(unit.menu.w, unit.menu.h) end
+    -- the icon a key picks while the flyout is open, or "" for a key that picks none
+    local function ours(key)
+        local action = GetBindingAction(key, true)
+        return action:match("^CLICK (FallensFlyoutsEntry[%d_]+):") or ""
+    end
     check(ids() == "101 501 502 503 504" and r.attrs["at" .. f .. "_2"] == "FallensFlyoutsEntry" .. f .. "_2"
         and entry(f, 2).attrs.ffspot == 2 and entry(f, 2).wraps ~= nil and entry(f, 2).wraps.OnDragStart ~= nil
         and entry(f, 2).wraps.OnReceiveDrag ~= nil, "each icon's spot is told to the secure code, which is run at an icon's drag and at a drop on one")
-    -- out of a fight the secure code leaves the drag to the addon's own code
+    -- an icon with a key of its own, which it keeps wherever it goes
+    flyout.entries[3].key = "G"
+    F11.Apply()
+    flushAll()
     W.cvars = W.cvars or {}
-    local second, fourth = entry(f, 2), entry(f, 4)
+    local second, third, fourth, fifth = entry(f, 2), entry(f, 3), entry(f, 4), entry(f, 5)
     local spots = {}
     for i = 1, 5 do spots[i] = stands(entry(f, i)) end
+    local full = long()
     tap("1")
-    check(unit.menu:IsShown(), "the flyout is open")
+    check(unit.menu:IsShown() and ours("G") == third.name and ours("3") == "", "the flyout is open; the icon with its own key is picked by it alone")
     W.guard = true
     fire("PLAYER_REGEN_DISABLED")
     W.combat = true
     flushAll()
-    local warned = #W.errors
+    local warned, caught = #W.errors, #W.caught
+    -- dragged out: off the flyout at once
     DragOff(second)
+    flushAll()
     check(W.cursor ~= nil and W.cursor[1] == "spell" and W.cursor[4] == 501 and #W.errors == warned,
         "in a fight an icon's drag puts its ability on the cursor, with no word of refusal")
+    check(ids() == "101 502 503 504" and not second:IsShown() and r.attrs["count" .. f] == 4
+        and r.attrs["holds" .. f] == ";spell:101;spell:502;spell:503;spell:504;",
+        "and takes it off its flyout at once, in what is saved and in what the secure code knows: " .. ids())
+    check(stands(third) == spots[2] and stands(fourth) == spots[3] and stands(fifth) == spots[4] and long() == full - Art11.ICON - Art11.NEXT,
+        "on the screen the icons after it move up a spot, and the strip is one icon shorter")
+    check(unit.menu:IsShown(), "the flyout stays open")
+    -- as out of a fight: an icon with a key of its own is picked by that key alone, the others by their spot's
+    check(ours("G") == third.name and ours("2") == "" and ours("3") == fourth.name and ours("4") == fifth.name and ours("5") == "",
+        "the keys follow: the icon with its own key keeps it, the others take the keys of the spots they stand on now, "
+        .. "and the emptied spot's key is free again: " .. table.concat({ ours("G"), ours("2"), ours("3"), ours("4"), ours("5") }, " "))
+    check(third.key.text == "G" and fourth.key.text == "3" and fifth.key.text == "4", "and each icon shows its key: "
+        .. table.concat({ tostring(third.key.text), tostring(fourth.key.text), tostring(fifth.key.text) }, " "))
+    -- let go over an icon of the flyout: back in, on that icon's spot
     DropOn(fourth)
     flushAll()
-    check(W.cursor == nil, "let go over another icon of the flyout, the cursor is empty again")
-    check(ids() == "101 502 503 501 504", "the icon has that spot and those between moved up by one, in what is saved: " .. ids())
-    check(stands(second) == spots[4] and stands(entry(f, 3)) == spots[2] and stands(fourth) == spots[3] and stands(entry(f, 5)) == spots[5],
-        "and on the screen: each icon stands on its new spot")
-    check(unit.entries[4] == second and unit.entries[2] == entry(f, 3) and unit.entries[3] == fourth and second.entryIndex == 4,
-        "the addon reads each icon with what it casts")
-    check(unit.menu:IsShown(), "the flyout stays open")
+    check(W.cursor == nil and ids() == "101 502 501 503 504" and second:IsShown() and r.attrs["count" .. f] == 5,
+        "let go over an icon of its flyout, it goes back in on that icon's spot, and those after move down: " .. ids())
+    check(stands(second) == spots[3] and stands(fourth) == spots[4] and stands(fifth) == spots[5] and long() == full,
+        "on the screen too, and the strip is as long as before")
+    check(unit.entries[3] == second and second.entryIndex == 3 and unit.entries[4] == fourth, "the addon reads each icon with what it casts")
     local before = #W.casts
-    tap("4")
-    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:501", "the fourth spot's key casts the icon that stands there now: "
-        .. tostring(W.casts[#W.casts]))
+    tap("3")
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:501", "the third spot's key casts it there: " .. tostring(W.casts[#W.casts]))
     tap("1")
-    tap("2")
-    check(W.casts[#W.casts] == "spell:502", "and the second spot's key the one that moved up to it: " .. tostring(W.casts[#W.casts]))
-    -- the other way, to the first spot
+    tap("5")
+    check(W.casts[#W.casts] == "spell:504", "and the fifth spot's key the last icon again: " .. tostring(W.casts[#W.casts]))
+    -- dragged out and let go over a bar button: the game puts it there; the flyout is without it
     tap("1")
-    DragOff(second)
-    DropOn(entry(f, 1))
-    flushAll()
-    check(ids() == "501 101 502 503 504" and stands(second) == spots[1] and stands(entry(f, 1)) == spots[2] and stands(fourth) == spots[4],
-        "moved the other way, to the first spot: those between move down by one: " .. ids())
-    -- let go on itself, or on a bar button: nothing in the flyout changes
-    DragOff(second)
-    DropOn(second)
-    check(W.cursor == nil and ids() == "501 101 502 503 504", "let go on itself, nothing changes and the cursor is empty")
-    DragOff(fourth)
+    DragOff(fifth)
     W.placed = W.placed or {}
     DropOn(W.frames.ActionButton7)
     flushAll()
-    check(ids() == "501 101 502 503 504" and GetActionInfo(7) == "spell" and select(2, GetActionInfo(7)) == 503,
-        "let go over a bar button, the game puts the ability there and nothing in the flyout changes")
+    check(ids() == "101 502 501 503" and GetActionInfo(7) == "spell" and select(2, GetActionInfo(7)) == 504 and not fifth:IsShown(),
+        "let go over a bar button, the game puts the ability there and the flyout is without it: " .. ids())
+    -- dragged out and dropped on the flyout's arrow: in again at the end, with its own key
+    DragOff(third)
+    flushAll()
+    check(ids() == "101 501 503" and ours("G") == "", "an icon with a key of its own taken off: its key goes with it")
+    DropOn(unit.opener)
+    flushAll()
+    check(ids() == "101 501 503 502" and flyout.entries[4].key == "G" and third:IsShown() and W.cursor == nil,
+        "dropped on the flyout's arrow it is in again, at the end, with its own key: " .. ids())
+    if not unit.menu:IsShown() then tap("1") end
+    before = #W.casts
+    tap("G")
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:502", "and that key picks it: " .. tostring(W.casts[#W.casts]))
+    -- dragged out and let go of on nothing
+    tap("1")
+    DragOff(fourth)
     W.cursor = nil
     fire("ACTIONBAR_HIDEGRID")
+    flushAll()
+    check(ids() == "101 501 502" and r.attrs["count" .. f] == 3, "let go of on nothing, it stays off: " .. ids())
     DropOn(entry(f, 1))
-    check(ids() == "501 101 502 503 504", "a drop on an icon with no icon lifted moves nothing")
+    check(ids() == "101 501 502", "a drop on an icon with nothing lifted and nothing carried changes nothing")
     -- with the bars locked, only with the game's key for picking an ability up
     r.attrs.barslocked = true
     W.modified = W.modified or {}
-    DragOff(entry(f, 5))
-    check(W.cursor == nil, "bars locked and no pickup key held: the icon is not lifted")
+    DragOff(entry(f, 1))
+    check(W.cursor == nil and ids() == "101 501 502", "bars locked and no pickup key held: the icon is not lifted")
     r.attrs.barslocked = nil
+    check(#W.caught == caught, "none of it raised an error")
     -- the fight over: laid afresh, each icon by its name again
     if unit.menu:IsShown() then tap("1") end
     W.combat = false
@@ -2979,19 +3013,44 @@ do
     for _ = 1, 4 do flushAll() end
     local after, afterUnit = F11.At("ActionButton1")
     local names, order = true, {}
-    for i = 1, 5 do
+    for i = 1, 3 do
         local frame = afterUnit.entries[i]
         names = names and frame == entry(afterUnit.index, i) and frame.entryIndex == i and stands(frame) == spots[i]
         order[i] = tostring(frame.attrs.spell)
     end
-    check(after == flyout and names and table.concat(order, " ") == "501 101 502 503 504",
-        "the fight over: laid afresh in the saved order, each icon in its made place again: " .. table.concat(order, " "))
+    check(after == flyout and names and table.concat(order, " ") == "101 501 502" and not entry(afterUnit.index, 4):IsShown(),
+        "the fight over: laid afresh as saved, each icon in its made place again: " .. table.concat(order, " "))
     tap("1")
     before = #W.casts
-    tap("3")
-    check(W.casts[#W.casts] == "spell:502" and #W.casts == before + 1, "and the keys go by the spots as ever")
-    -- a flyout that fills itself has no icon moved, in a fight as out of one
+    tap("G")
+    check(W.casts[#W.casts] == "spell:502" and #W.casts == before + 1, "the keys are as ever, an icon's own too")
+    if unit.menu:IsShown() then tap("1") end
     check(r.attrs["still" .. afterUnit.index] == nil, "a flyout made by hand is not held still")
+    -- a flyout left with only its button's own ability is no flyout any more, as out of a fight
+    stack("ActionButton2", 601)
+    local small, smallUnit = F11.At("ActionButton2")
+    local g = smallUnit and smallUnit.index
+    check(small ~= nil and #small.entries == 2 and opens("Q"), "a flyout of two: its button's own ability and one more")
+    fire("PLAYER_REGEN_DISABLED")
+    W.combat = true
+    flushAll()
+    tap("Q")
+    check(smallUnit.menu:IsShown(), "it is open")
+    DragOff(entry(g, 2))
+    flushAll()
+    check(W.cursor ~= nil and W.cursor[4] == 601 and not smallUnit.menu:IsShown() and not smallUnit.opener:IsShown()
+        and r.attrs["hostof" .. g] == nil and r.attrs["host-ActionButton2"] == nil and not opens("Q"),
+        "its other icon dragged out in a fight: shut, its arrow gone, its button's keys the button's own again")
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    before = #W.casts
+    mouse(W.frames.ActionButton2)
+    check(W.casts[#W.casts] == "bar:ActionButton2" and #W.casts == before + 1, "a click on the button casts its ability")
+    check(#W.caught == caught, "and nothing raised an error")
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    for _ = 1, 4 do flushAll() end
+    check(F11.At("ActionButton2") == nil and not opens("Q") and #F11.List() == 1, "the fight over, the flyout left with one is removed")
     W.guard = nil
     local all = F11.List()
     for i = #all, 1, -1 do table.remove(all, i) end
@@ -3032,8 +3091,8 @@ do
     check(ids() == "101 501 502" and r.attrs["room" .. f] == F12.MAX - 3
         and r.attrs["holds" .. f] == ";spell:101;spell:501;spell:502;" and grip.wraps ~= nil and grip.wraps.OnReceiveDrag ~= nil,
         "before a fight the secure code is told what the flyout holds and how many more it takes, and is run at a drop on its arrow")
-    check((r.attrs["xkeys" .. f .. "_4"] or 0) >= 1 and r.attrs["xkey" .. f .. "_4_1"] == "4" and r.attrs["xkey" .. f .. "_5_1"] == "5",
-        "and the key each free place would get: " .. tostring(r.attrs["xkey" .. f .. "_4_1"]))
+    check(r.attrs["xkey" .. f .. "_4"] == "4" and r.attrs["xkey" .. f .. "_5"] == "5" and r.attrs["xpad" .. f .. "_4"] ~= nil,
+        "and the key and pad button each place gets: " .. tostring(r.attrs["xkey" .. f .. "_4"]))
     -- out of a fight the plus takes the drop itself, and the arrow none
     carry(503)
     local tab = NS.Drop.Tab("ActionButton1")
@@ -3101,7 +3160,7 @@ do
     DropOn(grip)
     check(#flyout.entries == 7 and W.errors[#W.errors] == "That is in the flyout already.", "a macro it holds already is refused")
     empty()
-    -- An icon lifted earlier and let go on nothing does not make the next drop a move: a spell from
+    -- An icon lifted and let go of on nothing is off the flyout, and the next drop is no move: a spell from
     -- elsewhere dropped on an icon takes that icon's place, as on a bar slot, and hands back what was there.
     tap("1")
     DragOff(entry(f, 2))
@@ -3110,26 +3169,26 @@ do
     carry(505)
     DropOn(entry(f, 3))
     flushAll()
-    check(ids() == "101 501 505 503 504 4540 Mend" and W.cursor ~= nil and W.cursor[4] == 502,
-        "an icon lifted and let go on nothing, then a spell dropped on an icon: it takes that icon's place, nothing moved, "
-        .. "and what was there is on the cursor: " .. ids())
+    check(ids() == "101 505 503 504 4540 Mend" and W.cursor ~= nil and W.cursor[4] == 502,
+        "an icon lifted and let go of on nothing is off the flyout; then a spell dropped on an icon takes that icon's "
+        .. "place, and what was there is on the cursor: " .. ids())
     DropOn(grip)
     flushAll()
-    check(ids() == "101 501 505 503 504 4540 Mend 502" and W.cursor == nil,
+    check(ids() == "101 505 503 504 4540 Mend 502" and W.cursor == nil,
         "what came off is added again by a drop on the arrow: " .. ids())
-    -- an added icon moves like any other
+    -- an added icon moves like any other: dragged onto another icon of its flyout, it takes that one's spot
     DragOff(entry(f, 4))
     DropOn(entry(f, 2))
     flushAll()
-    check(ids() == "101 503 501 505 504 4540 Mend 502" and W.cursor == nil, "an added icon is moved in the fight like any other: " .. ids())
+    check(ids() == "101 505 504 4540 Mend 503 502" and W.cursor == nil, "an added icon is moved in the fight like any other: " .. ids())
     -- to the twelfth, and no further
-    for id = 506, 509 do
+    for id = 506, 510 do
         carry(id)
         DropOn(grip)
         flushAll()
     end
     check(#flyout.entries == F12.MAX and r.attrs["room" .. f] == 0 and entry(f, 12):IsShown(), "filled to twelve in the fight")
-    carry(510)
+    carry(511)
     check(not NS.Drop.Tab("ActionButton1"):IsShown(), "a full flyout shows no plus")
     DropOn(grip)
     check(#flyout.entries == F12.MAX and W.cursor ~= nil and W.errors[#W.errors] == "That flyout is full.",
@@ -3138,7 +3197,7 @@ do
     if not unit.menu:IsShown() then tap("1") end
     before = #W.casts
     tap("=")
-    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:509", "the twelfth has its key too: " .. tostring(W.casts[#W.casts]))
+    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:510", "the twelfth has its key too: " .. tostring(W.casts[#W.casts]))
     check(#W.caught == caught, "none of it raised an error")
     -- the fight over: laid afresh, all of it saved
     if unit.menu:IsShown() then tap("1") end
@@ -3146,7 +3205,7 @@ do
     fire("PLAYER_REGEN_ENABLED")
     for _ = 1, 4 do flushAll() end
     local after, afterUnit = F12.At("ActionButton1")
-    check(after == flyout and ids() == "101 503 501 505 504 4540 Mend 502 506 507 508 509",
+    check(after == flyout and ids() == "101 505 504 4540 Mend 503 502 506 507 508 509 510",
         "the fight over: the flyout holds all that was added, in its order: " .. ids())
     local laid = true
     for i = 1, F12.MAX do
@@ -3157,8 +3216,8 @@ do
     tap("1")
     before = #W.casts
     tap("2")
-    check(W.casts[#W.casts] == "spell:503" and #W.casts == before + 1, "and the keys go by the spots as ever")
-    carry(510)
+    check(W.casts[#W.casts] == "spell:505" and #W.casts == before + 1, "and the keys go by the spots as ever")
+    carry(511)
     check(NS.Drop.Tab("ActionButton2") ~= nil and NS.Drop.Tab("ActionButton2"):IsShown() and NS.Drop.Tab("ActionButton2").mouse == true,
         "out of the fight the plus is on every button again and takes the drop itself")
     empty()

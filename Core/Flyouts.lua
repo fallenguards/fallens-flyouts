@@ -318,11 +318,109 @@ local CLICK_AFTER = [[
 -- he named this one too). Out of a fight the addon's own code moves it, sliding the others out of its
 -- way; in a fight that code may not touch an icon. This may: an icon's drag is wrapped, and a drop on
 -- one. In a fight the drag puts the icon's ability on the cursor (the game then runs a drop on what it
--- is let go over) and remembers the icon. Let go over another icon of the flyout, the icon takes that
--- spot and those between move up by one, as out of a fight; the keys of the spots stay with the spots.
--- Let go anywhere else, the game does with what is on the cursor what it does with any ability, and
--- nothing in the flyout changes. Not for a flyout that fills itself, nor one whose icons stand around
--- its button; and with the bars locked, only with the game's key for picking an ability up.
+-- is let go over) and takes the icon off its flyout at once, as a drag out does out of a fight. His
+-- words (2026-11-23): "if i drag an ability out of a flyout mid combat, it does let me do so now
+-- thankfully, but it doesn't actually disappear from the flyout itself. even worse, it NEVER does unless
+-- i repeat it out of combat. ... i want it in real time anyway". The icons after it move up a spot, the
+-- keys of the spot left empty are let go, and the strip is one icon shorter; the icon, hidden, waits on
+-- that empty spot. Let go over an icon of the same flyout, it goes back in on that icon's spot (LAND);
+-- let go anywhere else, the game does with what is on the cursor what it does with any ability. A
+-- flyout left with no icon, or with only its button's own ability, is no flyout any more, as out of a
+-- fight: its button is its own again. Not for a flyout that fills itself, nor one whose icons stand
+-- around its button; and with the bars locked, only with the game's key for picking an ability up.
+-- The keys a spot gets are known beforehand for every spot (from Rebind), and the list of a flyout's
+-- pick keys holds those of its spots in use only (KEYS_OF).
+-- Moves the icon `mover` of flyout `f` from spot `from` to spot `to`; those between move one spot over.
+local SLIDE = [[
+    do
+        local menu = owner:GetFrameRef("menu" .. f)
+        local step, at = from < to and 1 or -1, from
+        while at ~= to do
+            -- the icon on the next spot takes this one, and the moved icon the next
+            local past = at + step
+            local a, b = f .. "_" .. at, f .. "_" .. past
+            local other = owner:GetFrameRef(owner:GetAttribute("at" .. b))
+            other:ClearAllPoints()
+            other:SetPoint(owner:GetAttribute("sp" .. a), menu, owner:GetAttribute("srp" .. a),
+                owner:GetAttribute("sx" .. a), owner:GetAttribute("sy" .. a))
+            other:SetAttribute("ffspot", at)
+            owner:SetAttribute("at" .. a, other:GetName())
+            mover:ClearAllPoints()
+            mover:SetPoint(owner:GetAttribute("sp" .. b), menu, owner:GetAttribute("srp" .. b),
+                owner:GetAttribute("sx" .. b), owner:GetAttribute("sy" .. b))
+            mover:SetAttribute("ffspot", past)
+            owner:SetAttribute("at" .. b, mover:GetName())
+            at = past
+        end
+    end
+]]
+-- the strip of flyout `f`, `by` icons longer (or shorter)
+local GROW = [[
+    do
+        local long, grows = owner:GetAttribute("mlong" .. f), owner:GetAttribute("mstep" .. f)
+        if long and grows then
+            long = long + grows * by
+            local strip = owner:GetFrameRef("menu" .. f)
+            if owner:GetAttribute("mup" .. f) then strip:SetHeight(long) else strip:SetWidth(long) end
+            owner:SetAttribute("mlong" .. f, long)
+        end
+    end
+]]
+-- The pick keys of flyout `f`, written afresh from what stands on its spots now, as Rebind writes them:
+-- for each spot in use, the key and the pad button of the icon on it, its own where it has one (ffkey,
+-- ffpad: they go wherever the icon goes) and else the spot's (xkey, xpad); then each of those under each
+-- modifier of the flyout's own keys. An opener key that is one of them is marked so (obtn "own<i>").
+local KEYS_OF = [[
+    do
+        local listed, count, seen = 0, owner:GetAttribute("count" .. f) or 0, ";"
+        for spot = 1, count do
+            local name = owner:GetAttribute("at" .. f .. "_" .. spot)
+            local icon = name and owner:GetFrameRef(name)
+            local key = icon and icon:GetAttribute("ffkey") or owner:GetAttribute("xkey" .. f .. "_" .. spot)
+            local pad = icon and icon:GetAttribute("ffpad") or owner:GetAttribute("xpad" .. f .. "_" .. spot)
+            for j = 1, 2 do
+                local one = key
+                if j == 2 then one = pad end
+                if one and not strfind(seen, ";" .. one .. ";", 1, true) then
+                    seen = seen .. one .. ";"
+                    listed = listed + 1
+                    owner:SetAttribute("pkey" .. f .. "_" .. listed, one)
+                    owner:SetAttribute("pentry" .. f .. "_" .. listed, name)
+                    owner:SetAttribute("pspot" .. f .. "_" .. listed, spot)
+                end
+            end
+        end
+        local plain = listed
+        for m = 1, owner:GetAttribute("mods" .. f) or 0 do
+            local mod = owner:GetAttribute("mod" .. f .. "_" .. m)
+            for k = 1, plain do
+                local base = owner:GetAttribute("pkey" .. f .. "_" .. k)
+                local under = mod .. base
+                if not strfind(base, "-", 1, true) and not strfind(seen, ";" .. under .. ";", 1, true) then
+                    seen = seen .. under .. ";"
+                    listed = listed + 1
+                    owner:SetAttribute("pkey" .. f .. "_" .. listed, under)
+                    owner:SetAttribute("pentry" .. f .. "_" .. listed, owner:GetAttribute("pentry" .. f .. "_" .. k))
+                    owner:SetAttribute("pspot" .. f .. "_" .. listed, owner:GetAttribute("pspot" .. f .. "_" .. k))
+                end
+            end
+        end
+        for k = listed + 1, owner:GetAttribute("pkeys" .. f) or 0 do
+            owner:SetAttribute("pkey" .. f .. "_" .. k, nil)
+            owner:SetAttribute("pentry" .. f .. "_" .. k, nil)
+            owner:SetAttribute("pspot" .. f .. "_" .. k, nil)
+        end
+        owner:SetAttribute("pkeys" .. f, listed)
+        for i = 1, owner:GetAttribute("okeys" .. f) or 0 do
+            local key = owner:GetAttribute("okey" .. f .. "_" .. i)
+            if key and strfind(seen, ";" .. key .. ";", 1, true) then
+                owner:SetAttribute("obtn" .. f .. "_" .. i, "own" .. i)
+            else
+                owner:SetAttribute("obtn" .. f .. "_" .. i, "LeftButton")
+            end
+        end
+    end
+]]
 local LIFT = [[
     if not PlayerInCombat() then return end
     lifted = nil
@@ -332,6 +430,40 @@ local LIFT = [[
     local kind = self:GetAttribute("type")
     local what = kind and self:GetAttribute(kind)
     if not what then return false end
+    local mover, from, count = self, self:GetAttribute("ffspot"), owner:GetAttribute("count" .. f) or 0
+    if from and from <= count then
+        local to = count
+]] .. SLIDE .. [[
+        self:Hide()
+        count = count - 1
+        owner:SetAttribute("count" .. f, count)
+        owner:SetAttribute("room" .. f, (owner:GetAttribute("room" .. f) or 0) + 1)
+        local mark = self:GetAttribute("ffmark")
+        local has = owner:GetAttribute("holds" .. f) or ";"
+        local a, b
+        if mark then a, b = strfind(has, ";" .. mark .. ";", 1, true) end
+        if a then owner:SetAttribute("holds" .. f, strsub(has, 1, a) .. strsub(has, b + 1)) end
+]] .. KEYS_OF .. [[
+        local by = -1
+]] .. GROW .. [[
+        -- none left, or only the button's own ability: the button is its own again
+        local first = count >= 1 and owner:GetFrameRef(owner:GetAttribute("at" .. f .. "_1"))
+        local lead = first and first:GetAttribute("ffmark")
+        local gone = count == 0 or (count == 1 and lead ~= nil and owner:GetAttribute("main-" .. lead) == f)
+        if gone then
+            local host = owner:GetAttribute("hostof" .. f)
+            if host then owner:SetAttribute("host-" .. host, nil) end
+            owner:SetAttribute("hostof" .. f, nil)
+            owner:SetAttribute("okeys" .. f, 0)
+            if lead then owner:SetAttribute("main-" .. lead, nil) end
+            owner:GetFrameRef("grip" .. f):Hide()
+            if owner:GetAttribute("open") == f then
+]] .. SHUT .. [[
+            end
+        end
+]] .. BIND .. [[
+        owner:CallMethod("Lifted", f, from, gone or nil)
+    end
     lifted = self:GetName()
     return kind, what
 ]]
@@ -389,6 +521,11 @@ local ADD = CARRIED .. [[
         owner:CallMethod("Refused", "full")
         return
     end
+    -- an icon taken off and added again keeps its own key; one given another ability has none
+    if icon:GetAttribute("ffmark") ~= mark then
+        icon:SetAttribute("ffkey", nil)
+        icon:SetAttribute("ffpad", nil)
+    end
     icon:SetAttribute("type", kind)
     icon:SetAttribute("spell", nil)
     icon:SetAttribute("item", nil)
@@ -400,33 +537,13 @@ local ADD = CARRIED .. [[
     owner:SetAttribute("count" .. f, n)
     owner:SetAttribute("room" .. f, room - 1)
     owner:SetAttribute("holds" .. f, has .. mark .. ";")
-    -- its keys: those its spot was given beforehand. One that is a key of the flyout's button too
-    -- stays the button's while it is held down.
-    local listed = owner:GetAttribute("pkeys" .. f) or 0
-    for j = 1, owner:GetAttribute("xkeys" .. f .. "_" .. n) or 0 do
-        local key = owner:GetAttribute("xkey" .. f .. "_" .. n .. "_" .. j)
-        listed = listed + 1
-        owner:SetAttribute("pkey" .. f .. "_" .. listed, key)
-        owner:SetAttribute("pentry" .. f .. "_" .. listed, name)
-        owner:SetAttribute("pspot" .. f .. "_" .. listed, n)
-        for i = 1, owner:GetAttribute("okeys" .. f) or 0 do
-            if owner:GetAttribute("okey" .. f .. "_" .. i) == key then
-                owner:SetAttribute("obtn" .. f .. "_" .. i, "own" .. i)
-            end
-        end
-    end
-    owner:SetAttribute("pkeys" .. f, listed)
+]] .. KEYS_OF .. [[
     icon:Show()
 ]] .. BIND .. [[
     owner:CallMethod("Added", f, n, kind, id)
     -- the strip, one icon longer
-    local long, grows = owner:GetAttribute("mlong" .. f), owner:GetAttribute("mstep" .. f)
-    if long and grows then
-        local strip = owner:GetFrameRef("menu" .. f)
-        long = long + grows
-        if owner:GetAttribute("mup" .. f) then strip:SetHeight(long) else strip:SetWidth(long) end
-        owner:SetAttribute("mlong" .. f, long)
-    end
+    local by = 1
+]] .. GROW .. [[
     return "clear"
 ]]
 -- An ability dropped on an icon takes that icon's place, as one dropped on a bar slot takes the slot:
@@ -458,15 +575,17 @@ local SWAP = CARRIED .. [[
     owner:CallMethod("Swapped", self:GetName(), kind, id)
     return "clear", was, back
 ]]
--- A drop on an icon in a fight. The icon lifted off this flyout, still on the cursor, is being moved.
--- Anything else on the cursor comes from the spellbook, the bags or a bar: it takes this icon's place.
--- An icon lifted earlier and let go elsewhere is told from what is carried now by its ability.
+-- A drop on an icon in a fight. The icon lifted off this flyout, still on the cursor, goes back in on
+-- this icon's spot: this one and those after it move down a spot. Anything else on the cursor comes from
+-- the spellbook, the bags, a bar or another flyout: it takes this icon's place. An icon lifted earlier
+-- and let go elsewhere is told from what is carried now by its ability.
 local LAND = [[
     if not (kind and PlayerInCombat()) then return end
     local f = self:GetAttribute("fffly")
     local mover = lifted and owner:GetFrameRef(lifted)
     lifted = nil
-    local moving = mover and f and mover:GetAttribute("fffly") == f and mover:GetAttribute("type") == kind
+    local moving = mover and f and not mover:IsShown() and mover:GetAttribute("fffly") == f
+        and mover:GetAttribute("type") == kind
     if moving then
         local what = mover:GetAttribute(kind)
         if kind == "spell" then
@@ -483,33 +602,17 @@ local LAND = [[
 ]] .. SWAP .. [[
     end
     local from, to = mover:GetAttribute("ffspot"), self:GetAttribute("ffspot")
-    if from == to then return "clear" end
-    local menu = owner:GetFrameRef("menu" .. f)
-    local step, at = from < to and 1 or -1, from
-    while at ~= to do
-        -- the icon on the next spot takes this one, and the moved icon the next
-        local past = at + step
-        local a, b = f .. "_" .. at, f .. "_" .. past
-        local other = owner:GetFrameRef(owner:GetAttribute("at" .. b))
-        other:ClearAllPoints()
-        other:SetPoint(owner:GetAttribute("sp" .. a), menu, owner:GetAttribute("srp" .. a),
-            owner:GetAttribute("sx" .. a), owner:GetAttribute("sy" .. a))
-        other:SetAttribute("ffspot", at)
-        owner:SetAttribute("at" .. a, other:GetName())
-        mover:ClearAllPoints()
-        mover:SetPoint(owner:GetAttribute("sp" .. b), menu, owner:GetAttribute("srp" .. b),
-            owner:GetAttribute("sx" .. b), owner:GetAttribute("sy" .. b))
-        mover:SetAttribute("ffspot", past)
-        owner:SetAttribute("at" .. b, mover:GetName())
-        at = past
-    end
-    -- each key of a spot goes to the icon on that spot now
-    for k = 1, owner:GetAttribute("pkeys" .. f) or 0 do
-        local spot = owner:GetAttribute("pspot" .. f .. "_" .. k)
-        if spot then owner:SetAttribute("pentry" .. f .. "_" .. k, owner:GetAttribute("at" .. f .. "_" .. spot)) end
-    end
-]] .. BIND .. [[
-    owner:CallMethod("Shifted", f, from, to)
+]] .. SLIDE .. [[
+    mover:Show()
+    local n = (owner:GetAttribute("count" .. f) or 0) + 1
+    owner:SetAttribute("count" .. f, n)
+    owner:SetAttribute("room" .. f, (owner:GetAttribute("room" .. f) or 1) - 1)
+    local mark = mover:GetAttribute("ffmark")
+    if mark then owner:SetAttribute("holds" .. f, (owner:GetAttribute("holds" .. f) or ";") .. mark .. ";") end
+]] .. KEYS_OF .. [[
+    local by = 1
+]] .. GROW .. BIND .. [[
+    owner:CallMethod("Landed", f, to)
     return "clear"
 ]]
 -- A pick key acts on its press and shuts on its release, unless the
@@ -771,16 +874,17 @@ end
 local function DragStart(self) ns.Move.Start(self) end
 local function DragStop() ns.Move.Released() end
 
--- what the secure code calls when it has moved a flyout or an icon in a fight (written further down);
--- F.Added and F.Refused, further down too, when it has added an icon or refused to
-local Rehomed, Shifted
+-- what the secure code calls when it has moved a flyout in a fight (written further down); F.Added,
+-- F.Refused, F.Swapped, F.Lifted and F.Landed, further down too, for what it does to a flyout's icons
+local Rehomed
 
 local function Build()
     if root then return end
     root = CreateFrame("Frame", ROOT, UIParent, "SecureHandlerBaseTemplate")
     root:Hide()
     root.Rehomed = function(_, ...) xpcall(Rehomed, geterrorhandler(), ...) end
-    root.Shifted = function(_, ...) xpcall(Shifted, geterrorhandler(), ...) end
+    root.Lifted = function(_, ...) xpcall(F.Lifted, geterrorhandler(), ...) end
+    root.Landed = function(_, ...) xpcall(F.Landed, geterrorhandler(), ...) end
     root.Added = function(_, ...) xpcall(F.Added, geterrorhandler(), ...) end
     root.Refused = function(_, ...) xpcall(F.Refused, geterrorhandler(), ...) end
     root.Swapped = function(_, ...) xpcall(F.Swapped, geterrorhandler(), ...) end
@@ -1496,24 +1600,43 @@ end
 -- The keys an icon added in a fight would get, by the place it would take: the secure code that adds it
 -- cannot work them out. As Picks gives them: the key set for that spot of every flyout, else the next
 -- free one. None for a flyout nothing is added to in a fight.
-local function Spare(unit, picks)
-    local flyout, spare, taken = unit.flyout, {}, {}
-    if flyout.auto or unit.radial then return spare end
-    for _, pick in ipairs(picks) do
-        if pick.key then taken[pick.key] = true end
-        if pick.pad then taken[pick.pad] = true end
+local function Defaults(unit)
+    local flyout, out, taken = unit.flyout, {}, {}
+    if flyout.auto or unit.radial then return out end
+    for _, entry in ipairs(flyout.all or flyout.entries) do
+        if type(entry.key) == "string" then taken[entry.key] = true end
+        if type(entry.pad) == "string" then taken[entry.pad] = true end
     end
+    local count = #flyout.entries
+    local pads = PadsOf(unit, count)
     local pool = F.Faces(flyout) and PADS_ALL or PADS
-    for i = #picks + 1, MAX do
+    for i = 1, MAX do
         local key, pad = Binds.Pick(i)
-        local pick = {}
-        if key and not taken[key] then pick.key, taken[key] = key, true end
-        if pad and not taken[pad] then pick.pad, taken[pad] = pad, true end
-        pick.key = pick.key or Free(KEYS[i], KEYS, taken)
-        pick.pad = pick.pad or Free(PadsOf(unit, i)[i], pool, taken)
-        spare[i] = pick
+        local d = {}
+        if key and not taken[key] then d.key, taken[key] = key, true end
+        if pad and not taken[pad] then d.pad, taken[pad] = pad, true end
+        out[i] = d
     end
-    return spare
+    for i = 1, MAX do
+        local d = out[i]
+        d.key = d.key or Free(KEYS[i], KEYS, taken)
+        local want = pads[i]
+        if i > count then want = PadsOf(unit, i)[i] end
+        d.pad = d.pad or Free(want, pool, taken)
+    end
+    return out
+end
+-- An icon's key and pad button as the secure code has written them in a fight, for its label: its own
+-- where it has one, else its spot's.
+local function Repick(unit)
+    local defaults = unit.defaults
+    if not defaults then return end
+    local picks = {}
+    for i, frame in ipairs(unit.entries) do
+        local d = defaults[i] or {}
+        picks[i] = { key = frame:GetAttribute("ffkey") or d.key, pad = frame:GetAttribute("ffpad") or d.pad }
+    end
+    unit.picks = picks
 end
 
 -- one label per icon: the pad's symbol while the pad is the input in use, else the key
@@ -2071,23 +2194,28 @@ local function Rebind()
                 end
             end
         end
-        -- the keys of the places still free, for an icon added in a fight
-        unit.spare = Spare(unit, unit.picks)
-        for i = #unit.picks + 1, MAX do
-            local pick, extra, told = unit.spare[i], 0, {}
-            local function Extra(key)
-                if told[key] then return end
-                extra, told[key] = extra + 1, true
-                root:SetAttribute("xkey" .. f .. "_" .. i .. "_" .. extra, key)
-            end
-            for _, base in ipairs(pick and { pick.key, pick.pad } or {}) do
-                Extra(base)
-                for mod in pairs(mods) do
-                    if not base:find("-", 1, true) and not plain[mod .. base] then Extra(mod .. base) end
-                end
-            end
-            root:SetAttribute("xkeys" .. f .. "_" .. i, extra)
+        -- For the secure code, which writes the pick keys afresh when an icon is taken off, put back or
+        -- added in a fight: each spot's key and pad button (those it has when its icon has none of its
+        -- own), each icon's own, and the modifiers of the flyout's own keys.
+        unit.defaults = Defaults(unit)
+        for i = 1, MAX do
+            local d = unit.defaults[i] or {}
+            root:SetAttribute("xkey" .. f .. "_" .. i, d.key)
+            root:SetAttribute("xpad" .. f .. "_" .. i, d.pad)
         end
+        for i, frame in ipairs(unit.entries) do
+            local entry, pick = frame.entry, unit.picks[i]
+            local key, pad
+            if entry and pick and entry.key ~= nil and entry.key == pick.key then key = pick.key end
+            if entry and pick and entry.pad ~= nil and entry.pad == pick.pad then pad = pick.pad end
+            frame:SetAttribute("ffkey", key)
+            frame:SetAttribute("ffpad", pad)
+        end
+        local modList = {}
+        for mod in pairs(mods) do modList[#modList + 1] = mod end
+        table.sort(modList)
+        for j, mod in ipairs(modList) do root:SetAttribute("mod" .. f .. "_" .. j, mod) end
+        root:SetAttribute("mods" .. f, #modList)
         for i, key in ipairs(unit.keys) do
             -- a key that is a pick while open says so in its click's name: held, it is kept from its
             -- icon until it is let go, so that its release comes to the opener
@@ -2441,23 +2569,70 @@ Rehomed = function(f, name, off)
     Tell("moved", unit)
 end
 
--- The secure code moved an icon to another spot of its flyout in a fight: the saved order follows, and
--- the addon's own list of the flyout's icons, so that each is still read with what it casts. They are
--- put back in the order they were made in when the fight is over and all of it is laid afresh.
-Shifted = function(f, from, to)
+-- The secure code took an icon off its flyout in a fight (`from`: its place; `gone`: the flyout is no
+-- flyout any more): what is saved follows, and the addon's own list of the flyout's icons, whose frames
+-- stand in the order of their spots (the hidden one after those in use), so that each is still read
+-- with what it casts. When the fight is over all of it is laid afresh; a flyout that is gone is removed.
+function F.Lifted(f, from, gone)
     local unit = units[f]
     local flyout = unit and unit.flyout
-    if not (flyout and flyout.entries[from] and flyout.entries[to]) then return end
-    table.insert(flyout.entries, to, table.remove(flyout.entries, from))
-    Mirror(flyout)
-    table.insert(unit.entries, to, table.remove(unit.entries, from))
-    for i, frame in ipairs(unit.entries) do frame.entryIndex = i end
+    if not (flyout and flyout.entries[from]) then return end
+    local count = #flyout.entries
+    local entry = table.remove(flyout.entries, from)
+    for place = #(flyout.all or {}), 1, -1 do
+        if flyout.all[place] == entry then table.remove(flyout.all, place) end
+    end
+    local frame = table.remove(unit.entries, from)
+    table.insert(unit.entries, count, frame)
+    for i, one in ipairs(unit.entries) do one.entryIndex = i end
+    unit.lifted = { frame = frame, entry = entry }
     unit.shuffled = true
+    Repick(unit)
+    pending = true
+    if gone then
+        Run(flyout).forget = true
+        unit.host = nil
+        Face(unit)
+        Named(unit)
+    end
+    if not InCombatLockdown() then return F.Settle() end
+    Labels(unit)
+    State(unit)
+    ns.Log(("in a fight %s was taken off the flyout on %s, from place %d%s"):format(Name(entry), tostring(flyout.host),
+        from, gone and "; the flyout is gone with it" or ""))
+    Tell("lifted", unit, from)
+end
+
+-- The secure code put the icon it took off back in, on spot `to` of the same flyout.
+function F.Landed(f, to)
+    local unit = units[f]
+    local flyout, held = unit and unit.flyout, unit and unit.lifted
+    if not (flyout and held) then return end
+    unit.lifted = nil
+    table.insert(flyout.entries, to, held.entry)
+    if flyout.all then
+        -- in the whole, right after the one shown before it
+        local before, place = flyout.entries[to - 1], 1
+        for i, other in ipairs(flyout.all) do
+            if other == before then place = i + 1 end
+        end
+        table.insert(flyout.all, place, held.entry)
+    end
+    for i, frame in ipairs(unit.entries) do
+        if frame == held.frame then
+            table.remove(unit.entries, i)
+            break
+        end
+    end
+    table.insert(unit.entries, to, held.frame)
+    for i, one in ipairs(unit.entries) do one.entryIndex = i end
+    Repick(unit)
     pending = true
     if not InCombatLockdown() then return F.Settle() end
     Labels(unit)
     State(unit)
-    ns.Log(("in a fight an icon of the flyout on %s went from place %d to %d"):format(tostring(flyout.host), from, to))
+    ns.Log(("in a fight %s went back into the flyout on %s, at place %d"):format(Name(held.entry),
+        tostring(flyout.host), to))
     Tell("moved", unit)
 end
 
@@ -2465,6 +2640,11 @@ function F.Settle()
     if InCombatLockdown() then
         pending = true
         return
+    end
+    for f = 1, used do units[f].lifted = nil end
+    for i = #(list or {}), 1, -1 do
+        -- (Forget is written further down)
+        if Run(list[i]).forget then F.Forget(list[i]) end
     end
     for _, flyout in ipairs(list or {}) do
         local held, state = Bars.Named(flyout.host), Run(flyout)
@@ -2810,13 +2990,22 @@ function F.Added(f, n, kind, id)
     if not (flyout and frame) then return end
     local entry = { kind = kind, id = id }
     if kind == "macro" then entry = Macros.Entry(id) or { kind = kind, id = (GetMacroInfo(id)) } end
-    Append(flyout, entry)
-    local whole = Full(flyout)
-    local new = whole[#whole]
+    local held = unit.lifted
+    unit.lifted = nil
+    local new
+    if held and held.frame == frame and Same(held.entry, entry) then
+        new = held.entry
+        local whole = Full(flyout)
+        whole[#whole + 1] = new
+    else
+        Append(flyout, entry)
+        local whole = Full(flyout)
+        new = whole[#whole]
+    end
     if flyout.all then flyout.entries[#flyout.entries + 1] = new end
     frame.entry, frame.flyout, frame.entryIndex = new, flyout, n
     frame.icon:SetTexture(F.Icon(new))
-    if unit.picks then unit.picks[n] = unit.spare and unit.spare[n] or {} end
+    Repick(unit)
     pending = true
     if not InCombatLockdown() then return F.Settle() end
     Labels(unit)
