@@ -4675,10 +4675,47 @@ do
         .. "the flyout of the other page is still there when the bar turns back")
     check(#W.caught == errors, "no error on the way: " .. tostring(W.caught[#W.caught]))
 
+    -- His words (2026-11-23): "bear form vs no form is supposed to be completely separate bar. yet if i make
+    -- flyout on no stance bar, and have the same ability in that slot in bear form, it auto makes the bear
+    -- form version of it a flyout too. why. only happens if it's same base spell in same slot." Button 3
+    -- holds the same spell out of form and in the form.
+    W.placed[99] = 103
+    stack("ActionButton3", 503)
+    rebound()
+    flushAll()
+    local three = W.frames.ActionButton3
+    local own3 = F11.At("ActionButton3")
+    check(own3 ~= nil and own3.main.id == 103 and own3.slot == 3, "out of form: a flyout on button 3, kept to its slot")
+    TurnPage(9)
+    casts = #W.casts
+    mouse(three)
+    check(r.attrs["host-ActionButton3"] == nil and #W.casts == casts + 1 and not opens("3")
+        and not F11.UnitOf(own3), "in the form button 3 holds the same spell in the same place and is no flyout: "
+        .. "the form's bar is a bar of its own")
+    stack("ActionButton3", 504)
+    rebound()
+    flushAll()
+    local bear3 = F11.At("ActionButton3")
+    check(bear3 ~= nil and bear3 ~= own3 and bear3.main.id == 103 and bear3.slot == 99 and #bear3.entries == 2
+        and bear3.entries[2].id == 504 and #own3.entries == 2 and own3.entries[2].id == 503,
+        "a flyout made there is the form's own, led by the same spell, with its own icons; the other keeps its own")
+    TurnPage(1)
+    check(F11.At("ActionButton3") == own3 and opens("3"), "out of form button 3 has its own flyout again")
+    TurnPage(9)
+    check(F11.At("ActionButton3") == bear3 and opens("3"), "and in the form the form's")
+    -- one saved with no slot, from before: the first page that holds its spell, the bar out of form
+    own3.slot = nil
+    F11.Apply()
+    flushAll()
+    check(F11.At("ActionButton3") == bear3 and own3.slot == 3 and F11.Sleeps(own3),
+        "a flyout saved before flyouts were kept to a page goes to the bar out of form")
+    TurnPage(1)
+    flushAll()
+
     -- the bars as they were
     local all = F11.List()
     for i = #all, 1, -1 do table.remove(all, i) end
-    W.placed[97], W.placed[98] = nil, nil
+    W.placed[97], W.placed[98], W.placed[99] = nil, nil, nil
     F11.Apply()
     rebound()
     flushAll()

@@ -347,7 +347,9 @@ F.PAGE = [[
             if away and away ~= name then mine = nil end
             local had = owner:GetAttribute("host-" .. name)
             local lead = had and owner:GetAttribute("lead" .. had)
-            if had and had ~= mine and lead and lead ~= now then
+            -- off: one kept to a slot of the bar's pages (pslot), the page shows another; any other, the
+            -- button no longer holds its ability
+            if had and had ~= mine and (owner:GetAttribute("pslot" .. had) or (lead and lead ~= now)) then
                 owner:SetAttribute("host-" .. name, nil)
                 owner:SetAttribute("hostof" .. had, nil)
                 owner:SetAttribute("okeys" .. had, 0)
@@ -2498,7 +2500,7 @@ function F.Apply()
         local slots, sleeps = F.PageSlots(flyout), false
         if slots and #slots > 0 then
             host = Bars.Named(name)
-            sleeps = host ~= nil and not Bars.Holds(host, flyout.main)
+            sleeps = host ~= nil and Bars.Slot(host) ~= slots[1]
             state.lost = nil
         end
         if host and #flyout.entries > 0 and (sleeps or not taken[name]) then
@@ -2510,6 +2512,7 @@ function F.Apply()
             -- its click opens the flyout (wrapped already, with every bar button's, once the bars settled)
             HostWrap(host, name)
             for _, slot in ipairs(slots or {}) do pages[slot] = used end
+            root:SetAttribute("pslot" .. used, slots and slots[1] or nil)
             if sleeps then
                 unit.asleep, unit.host = true, nil
                 unit.opener:Hide()
@@ -2579,6 +2582,7 @@ function F.Apply()
         root:SetAttribute("count" .. f, 0)
         root:SetAttribute("hostof" .. f, nil)
         root:SetAttribute("lead" .. f, nil)
+        root:SetAttribute("pslot" .. f, nil)
         unit.asleep = nil
     end
     root:SetAttribute("units", used)
@@ -2605,9 +2609,9 @@ function F.Follow()
         local held = Bars.Named(flyout.host)
         local on = main == nil or (held ~= nil and Bars.Holds(held, main))
         -- asleep on a page of its button out of view: on its button, not off it
-        local asleep = main ~= nil and not on and F.Sleeps(flyout)
+        local asleep = main ~= nil and F.Sleeps(flyout)
         if asleep then on = true end
-        if main and not (on and held:IsVisible()) then
+        if main and not asleep and not (on and held:IsVisible()) then
             -- off its button or its bar hidden: looked for once
             local why = on and "hidden" or "off"
             if search or state.sought ~= why then
@@ -2618,6 +2622,7 @@ function F.Follow()
                 if found then
                     Tell("follow", flyout, flyout.host, found)
                     flyout.host, state.lost, state.sought, change = found, nil, nil, true
+                    flyout.slot = F.SlotOn(Bars.Named(found))
                 elseif not on and not state.lost then
                     Tell("follow", flyout, flyout.host, nil)
                     state.lost, change = true, true
@@ -2661,6 +2666,7 @@ Rehomed = function(f, name, off)
     local laid, old = Laid(), flyout.host
     laid[name], laid[old] = laid[old] or laid[name], nil
     flyout.host, unit.host = name, host
+    flyout.slot = F.SlotOn(host)
     hosted[name] = true
     unit.keys = OpenKeys(unit)
     local side = Art.SIDES[unit.side]
@@ -2681,20 +2687,40 @@ Rehomed = function(f, name, off)
     Tell("moved", unit)
 end
 
--- The slots of its button's pages that hold a flyout's ability, for a flyout on a button of Action Bar 1
--- that the bar turns by its page; nil for any other.
+-- The slot of a flyout on a button of Action Bar 1 that the bar turns by its page, while it holds the
+-- flyout's ability, as a list of one (none when it no longer does); nil for a flyout on any other button.
+-- Each page is a bar of its own: a flyout is kept to the one slot it was made on. His words (2026-11-23):
+-- "bear form vs no form is supposed to be completely separate bar. yet if i make flyout on no stance bar,
+-- and have the same ability in that slot in bear form, it auto makes the bear form version of it a flyout
+-- too". A flyout saved with no slot (made before this) takes the first of its button's pages that holds
+-- its ability: the bar out of form before a form's.
 function F.PageSlots(flyout)
     local i = flyout and flyout.main and Bars.MainIndex(flyout.host)
     if not i then return nil end
-    return Bars.PageSlots(i, flyout.main)
+    local slot = flyout.slot
+    if type(slot) ~= "number" or (slot - 1) % Bars.MAIN_COUNT + 1 ~= i then
+        slot = Bars.PageSlots(i, flyout.main)[1]
+        if not slot then return {} end
+        flyout.slot = slot
+    end
+    if not Bars.HoldsAt(slot, flyout.main) then return {} end
+    return { slot }
 end
 
--- asleep: on its button of Action Bar 1, its ability on a page of the button out of view
+-- the slot a button of Action Bar 1 stands for now, kept with a flyout hung on it; nil for any other button
+function F.SlotOn(button)
+    local name = button and button:GetName()
+    if not (name and Bars.MainIndex(name)) then return nil end
+    return Bars.Slot(button)
+end
+
+-- asleep: on its button of Action Bar 1, its slot on a page of the button out of view (the page in view
+-- may hold the same ability: that is another bar's)
 function F.Sleeps(flyout)
     local slots = F.PageSlots(flyout)
     if not (slots and #slots > 0) then return false end
     local held = Bars.Named(flyout.host)
-    return held ~= nil and not Bars.Holds(held, flyout.main)
+    return held ~= nil and Bars.Slot(held) ~= slots[1]
 end
 
 -- The bar's turns are followed by F.PAGE, wrapped once on the bar out of a fight, with the bar's
@@ -3081,9 +3107,15 @@ end
 
 -- the flyout an action leads, wherever it is
 function F.Of(main)
+    local asleep
     for _, flyout in ipairs(list or {}) do
-        if Same(flyout.main, main) then return flyout end
+        if Same(flyout.main, main) then
+            -- one asleep on a page of Action Bar 1 out of view gives way to one in view
+            if not F.Sleeps(flyout) then return flyout end
+            asleep = asleep or flyout
+        end
     end
+    return asleep
 end
 
 local function Has(flyout, entry)
@@ -3120,16 +3152,18 @@ function F.Stack(button, entry)
         main = Bars.Action(button)
         if not main then return nil, TEXT.noLead end
         flyout = F.Of(main)
+        -- one asleep on another page of the bar is that page's: this page gets one of its own
+        if flyout and F.Sleeps(flyout) then flyout = nil end
     end
     if flyout then
         if flyout.auto then return nil, TEXT.auto end
         if #Full(flyout) >= MAX then return nil, TEXT.full end
         if Has(flyout, entry) then return nil, TEXT.twice end
-        flyout.host = name
+        flyout.host, flyout.slot = name, F.SlotOn(button)
         Run(flyout).lost = nil
     else
         if Same(main, entry) then return nil, TEXT.twice end
-        flyout = { host = name, main = main, entries = { Copy(main) } }
+        flyout = { host = name, main = main, entries = { Copy(main) }, slot = F.SlotOn(button) }
         list[#list + 1] = flyout
     end
     Append(flyout, entry)
@@ -3146,6 +3180,8 @@ function F.StackLed(main, entry, button)
     local name = button and button:GetName()
     local flyout = name and F.At(name)
     if not (flyout and Same(flyout.main, main)) then flyout = F.Of(main) end
+    -- one asleep on another page of the bar is that page's: a button in view gets one of its own
+    if flyout and name and F.Sleeps(flyout) then flyout = nil end
     if flyout and flyout.auto then return nil, TEXT.auto end
     if flyout then
         if not Has(flyout, entry) then
@@ -3157,7 +3193,7 @@ function F.StackLed(main, entry, button)
         list[#list + 1] = flyout
     end
     if name then
-        flyout.host = name
+        flyout.host, flyout.slot = name, F.SlotOn(button)
         Run(flyout).lost = nil
     end
     -- its button is looked for at the next pass

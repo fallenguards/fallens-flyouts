@@ -3,7 +3,7 @@
 ## [1.1.5] - 2026-11-23
 
 ### Fixed
-- A flyout on Action Bar 1 follows the bar at once when a druid's form, a stance or stealth turns the bar to another page, in combat too. Each page keeps its own flyouts: one made in Bear Form is on its button whenever you are in Bear Form, and the one on that button out of form is back the moment you leave it. Until now a flyout caught up only about a second after each shift, and in combat not until the fight was over: in between, a click on its button cast the button's ability, or opened the other page's flyout.
+- A flyout on Action Bar 1 follows the bar at once when a druid's form, a stance or stealth turns the bar to another page, in combat too. Each page is a bar of its own: a flyout made out of form is on its button only out of form, even where the form's page holds the same ability in that place, and one made in Bear Form only in Bear Form. Until now a flyout caught up only about a second after each shift, and in combat not until the fight was over: in between, a click on its button cast the button's ability, or opened the other page's flyout.
 
 ## [1.1.4] - 2026-11-23
 
