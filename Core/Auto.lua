@@ -2,7 +2,7 @@ local _, ns = ...
 -- luacheck: globals FallensFlyoutsDB
 -- luacheck: read globals C_Container C_Item C_Spell C_Timer Enum CreateFrame InCombatLockdown UnitLevel issecretvalue
 -- luacheck: read globals CreateMacro GetMacroInfo PickupMacro ClearCursor NUM_TOTAL_EQUIPPED_BAG_SLOTS NUM_BAG_SLOTS
--- luacheck: read globals DeleteMacro
+-- luacheck: read globals DeleteMacro EditMacro
 
 -- Flyouts that fill themselves from the bags: all there is to eat, all there
 -- is to drink, the potions, and so on, each kind apart. What sits on the bar
@@ -384,6 +384,59 @@ function A.Mix(ids)
     return kind
 end
 
+-- A kind of the player's own given a name or an icon of its own, from the icon window its right-click opens
+-- on the settings page. His words (2026-11-23): "right click should be for setting icon like usual". Kept
+-- with the kind; its macro is renamed and given the icon too, so that the bars show them, and its flyouts
+-- follow the macro's new name (A.Refresh). `name`: nil leaves it as it is, "" gives back the name of its
+-- kinds; `icon`: nil leaves it, false gives back its own.
+function A.Restyle(id, name, icon)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local kind = A.Kind(id)
+    if not (kind and kind.own) then return false end
+    local saved
+    for _, one in ipairs(mixesOf or {}) do
+        if one.id == id then saved = one end
+    end
+    if not saved then return false end
+    local macro = A.Macro(id)
+    if type(name) == "string" then
+        -- as the game does with a macro's name
+        local clean = name:gsub('"', ""):match("^%s*(.-)%s*$")
+        if clean == "" then
+            saved.name = nil
+        else
+            saved.name = Short(clean, NAME_MOST)
+        end
+        kind.name = saved.name or Title(kind.parts)
+    end
+    if icon == false then
+        saved.icon = nil
+        local fresh = Own(saved)
+        kind.icon = fresh and fresh.icon or NO_ICON
+        -- no icon of its own kinds: the icon of the best the bags hold of them, as when it was made
+        if kind.icon == NO_ICON and C_Item.GetItemIconByID then
+            local best = A.Entries(id)[1]
+            local found = best and C_Item.GetItemIconByID(best.id)
+            if not Hidden(found) and type(found) == "number" then saved.icon, kind.icon = found, found end
+        end
+    elseif type(icon) == "number" then
+        saved.icon, kind.icon = icon, icon
+    end
+    if macro and EditMacro then
+        -- the first of its names that no other macro has (its own present name among them)
+        local to = macro
+        for _, one in ipairs(Names(kind)) do
+            if one == macro or not GetMacroInfo(one) then
+                to = one
+                break
+            end
+        end
+        pcall(EditMacro, macro, to, kind.icon)
+    end
+    A.Refresh()
+    return true
+end
+
 -- Does away with a kind of the player's own: its macro, its flyout in the profile in use, and the kind.
 -- Its flyouts in other profiles go when those are next in use.
 function A.Unmix(id)
@@ -424,6 +477,11 @@ function A.Refresh()
         if flyout.auto and byId[flyout.auto] then
             local entries = A.Entries(flyout.auto)
             if not Alike(entries, flyout.entries or {}) then changed = true end
+            -- its macro renamed (a kind of the player's own given a name): the flyout goes by the new name
+            local macro = not InCombatLockdown() and A.Macro(flyout.auto)
+            if macro and type(flyout.main) == "table" and flyout.main.kind == "macro" and flyout.main.id ~= macro then
+                flyout.main.id, changed = macro, true
+            end
         elseif type(flyout.auto) == "string" and flyout.auto:find("^" .. MIX .. "%d+$") then
             -- of a kind of the player's own that is no more: the flyout goes with it
             if not InCombatLockdown() then

@@ -703,6 +703,27 @@ function CreateMacro(name, icon, body)
     fire("UPDATE_MACROS")
     return macroPlace(own)
 end
+-- A macro given a name or an icon: the bar slots that hold it show its new name, as the game's do.
+function EditMacro(x, name, icon)
+    assert(not W.combat, "EditMacro in a fight")
+    local m = macroAt(x)
+    if not m then return nil end
+    if W.macros and W.macros[m.name] == m.own then
+        if name and name ~= m.name then
+            W.macros[m.name] = nil
+            W.macros[name] = m.own
+        end
+        if icon then m.own[1] = icon end
+    else
+        if name then m.own[1] = name end
+        if icon then m.own[2] = icon end
+    end
+    for _, held in pairs(W.placed or {}) do
+        if type(held) == "table" and held[1] == "macro" and (held.own == m.own or held[2] == m.name) and name then held[2] = name end
+    end
+    fire("UPDATE_MACROS")
+    return macroPlace(m.own)
+end
 function DeleteMacro(x)
     local m = macroAt(x)
     if not m then return end

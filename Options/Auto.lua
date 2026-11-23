@@ -1,6 +1,7 @@
 local _, ns = ...
 -- luacheck: globals SlashCmdList
 -- luacheck: read globals CreateFrame Settings GameTooltip StaticPopup_Show C_Timer
+-- luacheck: read globals UIParent
 
 -- The settings page of the flyouts that fill themselves: an icon for each
 -- kind, picked up here and dropped on an action bar. Under them, the player's
@@ -15,6 +16,8 @@ local APART = 1.9
 -- the list of kinds to tick and the button beside it: the list's width, the button's height, its least
 -- width and the room about its word; and the room a name takes under an icon
 local DROP_W, LINE, BUTTON_FLOOR, CHROME, NAME_H = 220, 22, 70, 20, 16
+-- the x on each of the player's own: its size, and how far past the icon's corner its middle stands
+local CLOSE, CLOSE_OUT = 18, 2
 local TEXT = {
     title = "Automatic Flyouts",
     intro = "Each of these fills itself with what is in your bags, the best first, and keeps up as your bags change.",
@@ -31,9 +34,11 @@ local TEXT = {
     create = "Create",
     createTip = "Makes a flyout that holds every ticked kind, in the order ticked, each kind's best first.",
     ownTip = "A flyout of your own: %s.",
-    delete = "Right-click to delete it.",
+    delete = "Right-click to change its icon or name. The x deletes it.",
+    deleteTip = "Delete this flyout.",
     askDelete = "Delete your flyout %s? Its macro goes with it.",
-    ownNote = "Each of yours uses one of your general macros. Right-click it on a bar to change its name or icon.",
+    ownNote = "Each of yours uses one of your general macros. Right-click one to change its icon or name; its x "
+        .. "deletes it.",
 }
 UI.TEXT = TEXT
 
@@ -114,10 +119,11 @@ function UI.Icon(kind, parent)
     button:RegisterForDrag("LeftButton")
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     button:SetScript("OnDragStart", function(self) UI.Pick(self.kind.id) end)
-    -- any is picked up with the left button; one of the player's own is deleted with the right
+    -- any is picked up with the left button; the right one gives one of the player's own its icon and name,
+    -- as a flyout's are set from its bar button (its x deletes it)
     button:SetScript("OnClick", function(self, which)
         if which == "RightButton" then
-            if self.kind.own then UI.AskDelete(self.kind) end
+            if self.kind.own and ns.Icon then ns.Icon.OpenKind(self.kind) end
             return
         end
         UI.Pick(self.kind.id)
@@ -125,6 +131,26 @@ function UI.Icon(kind, parent)
     button:SetScript("OnEnter", ShowTip)
     button:SetScript("OnLeave", HideTip)
     return button
+end
+
+-- the game's small close button on the top right corner of one of the player's own: it deletes it, once
+-- that is said again (his words, 2026-11-23: "should have \"x\" appears in top right of each to clear them
+-- instead of right click")
+local function Remove(button)
+    local made, x = pcall(CreateFrame, "Button", nil, button, "UIPanelCloseButtonNoScripts")
+    if not made or not x then x = CreateFrame("Button", nil, button, "UIPanelCloseButton") end
+    x:SetSize(CLOSE, CLOSE)
+    x:ClearAllPoints()
+    x:SetPoint("CENTER", button, "TOPRIGHT", CLOSE_OUT, CLOSE_OUT)
+    x:SetFrameLevel(button:GetFrameLevel() + 2)
+    x:SetScript("OnClick", function() UI.AskDelete(button.kind) end)
+    x:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(TEXT.deleteTip, 1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    x:SetScript("OnLeave", HideTip)
+    return x
 end
 
 local function IsTicked(id)
@@ -176,22 +202,35 @@ function UI.Refresh()
     if not panel.built then return end
     panel.ticked:SetText(#order > 0 and TEXT.ticked:format(PartNames(order)) or TEXT.noneTicked)
     panel.create:SetEnabled(#order > 0)
+    -- Each in a place as wide as its name, so that no name runs into the next (his snip, 2026-11-23: "text
+    -- overlapping when i make multipel custom auto flyouts"); a row too long for the page goes on under it.
     local own = Auto.Mixes()
+    local step, row = Art.ICON * APART, Art.ICON + NAME_H + GAP * 3
+    local room = (panel.content:GetWidth() or 0) - EDGE * 2
+    local x, rows = 0, 1
     for i, kind in ipairs(own) do
         local button = panel.own[i]
         if not button then
             button = UI.Icon(kind, panel.content)
-            if i == 1 then
-                button:SetPoint("TOPLEFT", panel.ticked, "BOTTOMLEFT", GAP, -GAP * 2)
-            else
-                button:SetPoint("LEFT", panel.own[i - 1], "LEFT", Art.ICON * APART, 0)
-            end
+            button.remove = Remove(button)
             panel.own[i] = button
         end
         UI.Dress(button, kind)
+        local wide = math.max(step, (button.label:GetStringWidth() or 0) + GAP * 2)
+        if x > 0 and room > 0 and x + wide > room then
+            x, rows = 0, rows + 1
+        end
+        button:ClearAllPoints()
+        button:SetPoint("TOPLEFT", panel.ticked, "BOTTOMLEFT", x + (wide - Art.ICON) / 2, -(GAP * 2 + (rows - 1) * row))
+        x = x + wide
         button:Show()
     end
     for i = #own + 1, #panel.own do panel.own[i]:Hide() end
+    -- the words under the row, under its last line
+    panel.note:ClearAllPoints()
+    panel.note:SetPoint("TOPLEFT", panel.ticked, "BOTTOMLEFT", 0, -(GAP * 2 + rows * row - GAP))
+    panel.note:SetPoint("RIGHT", panel.content, "RIGHT", -EDGE, 0)
+    UI.Fit()
 end
 
 function UI.Build()

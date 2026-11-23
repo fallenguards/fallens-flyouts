@@ -2656,7 +2656,37 @@ do
     local shown = 0
     for _, button in ipairs(page.own) do shown = shown + (button:IsShown() and 1 or 0) end
     check(#Auto.Mixes() == Auto.MIX_MOST and eighth == nil and whyMost == Auto.TEXT.most and shown == Auto.MIX_MOST,
-        "one row of them and no more: the next is refused, with the reason")
+        "seven of them and no more: the next is refused, with the reason")
+    -- His snip (2026-11-23): "text overlapping when i make multipel custom auto flyouts". Where a name stands:
+    -- under its icon's middle, as wide as its letters.
+    local function span(button)
+        local x = button.point[4] + NS.Art.ICON / 2
+        local half = (button.label:GetStringWidth() or 0) / 2
+        return x - half, x + half, button.point[5]
+    end
+    local apart, xs = true, true
+    for n = 2, #page.own do
+        local _, rightBefore, yBefore = span(page.own[n - 1])
+        local left, _, y = span(page.own[n])
+        if y == yBefore and left < rightBefore + 4 then apart = false end
+        if not (page.own[n].remove and page.own[n].remove.template == "UIPanelCloseButtonNoScripts"
+            and page.own[n].remove.point[2] == page.own[n] and page.own[n].remove.point[3] == "TOPRIGHT") then xs = false end
+    end
+    check(apart, "on the row no name runs into the next, however long it is")
+    check(xs, "each of them has the game's small close button on its top right corner")
+    -- a page too narrow for them all: they go on in a row under it, and the words under the row move down
+    page.content.w = 400
+    Page.Refresh()
+    local lines = {}
+    for _, button in ipairs(page.own) do lines[button.point[5]] = true end
+    local count = 0
+    for _ in pairs(lines) do count = count + 1 end
+    local lowest = 0
+    for y in pairs(lines) do lowest = math.min(lowest, y) end
+    check(count >= 2 and page.note.points[1][5] < lowest - NS.Art.ICON - 16, "a page too narrow for them: they go on in another row, "
+        .. "and the words under them stand under the last: " .. count .. " rows")
+    page.content.w = nil
+    Page.Refresh()
     -- a macro of a kind whose number only begins the same is not this kind's
     macro[2] = "#fallensflyouts mix10"
     check(Auto.Macro("mix1") == nil, "the macro of mix10 is not taken for the macro of mix1")
@@ -2674,9 +2704,39 @@ do
     page.icons[1].scripts.OnClick(page.icons[1], "RightButton")
     check(W.popup == nil and W.cursor == nil and Auto.Unmix("food") == false and Auto.Kind("food") ~= nil,
         "a ready-made kind is not deleted: the right button does nothing on it")
+    -- His words (2026-11-23): "should have \"x\" appears in top right of each to clear them instead of right
+    -- click. right click should be for setting icon like usual"
     page.own[1].scripts.OnClick(page.own[1], "RightButton")
+    local window = NS.Icon.popup
+    check(W.popup == nil and window ~= nil and window:IsShown() and window.BorderBox.IconSelectorEditBox.text == "Food/Drink"
+        and window.BorderBox.SelectedIconArea.SelectedIconButton:GetIconTexture() == 133952 and not NS.Icon.own:IsShown(),
+        "the right button on one of the player's own opens the icon window, with its name and its icon, and deletes nothing")
+    window.BorderBox.IconSelectorEditBox:SetText("Snacks")
+    window.BorderBox.SelectedIconArea.SelectedIconButton:SetIconTexture(4242)
+    window:OkayButton_OnClick()
+    flushAll()
+    local mine = Auto.Kind("mix1")
+    check(mine.name == "Snacks" and mine.icon == 4242 and FallensFlyoutsDB.mixes.list[1].name == "Snacks"
+        and FallensFlyoutsDB.mixes.list[1].icon == 4242 and page.own[1].label.text == "Snacks" and page.own[1].icon.texture == 4242,
+        "Okay: the name and the icon are the kind's, kept with it, and the row shows them")
+    check(W.macros["Snacks"] ~= nil and W.macros["Food/Drink"] == nil and W.macros["Snacks"][1] == 4242 and Auto.Macro("mix1") == "Snacks",
+        "its macro is renamed and given the icon, so the bars show them")
+    check(F9.At("ActionButton9") ~= nil and F9.At("ActionButton9").auto == "mix1" and F9.At("ActionButton9").main.id == "Snacks"
+        and GetActionText(9) == "Snacks", "its flyout on the bar follows the macro's new name")
+    page.own[1].scripts.OnClick(page.own[1], "RightButton")
+    window.BorderBox.IconSelectorEditBox:SetText("")
+    window:OkayButton_OnClick()
+    flushAll()
+    check(Auto.Kind("mix1").name == "Food/Drink" and Auto.Macro("mix1") == "Food/Drink" and F9.At("ActionButton9") ~= nil,
+        "an empty name gives back the name of its kinds, its macro's too")
+    page.own[1].scripts.OnClick(page.own[1], "RightButton")
+    NS.Icon.reset.scripts.OnClick(NS.Icon.reset)
+    flushAll()
+    check(Auto.Kind("mix1").icon == 133952 and FallensFlyoutsDB.mixes.list[1].icon == nil and W.macros["Food/Drink"][1] == 133952,
+        "Reset gives back its own icon")
+    page.own[1].remove.scripts.OnClick(page.own[1].remove)
     check(W.popup ~= nil and W.popup.which == "FALLENSFLYOUTS_CONFIRM" and W.popup.text:find("Food/Drink", 1, true) ~= nil
-        and Auto.Kind("mix1") ~= nil, "the right button on one of the player's own asks first")
+        and Auto.Kind("mix1") ~= nil, "its x asks first")
     StaticPopupDialogs.FALLENSFLYOUTS_CONFIRM.OnAccept(nil, W.popup.data)
     flushAll()
     local left = 0

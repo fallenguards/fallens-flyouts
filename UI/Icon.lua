@@ -283,6 +283,17 @@ local function Okay(self)
     local name = self.BorderBox.IconSelectorEditBox:GetText()
     IconSelectorPopupFrameTemplateMixin.OkayButton_OnClick(self)
     if not flyout then return end
+    -- a kind of the player's own (from the settings page): its name and icon, kept with the kind
+    if flyout.kindId then
+        local QUESTION = 134400
+        local pick = nil
+        if icon ~= opened then pick = icon end
+        if pick == QUESTION then pick = false end
+        local ok, why = ns.Auto.Restyle(flyout.kindId, name, pick)
+        if not ok and why then ns.Warn(why) end
+        if ns.AutoUI then ns.AutoUI.Refresh() end
+        return
+    end
     local named, whyNot = F.SetName(flyout, name)
     if not named and whyNot then ns.Warn(whyNot) end
     if picked then
@@ -297,7 +308,13 @@ local function Reset()
     local flyout = target
     popup:CancelButton_OnClick()
     if not flyout then return end
-    local ok, why = F.Reset(flyout)
+    local ok, why
+    if flyout.kindId then
+        ok, why = ns.Auto.Restyle(flyout.kindId, nil, false)
+        if ns.AutoUI then ns.AutoUI.Refresh() end
+    else
+        ok, why = F.Reset(flyout)
+    end
     if not ok and why then ns.Warn(why) end
 end
 
@@ -396,6 +413,13 @@ local function Build()
     end)
     reset:SetScript("OnLeave", HideTip)
     I.popup, I.own, I.reset, I.search = popup, own, reset, search
+end
+
+-- The icon window for a kind of the player's own that fills itself, from its right-click on the settings
+-- page: its name and its icon, as a flyout's are set from its bar button.
+function I.OpenKind(kind)
+    if not (kind and kind.own) then return end
+    I.Open({ kindId = kind.id, auto = kind.id, icon = kind.icon, name = kind.name, entries = {} })
 end
 
 -- the icon window for one flyout
