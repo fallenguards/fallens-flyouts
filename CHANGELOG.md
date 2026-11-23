@@ -13,6 +13,7 @@
 - A flyout's bar button dragged to another bar slot in combat takes its flyout along at once: its arrow, its keys and a click on the button all open it there. Until now the flyout stayed on the old button until combat ended. A flyout whose button was dropped on, its ability left on the cursor, follows that ability to the button it is set down on.
 - An icon can be moved to another spot of its flyout in combat: drag it onto the icon whose spot it should take, and the icons between move up by one, each spot keeping its key. Until now nothing in a flyout could be moved until combat ended. Out of combat it lifts and slides as before. A flyout that fills itself, and one whose icons stand around its button, keep their order.
 - A flyout's icon shows when its ability is out of range of the target, as a bar button does: its key turns red, and an icon with no key shows the game's range dot. Where the bars are set up to tint a whole button out of range, the flyout's icons take that same tint. Until now a flyout showed no range at all.
+- An ability can be added to a flyout in combat: drag it onto the plus, which stands on the flyout's arrow in combat, or onto an icon of the open flyout. It takes the next spot, with its key, at once. Until now nothing could be added until combat ended. A flyout that fills itself, and one whose icons stand around its button, take none in combat, and a new flyout is still made out of combat.
 
 ## [1.1.3] - 2026-11-22
 

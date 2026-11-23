@@ -113,6 +113,8 @@ function Frame:SetScrollChild(child) self.scrollChild = child end
 function Frame:GetScrollChild() return self.scrollChild end
 function Frame:UpdateScrollChildRect() end
 function Frame:EnableMouseWheel() end
+-- whether the mouse reaches it: a frame it does not reach lets clicks and drops through to what is under it
+function Frame:EnableMouse(v) self.mouse = v end
 function Frame:GetVerticalScrollRange()
     local child = self.scrollChild
     return math.max(0, (child and child.h or 0) - (self.h or 0))
@@ -1009,7 +1011,15 @@ local function boot(alone)
         PlayerCanAttack = function(unit) return unit == "mouseover" and W.mouseover == "foe" end,
         IsModifiedClick = function(what) return IsModifiedClick(what) end,
         strmatch = string.match,
+        strfind = string.find,
         tostring = tostring,
+        tonumber = tonumber,
+        select = select,
+        -- whom an ability is for, as the game tells a snippet
+        IsSpellHelpful = function(id) return C_Spell.IsSpellHelpful(id) end,
+        IsSpellHarmful = function(id) return C_Spell.IsSpellHarmful(id) end,
+        IsHelpfulItem = function(id) return C_Item.IsHelpfulItem(id) end,
+        IsHarmfulItem = function(id) return C_Item.IsHarmfulItem(id) end,
         -- what a slot holds, and whether the player is in a fight
         GetActionInfo = function(slot) return GetActionInfo(slot) end,
         PlayerInCombat = function() return W.combat == true end,
@@ -1032,7 +1042,8 @@ end
 
 -- W.guard (a test's to set): in a fight the client refuses addon code whatever changes a protected frame,
 -- a bar button or one made from a secure template. Secure code (W.secure: a wrap's body being run) may.
-for _, m in ipairs({ "SetAttribute", "SetPoint", "ClearAllPoints", "SetParent", "Show", "Hide", "SetScale" }) do
+for _, m in ipairs({ "SetAttribute", "SetPoint", "ClearAllPoints", "SetParent", "Show", "Hide", "SetScale", "SetWidth",
+    "SetHeight" }) do
     local plain = Frame[m]
     Frame[m] = function(self, ...)
         if W and W.guard and W.combat and not W.secure then
@@ -1081,12 +1092,21 @@ end
 -- A drag let go over a frame, as the client runs it: the wrap's body before (which is told what the
 -- cursor holds, and may answer "message", a pickup, or false), the frame's own handler (a bar button
 -- places what is carried), then the wrap's body after.
+-- (The client's Wrapped_Drag: the body is told all that GetCursorInfo gives, "self,button,kind,value,...",
+-- and a drop comes with no mouse button.)
+local function secureDrop(frame, body, header, ...)
+    local fn = assert(load("local owner = ...\nreturn (function(self, button, kind, value, ...)\n" .. body
+        .. "\nend)(select(2, ...))", frame.name, "t", W.env))
+    W.secure = true
+    local ok, a, b = pcall(fn, header, frame, nil, ...)
+    W.secure = false
+    if not ok then error(a, 0) end
+    return a, b
+end
 function DropOn(frame)
     local wrapped, message = frame.wraps and frame.wraps.OnReceiveDrag, nil
     if wrapped and wrapped.before then
-        local held = W.cursor
-        local kind, value = secureRun(frame, wrapped.before, "self, button, kind, value, owner", frame, "LeftButton",
-            held and held[1] or nil, held and held[2] or nil, wrapped.header)
+        local kind, value = secureDrop(frame, wrapped.before, wrapped.header, GetCursorInfo())
         if kind == false then return end
         if kind == "message" then
             message = value

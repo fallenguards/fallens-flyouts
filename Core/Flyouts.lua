@@ -335,12 +335,118 @@ local LIFT = [[
     lifted = self:GetName()
     return kind, what
 ]]
-local LAND = [[
-    if not (lifted and kind and PlayerInCombat()) then return end
-    local mover = owner:GetFrameRef(lifted)
+-- An ability added to a flyout in a fight. His words (2026-11-23): "flyout swaps in combat work. but i
+-- cant add to a flyout in combat still." Addon code may not touch an icon in a fight; this may. Every
+-- flyout has its twelve icons made and each spot's place told beforehand (Lay), and the keys an added
+-- icon would get (Rebind). What is carried is dropped on the flyout's arrow, where the plus stands in a
+-- fight, or on an icon of the open flyout: the next free icon is given the ability, shown on its spot,
+-- the strip made one icon longer, and its keys bound. The addon is then told (Added), to save it and
+-- draw it. Refused, with a word in red: one the flyout holds already, a full flyout, and a flyout that
+-- fills itself or whose icons stand around its button. `f`: the flyout.
+local ADD = [[
     lifted = nil
+    if not f then return end
+    local id, casts, base = value, value, nil
+    if kind == "spell" then
+        local _, spell, under = ...
+        id, casts, base = spell, spell, under
+    elseif kind == "item" then
+        casts = "item:" .. tostring(value)
+    elseif kind ~= "macro" then
+        return
+    end
+    -- a number, or it is nothing this can add
+    if not id or tonumber(id) ~= id then return end
+    if owner:GetAttribute("still" .. f) then
+        owner:CallMethod("Refused", owner:GetAttribute("auto" .. f) and "auto" or "fight")
+        return
+    end
+    local has = owner:GetAttribute("holds" .. f) or ";"
+    local mark = kind .. ":" .. id .. ";"
+    if strfind(has, ";" .. mark, 1, true) or (base and strfind(has, ";spell:" .. base .. ";", 1, true)) then
+        owner:CallMethod("Refused", "twice")
+        return
+    end
+    local room, n = owner:GetAttribute("room" .. f) or 0, (owner:GetAttribute("count" .. f) or 0) + 1
+    local name = owner:GetAttribute("at" .. f .. "_" .. n)
+    local icon = name and owner:GetFrameRef(name)
+    if room < 1 or not icon then
+        owner:CallMethod("Refused", "full")
+        return
+    end
+    icon:SetAttribute("type", kind)
+    icon:SetAttribute("spell", nil)
+    icon:SetAttribute("item", nil)
+    icon:SetAttribute("macro", nil)
+    icon:SetAttribute(kind, casts)
+    icon:SetAttribute("fhelp", nil)
+    icon:SetAttribute("fharm", nil)
+    owner:SetAttribute("count" .. f, n)
+    owner:SetAttribute("room" .. f, room - 1)
+    owner:SetAttribute("holds" .. f, has .. mark)
+    -- its keys: those its spot was given beforehand. One that is a key of the flyout's button too
+    -- stays the button's while it is held down.
+    local listed = owner:GetAttribute("pkeys" .. f) or 0
+    for j = 1, owner:GetAttribute("xkeys" .. f .. "_" .. n) or 0 do
+        local key = owner:GetAttribute("xkey" .. f .. "_" .. n .. "_" .. j)
+        listed = listed + 1
+        owner:SetAttribute("pkey" .. f .. "_" .. listed, key)
+        owner:SetAttribute("pentry" .. f .. "_" .. listed, name)
+        owner:SetAttribute("pspot" .. f .. "_" .. listed, n)
+        for i = 1, owner:GetAttribute("okeys" .. f) or 0 do
+            if owner:GetAttribute("okey" .. f .. "_" .. i) == key then
+                owner:SetAttribute("obtn" .. f .. "_" .. i, "own" .. i)
+            end
+        end
+    end
+    owner:SetAttribute("pkeys" .. f, listed)
+    icon:Show()
+]] .. BIND .. [[
+    owner:CallMethod("Added", f, n, kind, id)
+    -- the strip, one icon longer
+    local long, grows = owner:GetAttribute("mlong" .. f), owner:GetAttribute("mstep" .. f)
+    if long and grows then
+        local strip = owner:GetFrameRef("menu" .. f)
+        long = long + grows
+        if owner:GetAttribute("mup" .. f) then strip:SetHeight(long) else strip:SetWidth(long) end
+        owner:SetAttribute("mlong" .. f, long)
+    end
+    -- whom the game's Mouseover Cast sends it to, as every icon is told when it is laid
+    local help, harm
+    if kind == "spell" then
+        help, harm = IsSpellHelpful(id), IsSpellHarmful(id)
+        if not help and not harm then help, harm = true, true end
+    elseif kind == "item" then
+        help, harm = IsHelpfulItem(id), IsHarmfulItem(id)
+    end
+    icon:SetAttribute("fhelp", help or nil)
+    icon:SetAttribute("fharm", harm or nil)
+    return "clear"
+]]
+-- A drop on an icon in a fight. The icon lifted off this flyout, still on the cursor, is being moved.
+-- Anything else on the cursor comes from the spellbook, the bags or a bar: it is being added. An icon
+-- lifted earlier and let go elsewhere is told from what is carried now by its ability.
+local LAND = [[
+    if not (kind and PlayerInCombat()) then return end
     local f = self:GetAttribute("fffly")
-    if not (mover and f) or mover:GetAttribute("fffly") ~= f or mover:GetAttribute("type") ~= kind then return end
+    local mover = lifted and owner:GetFrameRef(lifted)
+    lifted = nil
+    local moving = mover and f and mover:GetAttribute("fffly") == f and mover:GetAttribute("type") == kind
+    if moving then
+        local what = mover:GetAttribute(kind)
+        if kind == "spell" then
+            local _, spell, under = ...
+            moving = what == spell or what == under
+        elseif kind == "item" then
+            moving = what == "item:" .. tostring(value)
+        else
+            -- a macro's icon runs it by its name while no other macro has that name: no telling then
+            moving = tonumber(what) ~= what or what == value
+        end
+    end
+    if not moving then
+]] .. ADD .. [[
+    end
     local from, to = mover:GetAttribute("ffspot"), self:GetAttribute("ffspot")
     if from == to then return "clear" end
     local menu = owner:GetFrameRef("menu" .. f)
@@ -627,7 +733,8 @@ end
 local function DragStart(self) ns.Move.Start(self) end
 local function DragStop() ns.Move.Released() end
 
--- what the secure code calls when it has moved a flyout or an icon in a fight (written further down)
+-- what the secure code calls when it has moved a flyout or an icon in a fight (written further down);
+-- F.Added and F.Refused, further down too, when it has added an icon or refused to
 local Rehomed, Shifted
 
 local function Build()
@@ -636,6 +743,8 @@ local function Build()
     root:Hide()
     root.Rehomed = function(_, ...) xpcall(Rehomed, geterrorhandler(), ...) end
     root.Shifted = function(_, ...) xpcall(Shifted, geterrorhandler(), ...) end
+    root.Added = function(_, ...) xpcall(F.Added, geterrorhandler(), ...) end
+    root.Refused = function(_, ...) xpcall(F.Refused, geterrorhandler(), ...) end
     for i, key in ipairs(CLOSE_KEYS) do root:SetAttribute("ckey" .. i, key) end
     root:SetAttribute("ckeys", #CLOSE_KEYS)
     root:SetAttribute("units", 0)
@@ -718,104 +827,109 @@ local function Dim(icon, kind, id)
     return color == READY
 end
 
--- Whether an ability is out of range of the target, as a bar button knows it: true or false, and nil
--- where it asks no range or there is no target. An item's range is asked outside a fight only: in
--- one the client keeps that call from addons.
-local function Far(kind, id)
-    if not UnitExists("target") then return nil end
-    local near
-    if kind == "spell" and C_Spell.IsSpellInRange then
-        near = C_Spell.IsSpellInRange(id, "target")
-    elseif kind == "item" and C_Item.IsItemInRange and not InCombatLockdown() then
-        near = C_Item.IsItemInRange(id, "target")
+-- An open flyout's icons show their range (the helpers keep to a block of their own: the file's own
+-- chunk has no local variables to spare).
+local Ranges
+do
+    -- Whether an ability is out of range of the target, as a bar button knows it: true or false, and nil
+    -- where it asks no range or there is no target. An item's range is asked outside a fight only: in
+    -- one the client keeps that call from addons.
+    local function Far(kind, id)
+        if not UnitExists("target") then return nil end
+        local near
+        if kind == "spell" and C_Spell.IsSpellInRange then
+            near = C_Spell.IsSpellInRange(id, "target")
+        elseif kind == "item" and C_Item.IsItemInRange and not InCombatLockdown() then
+            near = C_Item.IsItemInRange(id, "target")
+        end
+        if Hidden(near) then
+            F.hid.range = true
+            return nil
+        end
+        if near == nil then return nil end
+        return near == false or near == 0
     end
-    if Hidden(near) then
-        F.hid.range = true
-        return nil
-    end
-    if near == nil then return nil end
-    return near == false or near == 0
-end
 
--- What this client's bars do to the icon of a usable ability out of range. The game leaves the icon as
--- it is and reddens the key; where the bars are made to tint the icon as well, a flyout's icons take
--- the same tint. It is read off a bar button that is out of range right now: nil until one was seen,
--- false once the bars were seen to leave theirs alone.
-local farTint, farPlain = nil, 0
-local PLAIN_TIMES, SAME = 3, 0.01
-local function Like(r, g, b, color)
-    return math.abs(r - color[1]) < SAME and math.abs(g - color[2]) < SAME and math.abs(b - color[3]) < SAME
-end
--- `ours`: a texture of the addon's own, for its plain calls. Says whether the button had a word on it.
-local function Sample(button, ours)
-    local slot, icon = Bars.Slot(button), button.icon
-    if not slot or type(icon) ~= "table" or not UIParent.IsVisible(button) then return false end
-    local inRange = C_ActionBar and C_ActionBar.IsActionInRange or IsActionInRange
-    local usableAt = C_ActionBar and C_ActionBar.IsUsableAction or IsUsableAction
-    if not inRange or not usableAt then return false end
-    local near = inRange(slot)
-    if Hidden(near) or not (near == false or near == 0) then return false end
-    local usable = usableAt(slot)
-    if Hidden(usable) or not usable then return false end
-    local r, g, b = ours.GetVertexColor(icon)
-    local gray = ours.IsDesaturated(icon)
-    if Hidden(r) or Hidden(g) or Hidden(b) or Hidden(gray) or type(r) ~= "number" then return false end
-    -- the game's own dimming, caught between two of its looks: no word on the range
-    if Like(r, g, b, NO_POWER) or Like(r, g, b, UNUSABLE) then return false end
-    if Like(r, g, b, READY) and not gray then
-        farPlain = farPlain + 1
-        if farTint == nil or farPlain >= PLAIN_TIMES then farTint = false end
-    else
-        farTint, farPlain = { r, g, b, gray == true }, 0
+    -- What this client's bars do to the icon of a usable ability out of range. The game leaves the icon as
+    -- it is and reddens the key; where the bars are made to tint the icon as well, a flyout's icons take
+    -- the same tint. It is read off a bar button that is out of range right now: nil until one was seen,
+    -- false once the bars were seen to leave theirs alone.
+    local farTint, farPlain = nil, 0
+    local PLAIN_TIMES, SAME = 3, 0.01
+    local function Like(r, g, b, color)
+        return math.abs(r - color[1]) < SAME and math.abs(g - color[2]) < SAME and math.abs(b - color[3]) < SAME
     end
-    return true
-end
-function F.FarTint() return farTint end
+    -- `ours`: a texture of the addon's own, for its plain calls. Says whether the button had a word on it.
+    local function Sample(button, ours)
+        local slot, icon = Bars.Slot(button), button.icon
+        if not slot or type(icon) ~= "table" or not UIParent.IsVisible(button) then return false end
+        local inRange = C_ActionBar and C_ActionBar.IsActionInRange or IsActionInRange
+        local usableAt = C_ActionBar and C_ActionBar.IsUsableAction or IsUsableAction
+        if not inRange or not usableAt then return false end
+        local near = inRange(slot)
+        if Hidden(near) or not (near == false or near == 0) then return false end
+        local usable = usableAt(slot)
+        if Hidden(usable) or not usable then return false end
+        local r, g, b = ours.GetVertexColor(icon)
+        local gray = ours.IsDesaturated(icon)
+        if Hidden(r) or Hidden(g) or Hidden(b) or Hidden(gray) or type(r) ~= "number" then return false end
+        -- the game's own dimming, caught between two of its looks: no word on the range
+        if Like(r, g, b, NO_POWER) or Like(r, g, b, UNUSABLE) then return false end
+        if Like(r, g, b, READY) and not gray then
+            farPlain = farPlain + 1
+            if farTint == nil or farPlain >= PLAIN_TIMES then farTint = false end
+        else
+            farTint, farPlain = { r, g, b, gray == true }, 0
+        end
+        return true
+    end
+    function F.FarTint() return farTint end
 
--- One icon's range on its key, as a bar button shows it: the key red out of range, and with no key
--- the game's dot for an ability that asks a range.
-local function Ranged(frame, kind, id)
-    local far = Far(kind, id)
-    local key = frame.key
-    local text = key:GetText()
-    if text == nil or text == "" or text == RANGE_DOT then key:SetText(far ~= nil and RANGE_DOT or "") end
-    local color = far and RED_FONT_COLOR or ACTIONBAR_HOTKEY_FONT_COLOR
-    if color then key:SetVertexColor(color:GetRGB()) end
-    frame.far = far == true
-    return frame.far
-end
--- and on its icon, where this client's bars tint theirs: never over the game's own dimming
-local function Tinted(frame)
-    local tint = frame.far and frame.clear and farTint or nil
-    if tint then
-        frame.icon:SetVertexColor(tint[1], tint[2], tint[3])
-        frame.icon:SetDesaturated(tint[4])
-        frame.tinted = true
-    elseif frame.tinted then
-        frame.tinted = nil
-        frame.icon:SetDesaturated(false)
-        if frame.clear then frame.icon:SetVertexColor(READY[1], READY[2], READY[3]) end
+    -- One icon's range on its key, as a bar button shows it: the key red out of range, and with no key
+    -- the game's dot for an ability that asks a range.
+    local function Ranged(frame, kind, id)
+        local far = Far(kind, id)
+        local key = frame.key
+        local text = key:GetText()
+        if text == nil or text == "" or text == RANGE_DOT then key:SetText(far ~= nil and RANGE_DOT or "") end
+        local color = far and RED_FONT_COLOR or ACTIONBAR_HOTKEY_FONT_COLOR
+        if color then key:SetVertexColor(color:GetRGB()) end
+        frame.far = far == true
+        return frame.far
     end
-end
--- every icon of one flyout: its range, now
-local function Ranges(unit)
-    if not unit.flyout then return end
-    local any, ours = false, nil
-    for _, frame in ipairs(unit.entries) do
-        local entry = frame.entry
-        if entry then
-            ours = ours or frame.icon
-            if Ranged(frame, Casts(entry)) then any = true end
+    -- and on its icon, where this client's bars tint theirs: never over the game's own dimming
+    local function Tinted(frame)
+        local tint = frame.far and frame.clear and farTint or nil
+        if tint then
+            frame.icon:SetVertexColor(tint[1], tint[2], tint[3])
+            frame.icon:SetDesaturated(tint[4])
+            frame.tinted = true
+        elseif frame.tinted then
+            frame.tinted = nil
+            frame.icon:SetDesaturated(false)
+            if frame.clear then frame.icon:SetVertexColor(READY[1], READY[2], READY[3]) end
         end
     end
-    -- the flyout's own button first: it is the one next to these icons
-    if any and not (unit.host and Sample(unit.host, ours)) and farTint == nil then
-        for _, button in ipairs(Bars.Known() or {}) do
-            if Sample(button, ours) then break end
+    -- every icon of one flyout: its range, now
+    function Ranges(unit)
+        if not unit.flyout then return end
+        local any, ours = false, nil
+        for _, frame in ipairs(unit.entries) do
+            local entry = frame.entry
+            if entry then
+                ours = ours or frame.icon
+                if Ranged(frame, Casts(entry)) then any = true end
+            end
         end
-    end
-    for _, frame in ipairs(unit.entries) do
-        if frame.entry then Tinted(frame) end
+        -- the flyout's own button first: it is the one next to these icons
+        if any and not (unit.host and Sample(unit.host, ours)) and farTint == nil then
+            for _, button in ipairs(Bars.Known() or {}) do
+                if Sample(button, ours) then break end
+            end
+        end
+        for _, frame in ipairs(unit.entries) do
+            if frame.entry then Tinted(frame) end
+        end
     end
 end
 
@@ -999,6 +1113,11 @@ local function Unit(f)
     -- never "unit": the client reads that one as a unit name
     opener:SetAttribute("ffindex", f)
     root:WrapScript(opener, "OnClick", OPENER_WRAP)
+    -- in a fight what is dropped on the arrow is added to the flyout
+    root:WrapScript(opener, "OnReceiveDrag", [[
+        if not (kind and PlayerInCombat()) then return end
+        local f = self:GetAttribute("ffindex")
+    ]] .. ADD)
     root:SetAttribute("opener" .. f, OPENER .. f)
     opener:SetScript("PostClick", function(_, button, down) Tell("opener", unit, button, down) end)
     unit.opener = opener
@@ -1331,6 +1450,28 @@ local function Picks(unit)
         if not pick.pad and (pads[i] or not unit.radial) then pick.pad = Free(pads[i], pool, taken) end
     end
     return picks
+end
+-- The keys an icon added in a fight would get, by the place it would take: the secure code that adds it
+-- cannot work them out. As Picks gives them: the key set for that spot of every flyout, else the next
+-- free one. None for a flyout nothing is added to in a fight.
+local function Spare(unit, picks)
+    local flyout, spare, taken = unit.flyout, {}, {}
+    if flyout.auto or unit.radial then return spare end
+    for _, pick in ipairs(picks) do
+        if pick.key then taken[pick.key] = true end
+        if pick.pad then taken[pick.pad] = true end
+    end
+    local pool = F.Faces(flyout) and PADS_ALL or PADS
+    for i = #picks + 1, MAX do
+        local key, pad = Binds.Pick(i)
+        local pick = {}
+        if key and not taken[key] then pick.key, taken[key] = key, true end
+        if pad and not taken[pad] then pick.pad, taken[pad] = pad, true end
+        pick.key = pick.key or Free(KEYS[i], KEYS, taken)
+        pick.pad = pick.pad or Free(PadsOf(unit, i)[i], pool, taken)
+        spare[i] = pick
+    end
+    return spare
 end
 
 -- one label per icon: the pad's symbol while the pad is the input in use, else the key
@@ -1733,6 +1874,21 @@ local function Lay(unit)
     Named(unit)
     State(unit)
     root:SetAttribute("count" .. unit.index, count)
+    -- for an icon added in a fight: what the flyout holds (a macro by its place in the list, as the
+    -- cursor names it), how many more it takes, and how its strip grows by one
+    local whole, holds = flyout.all or flyout.entries, { "" }
+    for _, entry in ipairs(whole) do
+        local id = entry.id
+        if entry.kind == "macro" then id = Macros.Find(entry) end
+        if id then holds[#holds + 1] = entry.kind .. ":" .. tostring(id) end
+    end
+    holds[#holds + 1] = ""
+    root:SetAttribute("holds" .. unit.index, table.concat(holds, ";"))
+    root:SetAttribute("room" .. unit.index, MAX - #whole)
+    root:SetAttribute("mup" .. unit.index, upright or nil)
+    root:SetAttribute("mlong" .. unit.index, long)
+    root:SetAttribute("mstep" .. unit.index, Art.ICON + Art.NEXT)
+    root:SetAttribute("auto" .. unit.index, flyout.auto and true or nil)
     unit.placed = Bars.Placed(host)
     if ready then Laid()[flyout.host] = { way = way, scale = scale } end
     Hung(unit)
@@ -1868,6 +2024,23 @@ local function Rebind()
                     end
                 end
             end
+        end
+        -- the keys of the places still free, for an icon added in a fight
+        unit.spare = Spare(unit, unit.picks)
+        for i = #unit.picks + 1, MAX do
+            local pick, extra, told = unit.spare[i], 0, {}
+            local function Extra(key)
+                if told[key] then return end
+                extra, told[key] = extra + 1, true
+                root:SetAttribute("xkey" .. f .. "_" .. i .. "_" .. extra, key)
+            end
+            for _, base in ipairs(pick and { pick.key, pick.pad } or {}) do
+                Extra(base)
+                for mod in pairs(mods) do
+                    if not base:find("-", 1, true) and not plain[mod .. base] then Extra(mod .. base) end
+                end
+            end
+            root:SetAttribute("xkeys" .. f .. "_" .. i, extra)
         end
         for i, key in ipairs(unit.keys) do
             -- a key that is a pick while open says so in its click's name: held, it is kept from its
@@ -2291,6 +2464,19 @@ end
 
 function F.List() return list end
 function F.Units() return units, used end
+-- the flyouts an ability can be added to in a fight, each as its frames: made by hand, in a row, with
+-- room, and on a button
+function F.Roomy()
+    local out = {}
+    for f = 1, used do
+        local unit = units[f]
+        local flyout = unit.flyout
+        if flyout and unit.host and not flyout.auto and not unit.radial and #Full(flyout) < MAX then
+            out[#out + 1] = unit
+        end
+    end
+    return out
+end
 function F.Open() return open end
 function F.Lost(flyout) return Run(flyout).lost == true end
 function F.UnitOf(flyout) return Run(flyout).unit end
@@ -2469,7 +2655,8 @@ function F.Moved() moved = true end
 function F.At(name)
     for f = 1, used do
         local unit = units[f]
-        if unit.host:GetName() == name then return unit.flyout, unit end
+        -- one knocked off its button in a fight has none until its ability is set down
+        if unit.host and unit.host:GetName() == name then return unit.flyout, unit end
     end
 end
 
@@ -2559,6 +2746,32 @@ function F.StackLed(main, entry, button)
     F.Apply()
     return flyout
 end
+
+-- The secure code added an icon to a flyout in a fight: it is saved, and drawn, which addon code may
+-- still do then (an icon's picture, its key's text). `n`: its place; `id`: a spell or an item, or a
+-- macro's place in the list. All of it is laid afresh when the fight is over.
+function F.Added(f, n, kind, id)
+    local unit = units[f]
+    local flyout, frame = unit and unit.flyout, unit and unit.entries[n]
+    if not (flyout and frame) then return end
+    local entry = { kind = kind, id = id }
+    if kind == "macro" then entry = Macros.Entry(id) or { kind = kind, id = (GetMacroInfo(id)) } end
+    Append(flyout, entry)
+    local whole = Full(flyout)
+    local new = whole[#whole]
+    if flyout.all then flyout.entries[#flyout.entries + 1] = new end
+    frame.entry, frame.flyout, frame.entryIndex = new, flyout, n
+    frame.icon:SetTexture(F.Icon(new))
+    if unit.picks then unit.picks[n] = unit.spare and unit.spare[n] or {} end
+    pending = true
+    if not InCombatLockdown() then return F.Settle() end
+    Labels(unit)
+    State(unit)
+    ns.Log(("in a fight %s was added to the flyout on %s, at place %d"):format(Name(new), tostring(flyout.host), n))
+    Tell("added", unit, n)
+end
+-- and refused to: said in red, as out of a fight
+function F.Refused(why) ns.Warn(TEXT[why] or TEXT.fight) end
 
 local function Forget(flyout)
     for i = #list, 1, -1 do

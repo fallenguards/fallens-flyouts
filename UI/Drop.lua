@@ -1,5 +1,6 @@
 local _, ns = ...
 -- luacheck: read globals UIParent CreateFrame InCombatLockdown GetCursorInfo ClearCursor GetMacroInfo GameTooltip
+-- luacheck: read globals C_Timer
 
 -- The plus on bar buttons while carrying: a drop there stacks.
 local D = {}
@@ -177,7 +178,10 @@ end
 
 local function Tab(button, name)
     local tab = tabs[name]
-    if tab then return tab end
+    if tab then
+        tab:EnableMouse(true)
+        return tab
+    end
     tab = CreateFrame("Frame", nil, UIParent)
     tab:Hide()
     tab:SetFrameStrata(LAYER)
@@ -210,10 +214,32 @@ function D.Hide()
     end
 end
 
+-- In a fight addon code may add nothing to a flyout: the flyout's own secure code does, at a drop on
+-- its arrow. The plus is then a mark and no more: it stands on the arrow of each flyout that takes one
+-- more, and lets the drop through to it.
+local function ShowInFight()
+    local shown = 0
+    for _, unit in ipairs(F.Roomy()) do
+        local button = unit.host
+        local tab = Tab(button, button:GetName())
+        tab:EnableMouse(false)
+        -- a bar's measure may be kept from addons in a fight: the plus then keeps the size it had
+        local ok, scale = pcall(Bars.Scale, button)
+        if ok and Bars.Plain(scale) then tab:SetScale(scale) end
+        tab:ClearAllPoints()
+        tab:SetSize(BADGE_HIT, BADGE_HIT)
+        tab:SetPoint("CENTER", unit.opener, "CENTER")
+        tab.badge:Show()
+        tab:Show()
+        shown = shown + 1
+    end
+    return shown
+end
+
 -- every button that has a flyout or whose action can lead one
 function D.Show()
     D.Hide()
-    if InCombatLockdown() then return 0 end
+    if InCombatLockdown() then return ShowInFight() end
     local shown = 0
     for _, button in ipairs(Bars.All()) do
         local name = button:GetName()
@@ -242,14 +268,17 @@ local function Refresh()
 end
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID", "CURSOR_CHANGED", "PLAYER_REGEN_DISABLED" }) do
+for _, event in ipairs({ "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID", "CURSOR_CHANGED", "PLAYER_REGEN_DISABLED",
+    "PLAYER_REGEN_ENABLED" }) do
     events:RegisterEvent(event)
 end
 events:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_REGEN_DISABLED" then
+    if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
+        -- the plus is another in a fight: shown afresh for what is carried. A fight's first event
+        -- comes a moment before the game calls it one: that one is looked at a moment later.
         lastKind = nil
         D.Hide()
-    else
-        Refresh()
+        if event == "PLAYER_REGEN_DISABLED" then return C_Timer.After(0, Refresh) end
     end
+    Refresh()
 end)

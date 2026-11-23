@@ -271,7 +271,7 @@ end
 -- whether the mouse is on the open flyout, its bar button or the grip itself
 local function Over()
     if not shown then return false end
-    if shown.menu:IsMouseOver() or shown.host:IsMouseOver() then return true end
+    if shown.menu:IsMouseOver() or (shown.host and shown.host:IsMouseOver()) then return true end
     return grip ~= nil and grip:IsShown() and grip:IsMouseOver()
 end
 
