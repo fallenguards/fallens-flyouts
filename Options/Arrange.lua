@@ -8,18 +8,30 @@ ns.Arrange = A
 local F, Art = ns.Flyouts, ns.Art
 
 local EDGE, GAP, LINE, BUTTON_FLOOR, CHROME = 16, 8, 22, 70, 20
--- a row of the keys list: the room for an icon's name, how wide its key is, and the room between rows
-local NAME_W, KEY_W, ROW_GAP, FOOT = 200, 150, 4, 1
+-- The keys of each flyout, as the game's Keybindings options show a section: a banner that opens and
+-- shuts, and under it a row for each key. The banner's art and its measures are the game's own
+-- (SettingsExpandableSectionTemplate), and so are a row's (KeyBindingFrameBindingTemplate): its height,
+-- how far in its text starts, the text's room, and the key button's size. The key button itself is the
+-- game's (KeyBindingFrameBindingButtonTemplate).
+local BANNER = { left = "Options_ListExpand_Left", middle = "_Options_ListExpand_Middle",
+    shut = "Options_ListExpand_Right", open = "Options_ListExpand_Right_Expanded" }
+local BANNER_H, BANNER_IN, BANNER_UP, BANNER_ICON = 30, 21, 2, 18
+local ROW_H, ROW_IN, ROW_TOP, LABEL_W, KEY_W, KEY_H, ROW_ICON, FOOT = 25, 37, 6, 170, 160, 22, 18, 1
+local KEY_BUTTON = "KeyBindingFrameBindingButtonTemplate"
 -- how much the picked icon grows, as a held one does
 local GROW = 1.25
 local TEXT = {
-    keysHead = "Keys of one flyout",
-    keysNote = "The game's Keybindings options set a key for each spot of every flyout. Here an icon of one flyout "
-        .. "gets a key of its own: click its key, then press the key. Right-click gives it its spot's key back.",
+    keysHead = "Flyout keys",
+    keysNote = "The game's Keybindings options set a key for each spot of every flyout. Here each flyout has a "
+        .. "bar: open it, click an icon's key and press the key that icon should have in that flyout. "
+        .. "Right-click gives it its spot's key back.",
     keysWait = "Press a key for %s. Escape leaves it as it is.",
+    keysNone = "No flyout is on the bars.",
     keyPress = "Press a key",
     keyTip = "Click, then press the key that picks this icon while its flyout is open. Right-click gives it "
         .. "its spot's key back.",
+    keyOwn = "This is the icon's own key in this flyout.",
+    keySpot = "This is the key of its spot, the same in every flyout.",
     head = "Arrange a flyout",
     -- for those with a mouse: nobody is to take this section for the way a flyout is made
     live = "With a mouse none of this is needed: drag a spell, item or macro onto a bar button, where the + "
@@ -78,6 +90,87 @@ local function KeyName(key, pad)
     return text or ""
 end
 
+-- which flyouts' banners are open: by the flyout, for as long as it is one
+local opened = setmetatable({}, { __mode = "k" })
+local Banner, Row
+
+-- a flyout's own picture and name: those it was given, else its button's ability's
+local function Face(flyout)
+    local lead = flyout.main or flyout.entries[1]
+    return flyout.icon or (lead and F.Icon(lead)) or nil, flyout.name or (lead and F.Name(lead)) or ""
+end
+
+-- The keys section: a banner for each flyout on the bars, and under an open one a row for each icon.
+-- Each stands under the one before it, so the list is as long as it has to be.
+function A.KeysRefresh()
+    local w = panel and panel.arrange
+    if not (w and w.banners) then return end
+    local waiting = ns.Keys and ns.Keys.Waiting()
+    local list = Flyouts()
+    local last, drop = w.keysNote, -GAP * 2
+    local function Under(frame, down)
+        frame:ClearAllPoints()
+        frame:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, down)
+        frame:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)
+        frame:Show()
+        last = frame
+    end
+    for n, flyout in ipairs(list) do
+        local banner = w.banners[n] or Banner()
+        w.banners[n] = banner
+        banner.flyout = flyout
+        local icon, name = Face(flyout)
+        banner.icon:SetTexture(icon)
+        banner.text:SetText(name)
+        local open = opened[flyout] == true
+        banner.open = open
+        banner.right:SetAtlas(open and BANNER.open or BANNER.shut, true)
+        Under(banner, drop)
+        drop = -GAP / 2
+        for i = 1, F.MAX do
+            local row = banner.rows[i]
+            local entry = open and flyout.entries[i] or nil
+            if entry then
+                row = row or Row(banner, i)
+                banner.rows[i] = row
+                row.icon:SetTexture(F.Icon(entry))
+                row.label:SetText(F.Name(entry))
+                local key, pad, own = F.Picked(flyout, i)
+                local listening = waiting ~= nil and waiting.flyout == flyout and waiting.i == i
+                row.key:SetText(listening and TEXT.keyPress or KeyName(key, pad))
+                row.key.tip = TEXT.keyTip .. "\n" .. (own and TEXT.keyOwn or TEXT.keySpot)
+                -- lit as the game lights a key it is waiting to be given
+                row.key.waiting = listening
+                if row.key.SetSelected then row.key:SetSelected(listening) end
+                Under(row, i == 1 and -ROW_TOP or 0)
+            elseif row then
+                row:Hide()
+            end
+        end
+    end
+    for n = #list + 1, #w.banners do
+        local banner = w.banners[n]
+        banner.flyout = nil
+        banner:Hide()
+        for _, row in pairs(banner.rows) do row:Hide() end
+    end
+    local name = waiting and waiting.flyout.entries[waiting.i] and F.Name(waiting.flyout.entries[waiting.i])
+    w.keysNote:SetText(name and TEXT.keysWait:format(name) or (#list == 0 and TEXT.keysNone or TEXT.keysNote))
+    -- what stands under the list hangs on its last line
+    w.foot:ClearAllPoints()
+    w.foot:SetPoint("TOPLEFT", last, "BOTTOMLEFT")
+end
+
+-- a press on a flyout's banner opens or shuts its rows
+function A.KeysToggle(flyout)
+    if not flyout then return end
+    local K = ns.Keys
+    if K and K.Waiting() and K.Waiting().flyout == flyout then K.Stop() end
+    opened[flyout] = not opened[flyout] or nil
+    A.Refresh()
+end
+function A.KeysOpen(flyout) return opened[flyout] == true end
+
 function A.Refresh()
     if not (panel and panel.arrange) then return end
     local w = panel.arrange
@@ -85,33 +178,7 @@ function A.Refresh()
     if flyout and held and not flyout.entries[held] then held = nil end
     if not flyout then held = nil end
     w.which:SetText(flyout and TEXT.which:format(at, count, F.Name(flyout.main)) or TEXT.none)
-    -- the keys list: the same flyout, a row for each of its icons
-    local waiting = ns.Keys and ns.Keys.Waiting()
-    if waiting and waiting.flyout ~= flyout then waiting = nil end
-    w.keyWhich:SetText(w.which:GetText())
-    w.keyPrev:SetEnabled(count > 1)
-    w.keyNext:SetEnabled(count > 1)
-    local last = w.keyPrev
-    for i, row in ipairs(w.rows) do
-        local entry = flyout and flyout.entries[i]
-        row:SetShown(entry ~= nil)
-        if entry then
-            last = row
-            row.icon:SetTexture(F.Icon(entry))
-            row.name:SetText(F.Name(entry))
-            local key, pad, own = F.Picked(flyout, i)
-            local listening = waiting ~= nil and waiting.i == i
-            row.key:SetText(listening and TEXT.keyPress or KeyName(key, pad))
-            -- a key of the icon's own in the game's gold, its spot's key in white
-            row.key:SetNormalFontObject(own and "GameFontNormal" or "GameFontHighlight")
-            if listening then row.key:LockHighlight() else row.key:UnlockHighlight() end
-        end
-    end
-    local name = waiting and flyout.entries[waiting.i] and F.Name(flyout.entries[waiting.i])
-    w.keysNote:SetText(name and TEXT.keysWait:format(name) or TEXT.keysNote)
-    -- what stands under the list hangs on its last row
-    w.foot:ClearAllPoints()
-    w.foot:SetPoint("TOPLEFT", last, "BOTTOMLEFT")
+    A.KeysRefresh()
     w.prev:SetEnabled(count > 1)
     w.next:SetEnabled(count > 1)
     w.turn:SetEnabled(flyout ~= nil and F.UnitOf(flyout) ~= nil)
@@ -134,10 +201,9 @@ function A.Refresh()
     if ns.ProfileUI and ns.ProfileUI.Fit then ns.ProfileUI.Fit() end
 end
 
--- A click on the key of icon i: the left button waits for the key it is to have, or stops waiting; the
--- right button gives the icon its spot's key back.
-function A.Key(i, button)
-    local flyout = Current()
+-- A click on the key of icon i of a flyout: the left button waits for the key it is to have, or stops
+-- waiting; the right button gives the icon its spot's key back. `key`: the button clicked.
+function A.Key(flyout, i, button, key)
     local K = ns.Keys
     if not (flyout and flyout.entries[i] and K) then return end
     local was = K.Waiting()
@@ -147,7 +213,7 @@ function A.Key(i, button)
         local ok, why = F.SetKey(flyout, i, nil, false)
         if not ok and why then ns.Warn(why) end
     elseif not (was and was.flyout == flyout and was.i == i) then
-        local ok, why = K.Listen(flyout, i, holder, A.Refresh, panel.arrange.rows[i].key)
+        local ok, why = K.Listen(flyout, i, holder, A.Refresh, key)
         if not ok and why then ns.Warn(why) end
     end
     A.Refresh()
@@ -236,26 +302,55 @@ local function Icon(i)
     return button
 end
 
--- a row of the keys list: an icon, its name, and its key as a button
-local function Row(i)
+-- a flyout's banner: the game's own section art, with the flyout's picture before its name
+function Banner()
+    local banner = CreateFrame("Button", nil, holder)
+    banner:Hide()
+    banner:SetHeight(BANNER_H)
+    banner.left = banner:CreateTexture(nil, "BACKGROUND")
+    banner.left:SetAtlas(BANNER.left, true)
+    banner.left:SetPoint("TOPLEFT")
+    banner.right = banner:CreateTexture(nil, "BACKGROUND")
+    banner.right:SetAtlas(BANNER.shut, true)
+    banner.right:SetPoint("TOPRIGHT")
+    banner.middle = banner:CreateTexture(nil, "BACKGROUND")
+    banner.middle:SetAtlas(BANNER.middle, true)
+    banner.middle:SetPoint("TOPLEFT", banner.left, "TOPRIGHT")
+    banner.middle:SetPoint("TOPRIGHT", banner.right, "TOPLEFT")
+    banner.icon = banner:CreateTexture(nil, "ARTWORK")
+    banner.icon:SetSize(BANNER_ICON, BANNER_ICON)
+    banner.icon:SetPoint("LEFT", BANNER_IN, BANNER_UP)
+    banner.text = banner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    banner.text:SetPoint("LEFT", banner.icon, "RIGHT", GAP, 0)
+    banner.text:SetJustifyH("LEFT")
+    banner.rows = {}
+    banner:SetScript("OnClick", function(self) A.KeysToggle(self.flyout) end)
+    return banner
+end
+
+-- a row under a banner: an icon's picture and name, and its key as the game's own key button
+function Row(banner, i)
     local row = CreateFrame("Frame", nil, holder)
-    row:SetSize(LINE + GAP + NAME_W + GAP + KEY_W, LINE)
+    row:Hide()
+    row:SetHeight(ROW_H)
     row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(LINE, LINE)
-    row.icon:SetPoint("LEFT")
-    row.name = row:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    row.name:SetPoint("LEFT", row.icon, "RIGHT", GAP, 0)
-    row.name:SetWidth(NAME_W)
-    row.name:SetJustifyH("LEFT")
-    row.name:SetWordWrap(false)
-    row.key = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.key:SetSize(KEY_W, LINE)
-    row.key:SetPoint("LEFT", row.name, "RIGHT", GAP, 0)
-    row.key:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    row.key.tip = TEXT.keyTip
-    row.key:SetScript("OnClick", function(_, button) A.Key(i, button) end)
-    row.key:SetScript("OnEnter", ShowTip)
-    row.key:SetScript("OnLeave", HideTip)
+    row.icon:SetSize(ROW_ICON, ROW_ICON)
+    row.icon:SetPoint("LEFT", ROW_IN, 0)
+    row.label = row:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    row.label:SetPoint("LEFT", row.icon, "RIGHT", GAP, 0)
+    row.label:SetWidth(LABEL_W)
+    row.label:SetJustifyH("LEFT")
+    row.label:SetWordWrap(false)
+    -- the game's key button; a client without it gets the game's plain button
+    local made, key = pcall(CreateFrame, "Button", nil, row, KEY_BUTTON)
+    if not made then key = CreateFrame("Button", nil, row, "UIPanelButtonTemplate") end
+    row.key = key
+    key:SetSize(KEY_W, KEY_H)
+    key:SetPoint("LEFT", row.label, "RIGHT", GAP, 0)
+    key:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    key:SetScript("OnClick", function(self, button) A.Key(banner.flyout, i, button, self) end)
+    key:SetScript("OnEnter", ShowTip)
+    key:SetScript("OnLeave", HideTip)
     return row
 end
 
@@ -305,7 +400,7 @@ function A.Build(page, above, scrolled)
     if page.arrange then return end
     panel, holder = page, scrolled or page
     local w = {}
-    -- first the keys of one flyout: for everyone, where the section under it is for a controller
+    -- first the keys of each flyout: for everyone, where the section under it is for a controller
     local keysHead = holder:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     keysHead:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -GAP * 3)
     keysHead:SetText(TEXT.keysHead)
@@ -314,26 +409,12 @@ function A.Build(page, above, scrolled)
     w.keysNote:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)
     w.keysNote:SetJustifyH("LEFT")
     w.keysNote:SetText(TEXT.keysNote)
-    w.keyPrev = Button(TEXT.prev, TEXT.prevTip, function() A.Step(-1) end)
-    w.keyPrev:SetPoint("TOPLEFT", w.keysNote, "BOTTOMLEFT", 0, -GAP * 2)
-    w.keyNext = Button(TEXT.next, TEXT.nextTip, function() A.Step(1) end)
-    w.keyNext:SetPoint("LEFT", w.keyPrev, "RIGHT", GAP / 2, 0)
-    w.keyWhich = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    w.keyWhich:SetPoint("LEFT", w.keyNext, "RIGHT", GAP, 0)
-    w.rows = {}
-    for i = 1, F.MAX do
-        local row = Row(i)
-        if i == 1 then
-            row:SetPoint("TOPLEFT", w.keyPrev, "BOTTOMLEFT", 0, -GAP * 2)
-        else
-            row:SetPoint("TOPLEFT", w.rows[i - 1], "BOTTOMLEFT", 0, -ROW_GAP)
-        end
-        w.rows[i] = row
-    end
-    -- the list is as long as the flyout has icons: what follows hangs on this, set under its last row
+    -- a banner for each flyout, made as there are flyouts (A.KeysRefresh); what follows the list hangs
+    -- on this, set under its last line
+    w.banners = {}
     w.foot = CreateFrame("Frame", nil, holder)
     w.foot:SetSize(FOOT, FOOT)
-    w.foot:SetPoint("TOPLEFT", w.keyPrev, "BOTTOMLEFT")
+    w.foot:SetPoint("TOPLEFT", w.keysNote, "BOTTOMLEFT")
     -- the page put away ends a wait for a key
     holder:HookScript("OnHide", function() if ns.Keys then ns.Keys.Stop() end end)
     local head = holder:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")

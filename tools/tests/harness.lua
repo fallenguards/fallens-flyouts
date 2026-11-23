@@ -78,7 +78,13 @@ function Frame:GetScaledRect() return nil end
 -- seen or not, and a rectangle a test gives it: left, right, top, bottom
 function Frame:SetAlpha(v) self.alpha = v end
 -- the last anchor given: point, frame, its point, x, y
-function Frame:SetPoint(...) self.point = { ... } end
+-- A frame's anchors: every one set since they were last cleared (points), and the last of them (point).
+function Frame:SetPoint(...)
+    self.point = { ... }
+    self.points = self.points or {}
+    self.points[#self.points + 1] = self.point
+end
+function Frame:ClearAllPoints() self.points = {} end
 function Frame:GetPoint()
     if self.point then return table.unpack(self.point) end
 end

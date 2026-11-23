@@ -12,6 +12,6 @@ Shift-drag an icon to move it inside its flyout, or drag it out to take it off. 
 
 Automatic flyouts fill themselves from your bags: Food, Drink, Potions, Elixirs, Flasks, Scrolls and Bandages, each dragged onto a bar from the Automatic Flyouts page of the settings. On the same page several of those kinds can be ticked and made into one flyout of your own (Food and Drink together, say).
 
-`/ff` opens the settings: profiles, flyout size, the keys of each flyout, and an Arrange section for moving icons without a drag. The game's Keybindings options have a Fallen's Flyouts section with a row for each of the twelve spots of every flyout. A key for one icon of one flyout is set in the settings, under Keys of one flyout, or by hovering the icon in Quick Keybind Mode.
+`/ff` opens the settings: profiles, flyout size, the keys of each flyout, and an Arrange section for moving icons without a drag. The game's Keybindings options have a Fallen's Flyouts section with a row for each of the twelve spots of every flyout. A key for one icon of one flyout is set in the settings, under Flyout keys, or by hovering the icon in Quick Keybind Mode.
 
 Report a problem or ask for something under **Issues**.
