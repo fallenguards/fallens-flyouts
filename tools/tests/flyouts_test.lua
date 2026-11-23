@@ -4556,92 +4556,6 @@ do
     login("Player-1-0000000A")
 end
 
-print("an icon moved inside its flyout in a fight: a gap opens where the mouse is, follows it, and it lands there")
-do
-    -- His words (2026-11-23): "moving icons within a flyout to diff order doesnt work"; "do you not see the flyout
-    -- re-ordering preview not being possible in combat??". His log: Healing Touch lifted in a fight, then let go
-    -- of on the world: the flyout had closed up behind it, and a drop on an icon could not put it at the end.
-    login("Player-1-0000000G")
-    local F13 = NS.Flyouts
-    for id = 501, 503 do stack("ActionButton1", id) end
-    local flyout, unit = F13.At("ActionButton1")
-    local f, r = unit.index, root()
-    local function ids()
-        local out = {}
-        for i, held in ipairs(flyout.entries) do out[i] = tostring(held.id) end
-        return table.concat(out, " ")
-    end
-    local function stands(frame) return table.concat({ tostring(frame.point[1]), tostring(frame.point[4]), tostring(frame.point[5]) }, ",") end
-    local function long() return math.max(unit.menu.w, unit.menu.h) end
-    local spots = {}
-    for i = 1, 4 do spots[i] = stands(entry(f, i)) end
-    local full = long()
-    local one, two, three, four = entry(f, 1), entry(f, 2), entry(f, 3), entry(f, 4)
-    tap("1")
-    W.guard = true
-    fire("PLAYER_REGEN_DISABLED")
-    W.combat = true
-    flushAll()
-    local caught = #W.caught
-    DragOff(two)
-    flushAll()
-    check(ids() == "101 502 503" and stands(three) == spots[2] and not two:IsShown() and long() < full,
-        "lifted, it is off its flyout at once, the others closed up behind it, as before: " .. ids())
-    -- the mouse comes back over the flyout, onto the icon now standing where it stood
-    Enter(three)
-    check(stands(three) == spots[3] and stands(four) == spots[4] and long() == full and not two:IsShown()
-        and unit.menu.mouse == true, "brought back over its flyout, a gap opens where the mouse is: the others make room, "
-        .. "and the strip is as long as before")
-    -- on to the last icon: the gap goes with the mouse
-    Leave(three, four)
-    Enter(four)
-    check(stands(three) == spots[2] and stands(four) == spots[3] and long() == full,
-        "the gap goes with the mouse: the icon it passes over moves up a spot into the gap")
-    -- let go in the gap, at the end of the flyout
-    DropOn(unit.menu)
-    flushAll()
-    check(W.cursor == nil and ids() == "101 502 503 501" and two:IsShown() and stands(two) == spots[4]
-        and r.attrs["count" .. f] == 4 and unit.menu.mouse == false,
-        "let go in the gap it lands there, at the end, which a drop on an icon could not do: " .. ids())
-    check(unit.menu:IsShown(), "the flyout stays open")
-    local before = #W.casts
-    tap("4")
-    check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:501", "and the fourth spot's key picks it there: "
-        .. tostring(W.casts[#W.casts]))
-    -- the second icon (502 now) lifted again, brought back over the flyout, then taken off it: the gap
-    -- closes behind it
-    tap("1")
-    DragOff(three)
-    Enter(two)
-    check(long() == full and unit.menu.mouse == true, "lifted again and brought back: a gap again")
-    Leave(two, nil)
-    check(long() < full and unit.menu.mouse == false and ids() == "101 503 501",
-        "the mouse taken off the flyout: the gap closes, and it is off the flyout: " .. ids())
-    -- let go of on nothing, then another spell carried over the flyout: no gap kept for the one let go of
-    W.cursor = nil
-    fire("ACTIONBAR_HIDEGRID")
-    flushAll()
-    C_Spell.PickupSpell(505)
-    DropOn(entry(f, 2))
-    flushAll()
-    check(ids() == "101 503 505" and W.cursor ~= nil and W.cursor[4] == 501 and long() < full,
-        "another spell dropped on an icon then takes its place as ever, with no gap left open: " .. ids())
-    W.cursor = nil
-    check(#W.caught == caught, "none of it raised an error")
-    -- the fight over: laid afresh as saved
-    if unit.menu:IsShown() then tap("1") end
-    W.combat = false
-    fire("PLAYER_REGEN_ENABLED")
-    for _ = 1, 4 do flushAll() end
-    W.guard = nil
-    local after = F13.At("ActionButton1")
-    check(after == flyout and ids() == "101 503 505", "the fight over: as it was left: " .. ids())
-    local all = F13.List()
-    for i = #all, 1, -1 do table.remove(all, i) end
-    F13.Apply()
-    flushAll()
-end
-
 print("a druid's form turns Action Bar 1 to another page: its flyouts follow at once, in a fight too")
 do
     -- His words (2026-11-23): "ours is not working on druid forms... i make the flyout then click it and it
@@ -4814,6 +4728,75 @@ do
     flushAll()
     check(not opens("1") and not opens("Q") and r.attrs["page-1"] == nil and r.attrs["page-2"] == nil
         and r.attrs["page-97"] == nil, "none left behind for what follows")
+end
+
+print("with the setting on, a flyout's key pressed again casts the icon picked last from it")
+do
+    -- A player's ask (2026-11-23): "double tapping a flyout keybind hits the last used spell from it".
+    login("Player-1-0000000D")
+    local F14 = NS.Flyouts
+    stack("ActionButton1", 501)
+    stack("ActionButton1", 502)
+    rebound()
+    flushAll()
+    local flyout, unit = F14.At("ActionButton1")
+    check(F14.Twice() == false, "off unless turned on")
+    tap("E")
+    check(unit.menu:IsShown(), "the button's key opens its flyout")
+    tap("3")
+    local casts = #W.casts
+    tap("E")
+    tap("E")
+    check(#W.casts == casts and not unit.menu:IsShown(), "off: pressed again, the key only shuts it")
+    F14.SetTwice(true)
+    flushAll()
+    tap("E")
+    casts = #W.casts
+    tap("E")
+    check(#W.casts == casts + 1 and W.casts[#W.casts] == "spell:502" and not unit.menu:IsShown(),
+        "on: pressed again, the key casts the icon picked last (the third, 502) and shuts it: " .. tostring(W.casts[#W.casts]))
+    -- the key that is one of its picks as well stays that pick
+    tap("1")
+    tap("1")
+    check(W.casts[#W.casts] == "spell:101" and not unit.menu:IsShown(), "a key that is one of its picks stays that pick")
+    -- held down, the key keeps it open for picks, as ever
+    press("E")
+    tap("2")
+    release("E")
+    check(W.casts[#W.casts] == "spell:501" and not unit.menu:IsShown(), "held, the key keeps it open for a pick, and it "
+        .. "shuts when the key is let go")
+    -- kept through a laying out, and in a fight
+    F14.Apply()
+    flushAll()
+    tap("E")
+    tap("E")
+    check(W.casts[#W.casts] == "spell:501" and flyout.last ~= nil and flyout.last.id == 501,
+        "the one picked last is kept through a laying out: " .. tostring(W.casts[#W.casts]))
+    W.guard = true
+    fire("PLAYER_REGEN_DISABLED")
+    W.combat = true
+    flushAll()
+    tap("E")
+    tap("3")
+    tap("E")
+    casts = #W.casts
+    tap("E")
+    check(#W.casts == casts + 1 and W.casts[#W.casts] == "spell:502", "in a fight too: " .. tostring(W.casts[#W.casts]))
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    for _ = 1, 4 do flushAll() end
+    W.guard = nil
+    tap("E")
+    tap("E")
+    check(W.casts[#W.casts] == "spell:502", "after the fight it still casts what was picked in the fight")
+    fire("PLAYER_LOGOUT")
+    check(flyout.last ~= nil and flyout.last.id == 502, "and that is saved with the flyout at logout")
+    F14.SetTwice(false)
+    local all = F14.List()
+    for i = #all, 1, -1 do table.remove(all, i) end
+    F14.Apply()
+    rebound()
+    flushAll()
 end
 
 -- what ships names nobody else's addon and nothing of the dev folder

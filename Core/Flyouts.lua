@@ -123,6 +123,23 @@ local BIND = [[
                 owner:SetBindingClick(true, key, owner:GetAttribute("pentry" .. at), "Key")
             end
         end
+        -- With the setting on (twice), the flyout's own key pressed again, once it is let go of, casts the
+        -- icon picked last from it: a player's ask (2026-11-23), "double tapping a flyout keybind hits the
+        -- last used spell from it". A key that is one of its picks stays that pick's.
+        local last = owner:GetAttribute("twice") and held ~= open and owner:GetAttribute("last" .. open)
+        local icon = last and owner:GetFrameRef(last)
+        if icon and icon:IsShown() then
+            for i = 1, owner:GetAttribute("okeys" .. open) or 0 do
+                local key = owner:GetAttribute("okey" .. open .. "_" .. i)
+                local pick
+                for p = 1, owner:GetAttribute("pkeys" .. open) or 0 do
+                    if owner:GetAttribute("pkey" .. open .. "_" .. p) == key then pick = true end
+                end
+                if key and not pick and not (layers and layers:GetAttribute("hdown_" .. key)) then
+                    owner:SetBindingClick(true, key, last, "Key")
+                end
+            end
+        end
     end
 ]]
 -- A press opens its flyout or shuts the open one. Held, it stays open
@@ -142,7 +159,7 @@ local OPENER_WRAP = [[
             if picked then
                 picked = nil
 ]] .. SHUT .. BIND .. [[
-            elseif kept then
+            elseif kept or owner:GetAttribute("twice") then
 ]] .. BIND .. [[
             end
         end
@@ -666,59 +683,9 @@ local SWAP = CARRIED .. [[
 -- this icon's spot: this one and those after it move down a spot. Anything else on the cursor comes from
 -- the spellbook, the bags, a bar or another flyout: it takes this icon's place. An icon lifted earlier
 -- and let go elsewhere is told from what is carried now by its ability.
--- An icon moved inside its flyout in a fight, as out of one: lifted, it is off its flyout at once (LIFT);
--- brought back over the flyout, a gap opens where the cursor is and goes with it from icon to icon, and it
--- lands in the gap. His words (2026-11-23): "moving icons within a flyout to diff order doesnt work"; "do
--- you not see the flyout re-ordering preview not being possible in combat??". His log: Healing Touch was
--- lifted in a fight and let go of on the world, the flyout closed up behind it with nowhere left to put
--- it. The gap is the lifted icon itself, hidden, slid along the spots (`gapf`: its flyout, `gap`: its
--- spot). A mouse that comes over an icon in motion is told to the secure code; an icon slid under a still
--- mouse is not, so the gap does not run back and forth.
--- The gap closes (the lifted icon back at the end, out of sight, the strip one shorter): `f`, `mover`.
-F.GAPCLOSE = [[
-    do
-        local from, to = gap, (owner:GetAttribute("count" .. f) or 0) + 1
-        gapf, gap = nil, nil
-        owner:GetFrameRef("menu" .. f):EnableMouse(false)
-        if from and from ~= to then
-]] .. SLIDE .. [[
-        end
-        local by = -1
-]] .. GROW .. [[
-    end
-]]
--- the mouse comes over an icon: the lifted icon of its flyout makes a gap there
-F.PREVIEW = [[
-    if not (lifted and PlayerInCombat()) then return end
+local LAND = [[
+    if not (kind and PlayerInCombat()) then return end
     local f = self:GetAttribute("fffly")
-    local mover = owner:GetFrameRef(lifted)
-    if not (f and mover) or mover == self or mover:IsShown() or mover:GetAttribute("fffly") ~= f then return end
-    local to = self:GetAttribute("ffspot")
-    if not to or to > (owner:GetAttribute("count" .. f) or 0) + 1 then return end
-    local from = gap
-    if gapf ~= f then
-        -- the gap opens: the strip one icon longer, and taking a drop in the gap
-        from = mover:GetAttribute("ffspot")
-        local by = 1
-]] .. GROW .. [[
-        owner:GetFrameRef("menu" .. f):EnableMouse(true)
-    end
-    if from and from ~= to then
-]] .. SLIDE .. [[
-    end
-    gapf, gap = f, to
-]]
--- the mouse leaves an icon or the strip: off the flyout altogether, the gap closes
-F.GAPLEAVE = [[
-    if not (gapf and lifted and PlayerInCombat()) then return end
-    if owner:GetFrameRef("menu" .. gapf):IsUnderMouse(true) then return end
-    local f, mover = gapf, owner:GetFrameRef(lifted)
-    if not mover then return end
-]] .. F.GAPCLOSE
--- What a drop in a fight on an icon of flyout `f`, or on its strip, is: the lifted icon of that flyout
--- (`moving`), or anything else. With a gap open in the flyout the lifted icon lands in it; anything else
--- closes the gap first.
-F.LIFTED = [[
     local mover = lifted and owner:GetFrameRef(lifted)
     lifted = nil
     local moving = mover and f and not mover:IsShown() and mover:GetAttribute("fffly") == f
@@ -735,33 +702,6 @@ F.LIFTED = [[
             moving = tonumber(what) ~= what or what == value
         end
     end
-    if gapf and gapf == f and mover then
-        if moving then
-            local to = gap
-            gapf, gap = nil, nil
-            owner:GetFrameRef("menu" .. f):EnableMouse(false)
-            mover:Show()
-            local n = (owner:GetAttribute("count" .. f) or 0) + 1
-            owner:SetAttribute("count" .. f, n)
-            owner:SetAttribute("room" .. f, (owner:GetAttribute("room" .. f) or 1) - 1)
-            local mark = mover:GetAttribute("ffmark")
-            if mark then owner:SetAttribute("holds" .. f, (owner:GetAttribute("holds" .. f) or ";") .. mark .. ";") end
-]] .. KEYS_OF .. BIND .. [[
-            owner:CallMethod("Landed", f, to)
-            return "clear"
-        end
-]] .. F.GAPCLOSE .. [[
-    end
-]]
--- a drop on the strip itself: it takes one only while a gap is open in it
-F.MENUDROP = [[
-    if not (kind and PlayerInCombat()) then return end
-    local f = self:GetAttribute("ffmenu")
-]] .. F.LIFTED
-local LAND = [[
-    if not (kind and PlayerInCombat()) then return end
-    local f = self:GetAttribute("fffly")
-]] .. F.LIFTED .. [[
     if not moving then
 ]] .. SWAP .. [[
     end
@@ -821,6 +761,9 @@ local ENTRY_WRAP = [[
     end
     if armed ~= self:GetName() then return false end
     armed = nil
+    -- the icon picked last from its flyout, cast again by the flyout's key pressed twice where that is set
+    local mine = self:GetAttribute("fffly")
+    if mine then owner:SetAttribute("last" .. mine, self:GetName()) end
     if held then
         picked = true
         return
@@ -1346,8 +1289,6 @@ local function EntryButton(unit, i)
     -- what is dropped on an icon out of a fight is the addon's to deal with; in a fight the secure code's
     entry:SetScript("OnReceiveDrag", function(self) xpcall(F.Dropped, geterrorhandler(), self) end)
     root:WrapScript(entry, "OnReceiveDrag", LAND)
-    root:WrapScript(entry, "OnEnter", F.PREVIEW)
-    root:WrapScript(entry, "OnLeave", F.GAPLEAVE)
     entry:HookScript("OnEnter", EntryTip)
     entry:HookScript("OnLeave", HideTip)
     -- the game's dark slot, seen at the icon's cut corners
@@ -1410,12 +1351,6 @@ local function Unit(f)
     unit.hub:SetPoint("CENTER", menu, "CENTER")
     unit.hub:Hide()
     root:SetFrameRef("menu" .. f, menu)
-    -- the strip takes the mouse only while a gap is open in it in a fight (F.PREVIEW): a drop in the gap, and
-    -- the mouse leaving it (a leave is told to secure code only where an enter was wrapped too)
-    menu:SetAttribute("ffmenu", f)
-    root:WrapScript(menu, "OnEnter", "return")
-    root:WrapScript(menu, "OnLeave", F.GAPLEAVE)
-    root:WrapScript(menu, "OnReceiveDrag", F.MENUDROP)
     -- an open flyout asks its icons' range a few times a second; a frame in it runs only while it shows
     local tick, waited = CreateFrame("Frame", nil, menu), 0
     local function Pass() Ranges(unit) end
@@ -2568,6 +2503,8 @@ function F.Apply()
     -- the macro list is read afresh for every laying out
     Macros.Changed()
     Build()
+    -- what was picked last from each flyout, before its icons are laid anew
+    F.KeepLast()
     CastSettings()
     for _, unit in ipairs(units) do
         if unit.shuffled then
@@ -2580,13 +2517,10 @@ function F.Apply()
             end
         end
     end
-    for _, unit in ipairs(units) do
-        unit.menu:Hide()
-        unit.menu:EnableMouse(false)
-    end
+    for _, unit in ipairs(units) do unit.menu:Hide() end
     root:SetAttribute("open", nil)
-    -- no key counts as held or pressed across a layout, and nothing is lifted with a gap kept for it
-    root:Execute("armed, held, picked, lifted, gapf, gap = nil, nil, nil, nil, nil, nil")
+    -- no key counts as held or pressed across a layout
+    root:Execute("armed, held, picked = nil, nil, nil")
     local taken, leads, pages, sleeping = {}, {}, {}, {}
     used = 0
     local ranked, hiding = F.Ranked(), F.Hiding()
@@ -2628,6 +2562,8 @@ function F.Apply()
             Lay(unit)
             -- its click opens the flyout (wrapped already, with every bar button's, once the bars settled)
             HostWrap(host, name)
+            local last = F.LastIcon(unit)
+            root:SetAttribute("last" .. used, last and last:GetName() or nil)
             for _, slot in ipairs(slots or {}) do pages[slot] = used end
             root:SetAttribute("pslot" .. used, slots and slots[1] or nil)
             if sleeps then
@@ -2673,6 +2609,7 @@ function F.Apply()
         if name then root:SetAttribute("slot-" .. name, Bars.Slot(button)) end
     end
     root:SetAttribute("paging", Bars.MainBar() ~= nil or nil)
+    root:SetAttribute("twice", F.Twice() or nil)
     F.PageWrap()
     for lead in pairs(mains) do
         if not leads[lead] then root:SetAttribute("main-" .. lead, nil) end
@@ -2700,6 +2637,7 @@ function F.Apply()
         root:SetAttribute("hostof" .. f, nil)
         root:SetAttribute("lead" .. f, nil)
         root:SetAttribute("pslot" .. f, nil)
+        root:SetAttribute("last" .. f, nil)
         unit.asleep = nil
     end
     root:SetAttribute("units", used)
@@ -3190,6 +3128,43 @@ function F.SetFace(flyout, on)
     unit = Run(flyout).unit
     if shown and unit then F.Show(unit.index) end
     return true
+end
+
+-- Whether a flyout's key pressed again while it is open casts the icon picked last from it: the
+-- profile's, off unless turned on. A player's ask (2026-11-23): "double tapping a flyout keybind hits the
+-- last used spell from it". The secure code has no clock: a second press while open, as such addons do.
+function F.Twice()
+    local data = P.Data()
+    return data ~= nil and data.twice == true
+end
+function F.SetTwice(on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    data.twice = on and true or nil
+    F.Apply()
+    return true
+end
+
+-- The icon of each flyout picked last, as the secure code knows it (in a fight too), kept with the
+-- flyout, so that it lasts through a layout and a login.
+function F.KeepLast()
+    if not root then return end
+    for f = 1, used do
+        local unit = units[f]
+        local name = root:GetAttribute("last" .. f)
+        local frame = name and _G[name]
+        if unit.flyout and frame and frame.entry then unit.flyout.last = Copy(frame.entry) end
+    end
+end
+-- the icon of a laid out flyout that holds what was picked last from it
+function F.LastIcon(unit)
+    local last = unit.flyout and unit.flyout.last
+    if type(last) ~= "table" then return nil end
+    for i, frame in ipairs(unit.entries) do
+        local entry = unit.flyout.entries[i]
+        if entry and Same(entry, last) then return frame end
+    end
 end
 
 -- whether the ranks of one spell are kept in rank order: the profile's, on unless turned off
@@ -3761,7 +3736,8 @@ events:SetScript("OnEvent", function(_, event, on)
         -- the cursor holds no ability any more: one lifted off a flyout's button was set down or let go of
         if event == "ACTIONBAR_HIDEGRID" and next(inHand) then C_Timer.After(LET_GO, LetGo) end
     elseif event == "PLAYER_LOGOUT" then
-        -- what is saved is the whole of each flyout
+        -- what is saved is the whole of each flyout, with what was picked last from it
+        F.KeepLast()
         Whole(list)
     elseif event == "UPDATE_BINDINGS" then
         -- the key Mouseover Cast wants held is saved with the bindings

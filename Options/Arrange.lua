@@ -58,6 +58,9 @@ local TEXT = {
     around = "Open around the button in gamepad mode",
     aroundTip = "On the bars of gamepad mode a flyout opens around its button, each icon on the side its pad "
         .. "button is: up, right, down, left. Off, it opens as a strip.",
+    twice = "Press a flyout's key again for the last one used",
+    twiceTip = "With a flyout open, pressing its key again casts the icon you picked from it last, and shuts "
+        .. "it. Off, a second press only shuts the flyout.",
     plate = "Round background behind it",
     plateTip = "A flyout that opens around its button has a round plate behind it, so an open flyout is "
         .. "seen at a glance.",
@@ -197,6 +200,7 @@ function A.Refresh()
     w.around:SetChecked(F.Around())
     w.faces:SetChecked(F.Faces())
     w.plate:SetChecked(F.Plate())
+    w.twice:SetChecked(F.Twice())
     for i, button in ipairs(w.icons) do
         local entry = flyout and flyout.entries[i]
         button:SetShown(entry ~= nil)
@@ -388,6 +392,13 @@ function A.Hide(on)
     A.Refresh()
 end
 
+-- a flyout's key pressed again while it is open casts the icon picked last from it, or only shuts it
+function A.Twice(on)
+    local ok, why = F.SetTwice(on)
+    if not ok and why then ns.Warn(why) end
+    A.Refresh()
+end
+
 -- the controller's two: flyouts around the button in gamepad mode, and which of its crosses picks first
 function A.Around(on)
     local ok, why = F.SetAround(on)
@@ -492,7 +503,10 @@ function A.Build(page, above, scrolled)
     local aroundLabel
     w.around, aroundLabel = Check(TEXT.around, TEXT.aroundTip, A.Around, nil, w.ranks)
     w.faces = Check(TEXT.faces, TEXT.facesTip, A.Faces, aroundLabel)
-    w.plate = Check(TEXT.plate, TEXT.plateTip, A.Plate, nil, w.around)
+    local plateLabel
+    w.plate, plateLabel = Check(TEXT.plate, TEXT.plateTip, A.Plate, nil, w.around)
+    -- for every flyout, beside it: a flyout's key pressed again casts the last one used
+    w.twice = Check(TEXT.twice, TEXT.twiceTip, A.Twice, plateLabel)
     panel.arrange = w
     -- a flyout changed elsewhere shows here at once
     F.Watch(function(what)

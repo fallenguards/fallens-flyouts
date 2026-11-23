@@ -1107,9 +1107,7 @@ local function boot(alone)
         PlayerInCombat = function() return W.combat == true end,
     }
     W.env = setmetatable({}, { __index = function(t, k)
-        if k == "armed" or k == "held" or k == "picked" or k == "own" or k == "lifted" or k == "gapf" or k == "gap" then
-            return rawget(t, k)
-        end
+        if k == "armed" or k == "held" or k == "picked" or k == "own" or k == "lifted" then return rawget(t, k) end
         if asks[k] then return asks[k] end
         error("snippet read of a missing global: " .. tostring(k))
     end })
@@ -1177,37 +1175,6 @@ function RunAttributeWrap(frame, wrapped, name, value)
     if not frame.protected then return end
     secureRun(frame, wrapped.before, "self, name, value, owner", frame, name, value, wrapped.header)
 end
--- The mouse moved onto a frame, or off it (`to`: where it went, nil for off every frame of ours): W.under is
--- what it is over. A frame's OnEnter wrap is run for a move onto it, its OnLeave wrap for a move off it after
--- an enter was told, as the client runs them (Wrapped_OnEnter, Wrapped_OnLeave), on a frame protected itself.
-function Enter(frame)
-    W.under = frame
-    local wrapped = frame.wraps and frame.wraps.OnEnter
-    if wrapped and frame.protected then
-        frame.entered = true
-        secureRun(frame, wrapped.before, "self, owner", frame, wrapped.header)
-    end
-end
-function Leave(frame, to)
-    W.under = to
-    local wrapped = frame.wraps and frame.wraps.OnLeave
-    if wrapped and frame.protected and frame.entered then
-        frame.entered = nil
-        secureRun(frame, wrapped.before, "self, owner", frame, wrapped.header)
-    end
-end
--- whether the mouse is over a frame, or (recursive) over one of its children; a frame put away under the
--- mouse leaves it over what was behind it
-function Frame:IsUnderMouse(recursive)
-    local at = W.under
-    while at and not at:IsVisible() do at = at.parent end
-    while at do
-        if at == self then return true end
-        if not recursive then return false end
-        at = at.parent
-    end
-    return false
-end
 -- a frame's own snippet, run by secure code (the client's RunAttribute)
 function Frame:RunAttribute(attribute)
     local body = self.attrs[attribute]
@@ -1271,8 +1238,6 @@ end
 -- A drag begun on a frame, as the client runs it: the wrap's body first, which may refuse it or put
 -- something on the cursor; else the frame's own handler.
 function DragOff(frame)
-    -- a drag starts with the mouse on what is dragged
-    W.under = frame
     local wrapped = frame.wraps and frame.wraps.OnDragStart
     if wrapped and wrapped.before then
         local kind, value = secureRun(frame, wrapped.before, "self, button, kind, value, owner", frame, "LeftButton",
@@ -1297,8 +1262,6 @@ local function secureDrop(frame, body, header, ...)
     return a, b, c
 end
 function DropOn(frame)
-    -- the mouse comes over it before it lets go
-    if W.under ~= frame then Enter(frame) end
     local wrapped, message = frame.wraps and frame.wraps.OnReceiveDrag, nil
     if wrapped and wrapped.before then
         local kind, value, more = secureDrop(frame, wrapped.before, wrapped.header, GetCursorInfo())
