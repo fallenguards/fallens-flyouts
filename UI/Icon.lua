@@ -1,6 +1,7 @@
 local _, ns = ...
 -- luacheck: read globals UIParent CreateFrame InCombatLockdown issecretvalue Enum
 -- luacheck: read globals IconSelectorPopupFrameTemplateMixin IconSelectorPopupFrameIconFilterTypes
+-- luacheck: read globals InputUtil SmartNavigation
 -- luacheck: read globals IconDataProviderMixin IconDataProviderExtraType CreateAndInitFromMixin GenerateClosure
 -- luacheck: read globals C_SpellBook C_Spell C_Item C_Container GetNumMacros GetMacroInfo NUM_BAG_SLOTS GameTooltip
 
@@ -236,8 +237,36 @@ local function Update(self)
     Fill()
 end
 
+-- The game's template's own OnShow and OnHide, all but one line each. They count the game's icon windows
+-- shown, in a variable of the template's file (IconSelectorPopupFramesShown, SharedUIPanelTemplates.lua), and
+-- every bar button reads that count at the start of a drag (IsAnyIconSelectorPopupFrameShown, in its
+-- OnDragStart). Counted by this window, the count was the addon's from then on, and in a fight the game
+-- refused the pickup of every drag off a bar. His error (2026-11-23), dragging a flyout's bar button in a
+-- fight: "[ADDON_ACTION_BLOCKED] AddOn 'FallensFlyouts' tried to call the protected function
+-- 'PickupAction()'". This window is never counted: an ability dragged off a bar while it is open is picked
+-- up as by any drag, where the game's own windows have it copied.
+local function TemplateShow(self)
+    self:RegisterEvent("CURSOR_CHANGED")
+    self:RegisterEvent("GLOBAL_MOUSE_UP")
+    self.BorderBox.SelectedIconArea.SelectedIconButton:SetIconSelector(self)
+    self.BorderBox.IconSelectorEditBox:SetIconSelector(self)
+    self:UpdateStateFromCursorType()
+end
+local function TemplateHide(self)
+    self:UnregisterEvent("CURSOR_CHANGED")
+    self:UnregisterEvent("GLOBAL_MOUSE_UP")
+    if InputUtil and InputUtil.IsGamepadUIEnabled and InputUtil.IsGamepadUIEnabled() then
+        if self.iconSelectorFooter then self.iconSelectorFooter:HideAndDeactivateBindings() end
+        SmartNavigation:LeaveFocusGroup()
+        if self.oldButton then
+            SmartNavigation:SelectButton(self.oldButton)
+            self.oldButton = nil
+        end
+    end
+end
+
 local function OnShow(self)
-    IconSelectorPopupFrameTemplateMixin.OnShow(self)
+    TemplateShow(self)
     self.iconDataProvider = NewProvider()
     self:SetIconFilter(IconSelectorPopupFrameIconFilterTypes.All)
     self:Update()
@@ -267,7 +296,7 @@ local function OnShow(self)
 end
 
 local function OnHide(self)
-    IconSelectorPopupFrameTemplateMixin.OnHide(self)
+    TemplateHide(self)
     if self.iconDataProvider then
         self.iconDataProvider:Release()
         self.iconDataProvider = nil

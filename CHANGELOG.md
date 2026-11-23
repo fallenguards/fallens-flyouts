@@ -8,6 +8,7 @@
 ### Fixed
 - A flyout on Action Bar 1 follows the bar at once when a druid's form, a stance or stealth turns the bar to another page, in combat too. Each page is a bar of its own: a flyout made out of form is on its button only out of form, even where the form's page holds the same ability in that place, and one made in Bear Form only in Bear Form. Until now a flyout caught up only about a second after each shift, and in combat not until the fight was over: in between, a click on its button cast the button's ability, or opened the other page's flyout.
 - In combat the plus for adding to a flyout stands where it does out of combat, past the tip of the flyout's arrow, and a drop there adds to the flyout. It stood on the arrow itself, pulled down onto the button's edge.
+- Dragging an ability off a bar in combat could be refused, with an error naming Fallen's Flyouts ("tried to call the protected function 'PickupAction()'"), once the flyout icon window (a right-click on a flyout's bar button) had been open in that session. The icon window no longer touches what the game's bar buttons check at the start of a drag. While it is open, an ability dragged off a bar is picked up as by any drag.
 
 ## [1.1.4] - 2026-11-23
 

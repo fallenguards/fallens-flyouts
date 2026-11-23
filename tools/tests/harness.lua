@@ -62,6 +62,7 @@ function Frame:RegisterEvent(event)
     self.events[event] = true
 end
 Frame.RegisterUnitEvent = Frame.RegisterEvent
+function Frame:UnregisterEvent(event) if self.events then self.events[event] = nil end end
 function Frame:SetSize(w, h) self.w, self.h = w, h end
 function Frame:SetWidth(w) self.w = w end
 function Frame:SetHeight(h) self.h = h end
@@ -278,6 +279,8 @@ function Frame:SetAttribute(k, v)
     if onstate then RunAttributeWrap(self, { before = onstate }, stateid, v) end
 end
 function Frame:GetAttribute(k) return self.attrs[k] end
+-- the game's icon window's parts are told which window they belong to
+function Frame:SetIconSelector(owner) self.selector = owner end
 -- the mouse area's insets: left, right, top, bottom (a negative one reaches past the frame)
 function Frame:SetHitRectInsets(l, r, t, b) self.hit = { l, r, t, b } end
 -- as the client: a frame kept for the snippets under an attribute of its own
@@ -347,9 +350,13 @@ function CreateAndInitFromMixin(mixin, ...)
     return made
 end
 function GenerateClosure(fn, first) return function(...) return fn(first, ...) end end
+-- The template's own OnShow and OnHide count the game's icon windows shown (W.iconWindowsShown), as the
+-- game's do in a variable every bar button's drag reads: a window of ours that counts makes that count the
+-- addon's, and the game then refuses a drag's pickup in a fight.
 IconSelectorPopupFrameTemplateMixin = {
-    OnShow = function() end,
-    OnHide = function() end,
+    OnShow = function() W.iconWindowsShown = (W.iconWindowsShown or 0) + 1 end,
+    OnHide = function() W.iconWindowsShown = (W.iconWindowsShown or 0) - 1 end,
+    UpdateStateFromCursorType = function() end,
     OkayButton_OnClick = function(self) self:Hide() end,
     CancelButton_OnClick = function(self) self:Hide() end,
     SetIconFilter = function() end,
@@ -365,6 +372,7 @@ local function iconWindow(f)
     local chosen = {
         SetIconTexture = function(self, v) self.v = v == QUESTION_PATH and 134400 or v end,
         GetIconTexture = function(self) return self.v end,
+        SetIconSelector = function(self, owner) self.selector = owner end,
     }
     -- as the game's template: the words and the box for a name, the words over the list, the list of kinds
     -- (a frame of the window's own, as in the game: what is made on it is in view while the window is)

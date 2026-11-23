@@ -4230,6 +4230,11 @@ do
     Icon.Open(flyout)
     local window = Icon.popup
     local box, search = window.BorderBox.IconSelectorEditBox, Icon.search
+    -- His error (2026-11-23), dragging a flyout's bar button in a fight after this window had been open:
+    -- "[ADDON_ACTION_BLOCKED] AddOn 'FallensFlyouts' tried to call the protected function 'PickupAction()'".
+    check(W.iconWindowsShown == nil and window.BorderBox.SelectedIconArea.SelectedIconButton.selector == window,
+        "the window does what the game's template does when shown, but never counts itself among the game's icon "
+        .. "windows, a count every bar button reads at a drag")
     check(window:IsShown() and window.BorderBox.EditBoxHeaderText.text == "Name on the button (optional)" and box.maxLetters == 16
         and box.text == "", "the icon window's own name box is the flyout's name: sixteen letters, as for a macro, empty to begin with")
     check(search ~= nil and search ~= box and search.template == "SearchBoxTemplate" and search.maxLetters == 40
