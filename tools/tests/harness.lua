@@ -266,7 +266,7 @@ function Frame:CreateFontString() return region() end
 -- the client runs after its own handler
 function Frame:WrapScript(frame, script, body, after)
     if script == "OnClick" then
-        frame.wrap, frame.header = body, self
+        frame.wrap, frame.header, frame.wrapAfter = body, self, after
         return
     end
     frame.wraps = frame.wraps or {}
@@ -1063,20 +1063,44 @@ function DropOn(frame)
 end
 local function click(frame, down, button)
     button = button or "LeftButton"
+    -- What the game's bar button does with a click that reaches it: with an ability on the cursor it
+    -- takes that, at the release (ActionButton.lua: a mouse press acts on its release); else it casts.
+    local function bar()
+        if W.cursor and (W.cursor[1] == "spell" or W.cursor[1] == "macro") then
+            if not down then PlaceAction(frame.action) end
+        elseif down then
+            W.casts[#W.casts + 1] = "bar:" .. frame.name
+        end
+    end
     if not frame.wrap then
         -- a plain button of an addon's runs its own click: on the press when it listens for presses
         if frame.scripts.OnClick and not frame.attrs.type then
             if down == (frame.clicksOnPress == true) then frame.scripts.OnClick(frame, button, down) end
             return
         end
+        if frame.action then return bar() end
         if down then W.casts[#W.casts + 1] = "bar:" .. frame.name end
         return
     end
     local fn = assert(load("local self, button, down, owner = ...; " .. frame.wrap, frame.name, "t", W.env))
     W.secure = true
-    local ran, verdict = pcall(fn, frame, button, down, frame.header)
+    local ran, verdict, message = pcall(fn, frame, button, down, frame.header)
     W.secure = false
     if not ran then error(verdict, 0) end
+    -- A bar button: the wrap's body before, the game's own handler unless that body answered false, and
+    -- the wrap's body after when the one before gave it a message (the client's Wrapped_Click).
+    if frame.action then
+        if verdict ~= false then
+            bar()
+            if frame.wrapAfter and message ~= nil then
+                secureRun(frame, frame.wrapAfter, "self, message, button, down, owner", frame, message, button, down,
+                    frame.header)
+            end
+        end
+        -- the click's own script is over; what follows a click follows it either way
+        if frame.scripts.PostClick then frame.scripts.PostClick(frame, button, down) end
+        return
+    end
     -- as the client's secure button: it acts on the press, or on the release when told not to
     local onPress = frame.attrs.useOnKeyDown ~= false
     local cast = verdict ~= false and frame.attrs.type and down == onPress

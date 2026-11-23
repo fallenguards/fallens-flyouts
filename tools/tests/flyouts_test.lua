@@ -62,8 +62,15 @@ mouse(W.frames.ActionButton3)
 check(W.casts[#W.casts] == "bar:ActionButton3" and not menu:IsShown(), "a button without a flyout casts as ever")
 W.cursor = { "spell", 7, "spell", 777, 777 }
 fire("ACTIONBAR_SHOWGRID")
-mouse(host)
-check(W.casts[#W.casts] == "action:1" and not menu:IsShown(), "with something on the cursor the click goes to the bar")
+do
+    local own = select(2, GetActionInfo(1))
+    mouse(host)
+    check(select(2, GetActionInfo(1)) == 777 and not menu:IsShown(),
+        "with something on the cursor the click goes to the bar, which takes it")
+    -- and back as it was: what the button held came onto the cursor
+    PlaceAction(1)
+    check(select(2, GetActionInfo(1)) == own, "the button holds its own again")
+end
 W.cursor = nil
 fire("ACTIONBAR_HIDEGRID")
 mouse(host)
@@ -555,7 +562,7 @@ check(not opens("2") and not opens("Q") and #NS.Profiles.Data().flyouts == 1,
 check(opener("1") ~= nil and GetBindingAction("2", true) == "ACTIONBUTTON2", "and its key is the bar's again")
 check(lastChat("taken off") == nil and lastChat("flyout is gone") == nil, "and chat says nothing of that either")
 mouse(W.frames.ActionButton2)
-check(W.casts[#W.casts] == "action:2", "and a click on that button casts its own ability again")
+check(W.casts[#W.casts] == "bar:ActionButton2", "and a click on that button casts its own ability again")
 
 print("a drag moves an icon inside its flyout, as icons move on a phone's home screen")
 local Move = NS.Move
@@ -2572,14 +2579,24 @@ do
     check(opener("1") == f and opener("E") == f and not opens("5") and F10.DropWrapped("ActionButton5")
         and F10.DropWrapped("ActionButton1") and r.attrs["slot-ActionButton5"] == 5 and r.attrs["bkeys-ActionButton5"] == 2,
         "before a fight the secure code is told every bar button's slot and keys, and is run at a drop on any of them")
-    check(five.wrap == nil and not F10.Wrapped("ActionButton5"), "a button with no flyout has only its drop watched: its click is the game's own")
+    -- "ok the flyout can move in combat, but it's no longer a flyout in its new spot, until combat ends..."
+    -- (2026-11-22): a click on the new button cast its ability, since only a flyout's own button had its
+    -- click made ready, and none can be in a fight. Every bar button's is now, ahead of any fight.
+    check(five.wrap ~= nil and F10.Wrapped("ActionButton5") and six.wrap ~= nil and F10.Wrapped("ActionButton6"),
+        "before a fight every bar button's click is made ready to open a flyout, whether it has one or not")
+    local three = W.frames.ActionButton3
+    local casts = #W.casts
+    mouse(three)
+    check(#W.casts == casts + 1 and W.casts[#W.casts] == "bar:ActionButton3" and r.attrs["host-ActionButton3"] == nil,
+        "a button with no flyout still casts at a click, as ever")
     -- out of a fight the drop code leaves everything to the addon's own code, as it always was
+    -- (onto button 6: button 5 has had no flyout when the fight below begins)
     PickupAction(1)
     for _ = 1, 4 do flushAll() end
-    DropOn(five)
+    DropOn(six)
     for _ = 1, 4 do flushAll() end
-    check(F10.At("ActionButton5") == flyout and opens("5") and not opens("1"), "out of a fight a drag is followed as it always was")
-    PickupAction(5)
+    check(F10.At("ActionButton6") == flyout and not opens("1"), "out of a fight a drag is followed as it always was")
+    PickupAction(6)
     for _ = 1, 4 do flushAll() end
     DropOn(one)
     for _ = 1, 4 do flushAll() end
@@ -2605,6 +2622,13 @@ do
         and GetBindingAction("1", true) == "ACTIONBUTTON1", "the new button's keys open it, and the old button's keys are the old button's again")
     check(flyout.host == "ActionButton5" and unit.host == five and unit.arrow.point ~= nil and unit.arrow.point[2] == five,
         "where it sits is saved, and its arrow is drawn on the new button")
+    local quiet = #W.casts
+    mouse(five)
+    check(unit.menu:IsShown() and #W.casts == quiet, "a click on the new button opens the flyout there, in the fight, and casts nothing")
+    mouse(five)
+    check(not unit.menu:IsShown() and #W.casts == quiet, "a second click shuts it")
+    mouse(one)
+    check(not unit.menu:IsShown(), "a click on the old button opens nothing: it is a plain button again")
     tap("5")
     check(unit.menu:IsShown(), "the new button's key opens it, in the fight")
     local before = #W.casts
@@ -2656,18 +2680,30 @@ do
     flushAll()
     check(r.attrs["host-ActionButton2"] == f and r.attrs["hostof" .. f] == "ActionButton2" and opener("2") == f and opener("Q") == f
         and not opens("5"), "dropped on another flyout's button in a fight: the button is the dropped one's now, keys and all")
-    check(r.attrs["hostof" .. g] == nil and r.attrs["okeys" .. g] == 0 and not otherUnit.opener.shown,
+    check(r.attrs["hostof" .. g] == nil and r.attrs["okeys" .. g] == 0 and not otherUnit.opener.shown and r.attrs.adrift == true,
         "the flyout that button had waits, with no key and no grip, for its ability to be set down")
-    -- what the swap left on the cursor is set down by a click: that is seen when the fight is over
-    PlaceAction(5)
+    -- what the swap left on the cursor is set down by a click, the only way the game leaves: a click on a
+    -- button that is not taking it changes nothing, and the click that sets it down hangs its flyout there
+    local held = W.cursor and W.cursor[4]
+    W.cursor = nil
+    mouse(W.frames.ActionButton3)
+    check(r.attrs["host-ActionButton3"] == nil and r.attrs["hostof" .. g] == nil, "a click that only casts another button leaves it waiting")
+    W.cursor = { "spell", 7, "spell", held, held }
+    mouse(five)
     flushAll()
-    check(r.attrs["hostof" .. g] == nil and not opens("5"), "set down by a click in the fight, it still waits")
+    check(W.cursor == nil and select(2, GetActionInfo(5)) == held, "the click set its ability down on the button")
+    check(r.attrs["hostof" .. g] == "ActionButton5" and r.attrs["host-ActionButton5"] == g and opener("5") == g
+        and otherUnit.opener.shown and otherUnit.opener.parent == five and other.host == "ActionButton5",
+        "set down by a click in the fight, its flyout hangs on that button at once, keys and all")
+    mouse(five)
+    check(otherUnit.menu:IsShown(), "and a click there opens it, in the fight")
+    mouse(five)
     W.combat = false
     fire("PLAYER_REGEN_ENABLED")
     for _ = 1, 6 do flushAll() end
     local onTwo, onFive = F10.At("ActionButton2"), F10.At("ActionButton5")
-    check(onTwo == flyout and onFive == other and opens("2") and opens("5") and opener("2") ~= opener("5"),
-        "the fight over: each flyout is on the button its ability is on")
+    check(onTwo == flyout and onFive == other and opens("2") and opens("5") and opener("2") ~= opener("5")
+        and r.attrs.adrift == nil, "the fight over: each flyout is on the button its ability is on")
     W.guard = nil
     -- the bars as they were
     local all = F10.List()

@@ -161,9 +161,23 @@ local OPENER_WRAP = [[
 -- a click on the bar button itself does the same, on its release;
 -- a button with no flyout, or a full cursor, goes to the bar as ever.
 -- The right button is left to the icon window.
+-- Every bar button's click is wrapped with this ahead of any fight, not only a flyout's own button:
+-- the game wraps nothing in a fight, so a flyout dragged to another button in one could be opened there
+-- by its key and its arrow only, and a click cast the button's ability ("it's no longer a flyout in its
+-- new spot, until combat ends...", 2026-11-22). On a button with no flyout it lets the click through.
+-- While a flyout has lost its button in a fight (`adrift`) it also says what the button held, and
+-- CLICK_AFTER looks at the button once the game has dealt with the click.
 local HOST_WRAP = [[
     local mine = owner:GetAttribute("host-" .. self:GetName())
-    if not mine or owner:GetAttribute("carrying") then return end
+    if not mine or owner:GetAttribute("carrying") then
+        if not mine and owner:GetAttribute("adrift") and PlayerInCombat() then
+            local slot = owner:GetAttribute("slot-" .. self:GetName())
+            local kind, id
+            if slot then kind, id = GetActionInfo(slot) end
+            return nil, tostring(kind) .. ":" .. tostring(id)
+        end
+        return
+    end
     if button == "RightButton" then return false end
     if down then return false end
     armed, held, picked, own = nil, nil, nil, nil
@@ -184,40 +198,13 @@ local HOST_WRAP = [[
 -- GetActionInfo says what a slot holds). In a fight only: out of one the addon's own code follows.
 -- The button dropped on: if it now holds the ability of a flyout whose own button no longer does,
 -- the flyout, its grip and its keys go to this button, hung as they hung on the old one. A flyout
--- this button had, its ability carried off, waits with no key for the fight's end.
--- A drop by a click (what a swap leaves on the cursor) runs none of this: that one waits too.
+-- this button had, its ability carried off, has no button and no key (`adrift`) until its ability is
+-- set down: by a click, which is what a swap leaves to do (CLICK_AFTER), or by the fight's end.
 local DROP_BEFORE = [[
     return "message", "drop"
 ]]
-local DROP_AFTER = [[
-    if not PlayerInCombat() then return end
-    lifted = nil
-    local name = self:GetName()
-    local slot = owner:GetAttribute("slot-" .. name)
-    local kind, id
-    if slot then kind, id = GetActionInfo(slot) end
-    local mine = kind and id and owner:GetAttribute("main-" .. kind .. ":" .. tostring(id))
-    local had = owner:GetAttribute("host-" .. name)
-    if mine == had then return end
-    local off, on
-    if had then
-        off = had
-        owner:SetAttribute("host-" .. name, nil)
-        owner:SetAttribute("hostof" .. had, nil)
-        owner:SetAttribute("okeys" .. had, 0)
-        owner:GetFrameRef("grip" .. had):Hide()
-    end
-    if mine then
-        local was = owner:GetAttribute("hostof" .. mine)
-        -- a second one of the ability set down while the first is still on its button: the flyout stays
-        local still
-        if was then
-            local at = owner:GetAttribute("slot-" .. was)
-            local k, i
-            if at then k, i = GetActionInfo(at) end
-            still = k == kind and i == id
-        end
-        if not still then
+-- the flyout `mine` hung on this button (`self`, `name`), with this button's keys
+local HOME = [[
             on = mine
             if was then owner:SetAttribute("host-" .. was, nil) end
             owner:SetAttribute("host-" .. name, mine)
@@ -267,12 +254,64 @@ local DROP_AFTER = [[
                 owner:SetAttribute("obtn" .. mine .. "_" .. i, how)
             end
             owner:SetAttribute("okeys" .. mine, keys)
+]]
+local DROP_AFTER = [[
+    if not PlayerInCombat() then return end
+    lifted = nil
+    local name = self:GetName()
+    local slot = owner:GetAttribute("slot-" .. name)
+    local kind, id
+    if slot then kind, id = GetActionInfo(slot) end
+    local mine = kind and id and owner:GetAttribute("main-" .. kind .. ":" .. tostring(id))
+    local had = owner:GetAttribute("host-" .. name)
+    if mine == had then return end
+    local off, on
+    if had then
+        off = had
+        owner:SetAttribute("host-" .. name, nil)
+        owner:SetAttribute("hostof" .. had, nil)
+        owner:SetAttribute("okeys" .. had, 0)
+        owner:GetFrameRef("grip" .. had):Hide()
+        owner:SetAttribute("adrift", true)
+    end
+    if mine then
+        local was = owner:GetAttribute("hostof" .. mine)
+        -- a second one of the ability set down while the first is still on its button: the flyout stays
+        local still
+        if was then
+            local at = owner:GetAttribute("slot-" .. was)
+            local k, i
+            if at then k, i = GetActionInfo(at) end
+            still = k == kind and i == id
+        end
+        if not still then
+]] .. HOME .. [[
         end
     end
     if not (off or on) then return end
     armed, held, picked, own = nil, nil, nil, nil
 ]] .. SHUT .. BIND .. [[
     owner:CallMethod("Rehomed", on or 0, name, off or 0)
+]]
+-- After a click on a button with no flyout, in a fight, while a flyout has no button (HOST_WRAP sent
+-- what the button held as `message`). If the click changed what the button holds to the ability of a
+-- flyout that has no button, it was that ability set down from the cursor: the flyout hangs here. A
+-- click that only cast changes nothing, and a flyout that is on its button is never taken off it.
+local CLICK_AFTER = [[
+    if not PlayerInCombat() then return end
+    local name = self:GetName()
+    if owner:GetAttribute("host-" .. name) then return end
+    local slot = owner:GetAttribute("slot-" .. name)
+    local kind, id
+    if slot then kind, id = GetActionInfo(slot) end
+    if tostring(kind) .. ":" .. tostring(id) == message then return end
+    local mine = kind and id and owner:GetAttribute("main-" .. kind .. ":" .. tostring(id))
+    if not mine or owner:GetAttribute("hostof" .. mine) then return end
+    local on, was
+]] .. HOME .. [[
+    armed, held, picked, own = nil, nil, nil, nil
+]] .. SHUT .. BIND .. [[
+    owner:CallMethod("Rehomed", on, name, 0)
 ]]
 -- An icon moved to another spot of its flyout in a fight (asked which move he meant by the words above,
 -- he named this one too). Out of a fight the addon's own code moves it, sliding the others out of its
@@ -1362,6 +1401,18 @@ local function HostClicked(self, button, down)
     if flyout and not root:GetAttribute("carrying") then ns.Icon.Open(flyout) end
 end
 
+-- A bar button's click opens the flyout hung on it: wrapped once, and told which flyout at each click.
+-- Out of a fight only: the game wraps nothing in one.
+local function HostWrap(host, name)
+    if wrapped[name] ~= nil or InCombatLockdown() then return end
+    wrapped[name] = pcall(root.WrapScript, root, host, "OnClick", HOST_WRAP, CLICK_AFTER)
+    if wrapped[name] then
+        host:HookScript("PostClick", HostClicked)
+        host:HookScript("OnEnter", HostEntered)
+        host:HookScript("OnSizeChanged", HostSized)
+    end
+end
+
 -- where the icon in place i starts, along the flyout from the bar button
 function F.Slot(i) return Art.FIRST + (i - 1) * (Art.ICON + Art.NEXT) end
 
@@ -1608,7 +1659,8 @@ end
 
 -- What the secure code has to know of every bar button, should a flyout's ability be dropped on it
 -- in a fight: its slot, and its keys. Written only where it changed, and the keys read only when the
--- key map did. Each button's drop is wrapped once. None of it during the login: the buttons are looked
+-- key map did. Each button's drop is wrapped once, and its click, which opens whatever flyout the
+-- secure code hangs on it. None of it during the login: the buttons are looked
 -- for once the bars have settled, and after that a button new to the bars is taken up when the list of
 -- them is next read for something else.
 local reached, dropWrapped, reachedKeys = {}, {}, nil
@@ -1651,9 +1703,10 @@ local function Reach()
                     root:SetAttribute("bkeys-" .. name, #keys)
                 end
             end
-            if dropWrapped[name] == nil then
+            if dropWrapped[name] == nil and not InCombatLockdown() then
                 dropWrapped[name] = pcall(root.WrapScript, root, button, "OnReceiveDrag", DROP_BEFORE, DROP_AFTER)
             end
+            HostWrap(button, name)
         end
     end
 end
@@ -1915,15 +1968,8 @@ function F.Apply()
             unit.flyout, unit.host = flyout, host
             state.unit = unit
             Lay(unit)
-            -- its click opens the flyout: wrapped once, told which one each time
-            if wrapped[name] == nil then
-                wrapped[name] = pcall(root.WrapScript, root, host, "OnClick", HOST_WRAP)
-                if wrapped[name] then
-                    host:HookScript("PostClick", HostClicked)
-                    host:HookScript("OnEnter", HostEntered)
-                    host:HookScript("OnSizeChanged", HostSized)
-                end
-            end
+            -- its click opens the flyout (wrapped already, with every bar button's, once the bars settled)
+            HostWrap(host, name)
             root:SetAttribute("host-" .. name, used)
             root:SetAttribute("hostof" .. used, name)
             -- what the game says the button holds: by this the secure code knows the flyout's
@@ -1968,6 +2014,7 @@ function F.Apply()
         root:SetAttribute("hostof" .. f, nil)
     end
     root:SetAttribute("units", used)
+    root:SetAttribute("adrift", nil)
     Carry()
     Rebind()
     Tell("laid")
