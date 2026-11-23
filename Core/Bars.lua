@@ -438,12 +438,55 @@ function B.ActionAt(slot)
     end
 end
 
-function B.Holds(button, main)
-    local slot = B.Slot(button)
+-- whether a slot holds an action
+function B.HoldsAt(slot, main)
     if not slot or not HasAction(slot) then return false end
     local kind, id, text = Read(slot)
     if kind == nil or kind ~= main.kind or id ~= main.id then return false end
     return kind ~= "macro" or M.Same(main, { id = id, text = text })
+end
+
+function B.Holds(button, main)
+    return B.HoldsAt(B.Slot(button), main)
+end
+
+-- Action Bar 1 of the game's own turns its twelve buttons to another page of slots: a druid's form, a
+-- stance, stealth, the bar's page arrows. The game sets the bar's "actionpage" for it (its
+-- ActionBarController, in a fight too), and button i stands then for slot (page - 1) * 12 + i (the
+-- buttons' CalculateAction, which reads the page off the bar). A button some other addon gives a slot
+-- of its own (an "action" of its own, as Dominos does) is not turned so.
+local MAIN_BAR, MAIN_BUTTON, MAIN_COUNT = "MainActionBar", "ActionButton", 12
+-- the most pages a slot of the bar can be on: its six own, the forms' and stances', a vehicle's, a
+-- passing shapeshift's and an override bar's
+local MAIN_PAGES = 14
+B.MAIN_BAR, B.MAIN_BUTTON, B.MAIN_COUNT = MAIN_BAR, MAIN_BUTTON, MAIN_COUNT
+
+-- the bar, while it turns its buttons by its page
+function B.MainBar()
+    local bar = _G[MAIN_BAR]
+    if type(bar) ~= "table" or type(bar.GetAttribute) ~= "function" then return nil end
+    if not tonumber(bar:GetAttribute("actionpage")) then return nil end
+    return bar
+end
+
+-- i, for the button of Action Bar 1 the bar turns by its page; nil for any other button
+function B.MainIndex(name)
+    if type(name) ~= "string" or not B.MainBar() then return nil end
+    local i = tonumber(name:match("^" .. MAIN_BUTTON .. "(%d+)$"))
+    if not i or i < 1 or i > MAIN_COUNT then return nil end
+    local button = B.Named(name)
+    if not button or button:GetAttribute("action") ~= nil then return nil end
+    return i
+end
+
+-- the slots button i of the bar stands for on those of its pages that hold `main`
+function B.PageSlots(i, main)
+    local out = {}
+    for page = 1, MAIN_PAGES do
+        local slot = (page - 1) * MAIN_COUNT + i
+        if B.HoldsAt(slot, main) then out[#out + 1] = slot end
+    end
+    return out
 end
 
 function B.Used(button)

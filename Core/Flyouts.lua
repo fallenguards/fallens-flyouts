@@ -314,6 +314,70 @@ local CLICK_AFTER = [[
 ]] .. SHUT .. BIND .. [[
     owner:CallMethod("Rehomed", on, name, 0)
 ]]
+-- Action Bar 1 turned to another page: a druid's form, a stance, stealth, the bar's page arrows. His
+-- words (2026-11-23): "ours is not working on druid forms... i make the flyout then click it and it takes
+-- me out of form (casting the first ability immediately) instead of opening the flyout, and then i go back
+-- into form and it's not even a flyout at all anymore"; "the flyouts on the same bar out of form have a
+-- delay on showing the flyout symbol, and in fact even acting as a flyout"; "cant be having delays like
+-- that". Seen on his druid (/ffdev forms): every shift left a button of the bar wrong for 0.4 to 0.9 s,
+-- until the addon's once-a-second pass came round; in a fight nothing followed at all. The game turns
+-- the bar by setting its "actionpage" (its ActionBarController, in a fight too); this runs as that is
+-- set (the bar's OnAttributeChanged, wrapped), before the bar's buttons are drawn anew. On each button of
+-- the bar, the flyout of what it stands for now (`page-<slot>`, written by Apply for every page, those
+-- out of view as much as the one in view) is hung as a drop in a fight hangs one (HOME). The one there
+-- before is taken off when the button no longer holds its ability, and kept for that page.
+F.PAGE = [[
+    if name ~= "actionpage" or not owner:GetAttribute("paging") then return end
+    local page = tonumber(value)
+    if not page then return end
+    local changed, shut
+    for i = 1, owner:GetAttribute("mainbuttons") or 0 do
+        local button = owner:GetFrameRef("mainbutton" .. i)
+        local name = button and not button:GetAttribute("action") and button:GetName()
+        local slot = (page - 1) * 12 + i
+        local left = name and owner:GetAttribute("slot-" .. name)
+        if name and slot ~= left then
+            owner:SetAttribute("slot-" .. name, slot)
+            local kind, id = GetActionInfo(slot)
+            local now
+            if kind and id then now = kind .. ":" .. tostring(id) end
+            local mine = owner:GetAttribute("page-" .. slot)
+            local away = mine and owner:GetAttribute("hostof" .. mine)
+            -- hung on another button since (a drop in a fight): it stays there
+            if away and away ~= name then mine = nil end
+            local had = owner:GetAttribute("host-" .. name)
+            local lead = had and owner:GetAttribute("lead" .. had)
+            if had and had ~= mine and lead and lead ~= now then
+                owner:SetAttribute("host-" .. name, nil)
+                owner:SetAttribute("hostof" .. had, nil)
+                owner:SetAttribute("okeys" .. had, 0)
+                owner:GetFrameRef("grip" .. had):Hide()
+                if owner:GetAttribute("main-" .. lead) == had then owner:SetAttribute("main-" .. lead, nil) end
+                -- kept for the page it was on, to come back with it
+                if left and not owner:GetAttribute("page-" .. left) then owner:SetAttribute("page-" .. left, had) end
+                if owner:GetAttribute("open") == had then shut = true end
+                changed = true
+            end
+            if mine and owner:GetAttribute("host-" .. name) ~= mine then
+                local self, was, on = button, nil, nil
+]] .. HOME .. [[
+                if now then
+                    owner:SetAttribute("main-" .. now, mine)
+                    owner:SetAttribute("lead" .. mine, now)
+                end
+                changed = true
+            end
+        end
+    end
+    if not changed then return end
+    if shut then
+        armed, held, picked, own = nil, nil, nil, nil
+]] .. SHUT .. [[
+    end
+]] .. BIND .. [[
+    owner:CallMethod("Paged")
+]]
+
 -- An icon moved to another spot of its flyout in a fight (asked which move he meant by the words above,
 -- he named this one too). Out of a fight the addon's own code moves it, sliding the others out of its
 -- way; in a fight that code may not touch an icon. This may: an icon's drag is wrapped, and a drop on
@@ -888,6 +952,7 @@ local function Build()
     root.Added = function(_, ...) xpcall(F.Added, geterrorhandler(), ...) end
     root.Refused = function(_, ...) xpcall(F.Refused, geterrorhandler(), ...) end
     root.Swapped = function(_, ...) xpcall(F.Swapped, geterrorhandler(), ...) end
+    root.Paged = function(_, ...) xpcall(F.Paged, geterrorhandler(), ...) end
     for i, key in ipairs(CLOSE_KEYS) do root:SetAttribute("ckey" .. i, key) end
     root:SetAttribute("ckeys", #CLOSE_KEYS)
     root:SetAttribute("units", 0)
@@ -2092,6 +2157,8 @@ end
 -- the keys that open a flyout: its bar button's own
 local function OpenKeys(unit)
     local keys, hold = {}, HoldKeys()
+    -- asleep on a page of the bar out of view (F.PAGE): none
+    if not unit.host then return keys end
     for _, key in ipairs(Bars.Keys(unit.host)) do
         if not hold[key] then keys[#keys + 1] = key end
     end
@@ -2401,7 +2468,7 @@ function F.Apply()
     root:SetAttribute("open", nil)
     -- no key counts as held or pressed across a layout
     root:Execute("armed, held, picked = nil, nil, nil")
-    local taken, leads = {}, {}
+    local taken, leads, pages, sleeping = {}, {}, {}, {}
     used = 0
     local ranked, hiding = F.Ranked(), F.Hiding()
     for _, flyout in ipairs(list or {}) do
@@ -2424,26 +2491,49 @@ function F.Apply()
         local name = flyout.host
         local host = not state.lost and Bars.Named(name)
         state.unit = nil
-        if host and #flyout.entries > 0 and not taken[name] then
-            taken[name] = true
+        -- On a button of Action Bar 1 that the bar turns by its page, its ability on one of the button's
+        -- pages: laid on its button whichever page is in view, asleep while its own is not (no arrow, no
+        -- key, a click there for the bar), for the secure code to wake the moment the bar turns to its
+        -- page (F.PAGE).
+        local slots, sleeps = F.PageSlots(flyout), false
+        if slots and #slots > 0 then
+            host = Bars.Named(name)
+            sleeps = host ~= nil and not Bars.Holds(host, flyout.main)
+            state.lost = nil
+        end
+        if host and #flyout.entries > 0 and (sleeps or not taken[name]) then
             used = used + 1
             local unit = Unit(used)
-            unit.flyout, unit.host = flyout, host
+            unit.flyout, unit.host, unit.asleep = flyout, host, nil
             state.unit = unit
             Lay(unit)
             -- its click opens the flyout (wrapped already, with every bar button's, once the bars settled)
             HostWrap(host, name)
-            root:SetAttribute("host-" .. name, used)
-            root:SetAttribute("hostof" .. used, name)
-            -- what the game says the button holds: by this the secure code knows the flyout's
-            -- ability on another button, should it be dragged there in a fight
-            local slot = Bars.Slot(host)
-            local kind, id
-            if slot then kind, id = GetActionInfo(slot) end
-            if type(kind) == "string" and (type(id) == "number" or type(id) == "string") then
-                local lead = kind .. ":" .. tostring(id)
-                leads[lead] = true
-                root:SetAttribute("main-" .. lead, used)
+            for _, slot in ipairs(slots or {}) do pages[slot] = used end
+            if sleeps then
+                unit.asleep, unit.host = true, nil
+                unit.opener:Hide()
+                Face(unit)
+                Named(unit)
+                sleeping[name] = true
+                root:SetAttribute("hostof" .. used, nil)
+                root:SetAttribute("lead" .. used, nil)
+            else
+                taken[name] = true
+                root:SetAttribute("host-" .. name, used)
+                root:SetAttribute("hostof" .. used, name)
+                -- what the game says the button holds: by this the secure code knows the flyout's
+                -- ability on another button, should it be dragged there in a fight
+                local slot = Bars.Slot(host)
+                local kind, id
+                if slot then kind, id = GetActionInfo(slot) end
+                local lead
+                if type(kind) == "string" and (type(id) == "number" or type(id) == "string") then
+                    lead = kind .. ":" .. tostring(id)
+                    leads[lead] = true
+                    root:SetAttribute("main-" .. lead, used)
+                end
+                root:SetAttribute("lead" .. used, lead)
             end
         end
     end
@@ -2451,6 +2541,19 @@ function F.Apply()
         if not taken[name] then root:SetAttribute("host-" .. name, nil) end
     end
     hosted = taken
+    -- each slot of Action Bar 1's pages that leads a flyout there, for F.PAGE
+    for slot in pairs(F.pages or {}) do
+        if not pages[slot] then root:SetAttribute("page-" .. slot, nil) end
+    end
+    for slot, f in pairs(pages) do root:SetAttribute("page-" .. slot, f) end
+    F.pages = pages
+    for i = 1, Bars.MAIN_COUNT do
+        local button = _G[Bars.MAIN_BUTTON .. i]
+        local name = button and Bars.MainIndex(Bars.MAIN_BUTTON .. i) and Bars.MAIN_BUTTON .. i
+        if name then root:SetAttribute("slot-" .. name, Bars.Slot(button)) end
+    end
+    root:SetAttribute("paging", Bars.MainBar() ~= nil or nil)
+    F.PageWrap()
     for lead in pairs(mains) do
         if not leads[lead] then root:SetAttribute("main-" .. lead, nil) end
     end
@@ -2459,7 +2562,7 @@ function F.Apply()
     if ready then
         local laid = Laid()
         for name in pairs(laid) do
-            if not taken[name] then laid[name] = nil end
+            if not taken[name] and not sleeping[name] then laid[name] = nil end
         end
     end
     for f = used + 1, #units do
@@ -2475,6 +2578,8 @@ function F.Apply()
         root:SetAttribute("pkeys" .. f, 0)
         root:SetAttribute("count" .. f, 0)
         root:SetAttribute("hostof" .. f, nil)
+        root:SetAttribute("lead" .. f, nil)
+        unit.asleep = nil
     end
     root:SetAttribute("units", used)
     root:SetAttribute("adrift", nil)
@@ -2499,6 +2604,9 @@ function F.Follow()
         local state, main = Run(flyout), flyout.main
         local held = Bars.Named(flyout.host)
         local on = main == nil or (held ~= nil and Bars.Holds(held, main))
+        -- asleep on a page of its button out of view: on its button, not off it
+        local asleep = main ~= nil and not on and F.Sleeps(flyout)
+        if asleep then on = true end
         if main and not (on and held:IsVisible()) then
             -- off its button or its bar hidden: looked for once
             local why = on and "hidden" or "off"
@@ -2522,6 +2630,10 @@ function F.Follow()
             if state.lost then
                 state.lost, change = nil, true
             elseif state.unit and held and Bars.Placed(held) ~= state.unit.placed then
+                change = true
+            elseif state.unit and (state.unit.asleep == true) ~= asleep then
+                -- awake on a page out of view, or asleep on the one in view: the secure code missed a
+                -- turn of the bar
                 change = true
             end
         end
@@ -2567,6 +2679,74 @@ Rehomed = function(f, name, off)
     State(unit)
     ns.Log(("in a fight %s was dropped on %s: its flyout went along"):format(Name(flyout.main), name))
     Tell("moved", unit)
+end
+
+-- The slots of its button's pages that hold a flyout's ability, for a flyout on a button of Action Bar 1
+-- that the bar turns by its page; nil for any other.
+function F.PageSlots(flyout)
+    local i = flyout and flyout.main and Bars.MainIndex(flyout.host)
+    if not i then return nil end
+    return Bars.PageSlots(i, flyout.main)
+end
+
+-- asleep: on its button of Action Bar 1, its ability on a page of the button out of view
+function F.Sleeps(flyout)
+    local slots = F.PageSlots(flyout)
+    if not (slots and #slots > 0) then return false end
+    local held = Bars.Named(flyout.host)
+    return held ~= nil and not Bars.Holds(held, flyout.main)
+end
+
+-- The bar's turns are followed by F.PAGE, wrapped once on the bar out of a fight, with the bar's
+-- buttons it hangs flyouts on.
+do
+    local paging
+    function F.PageWrap()
+        if paging ~= nil or InCombatLockdown() or not root then return end
+        local bar = _G[Bars.MAIN_BAR]
+        if type(bar) ~= "table" then return end
+        paging = pcall(root.WrapScript, root, bar, "OnAttributeChanged", F.PAGE)
+        local count = 0
+        for i = 1, Bars.MAIN_COUNT do
+            local button = _G[Bars.MAIN_BUTTON .. i]
+            if type(button) == "table" then
+                root:SetFrameRef("mainbutton" .. i, button)
+                count = i
+            end
+        end
+        root:SetAttribute("mainbuttons", count)
+        ns.Log(("pages: Action Bar 1's turns are followed: %s, over %d buttons"):format(tostring(paging), count))
+    end
+end
+
+-- The secure code turned Action Bar 1's flyouts with the bar's page (F.PAGE): which are asleep and which
+-- awake is read off it. What is drawn on the bar's buttons follows, in a fight too (drawings, no
+-- frames): the woken flyout's own icon and name on its button, and its keys' text; the one gone to sleep
+-- takes its own away, first, so that the button's own name is given back before it is covered again.
+function F.Paged()
+    for f = 1, used do
+        local unit = units[f]
+        if unit.flyout and unit.host and not root:GetAttribute("hostof" .. f) then
+            unit.asleep, unit.host, unit.keys = true, nil, {}
+            Face(unit)
+            Named(unit)
+        end
+    end
+    for f = 1, used do
+        local unit = units[f]
+        local name = root:GetAttribute("hostof" .. f)
+        local host = name and Bars.Named(name)
+        if unit.flyout and not unit.host and host then
+            unit.asleep, unit.host = nil, host
+            unit.keys = OpenKeys(unit)
+            Face(unit)
+            Named(unit)
+            State(unit)
+            Labels(unit)
+        end
+    end
+    if InCombatLockdown() then pending = true end
+    Tell("paged")
 end
 
 -- The secure code took an icon off its flyout in a fight (`from`: its place; `gone`: the flyout is no
@@ -2648,7 +2828,7 @@ function F.Settle()
     end
     for _, flyout in ipairs(list or {}) do
         local held, state = Bars.Named(flyout.host), Run(flyout)
-        local on = flyout.main == nil or (held ~= nil and Bars.Holds(held, flyout.main))
+        local on = flyout.main == nil or (held ~= nil and Bars.Holds(held, flyout.main)) or F.Sleeps(flyout)
         state.lost, state.sought = not on or nil, nil
         -- off its button, or on a hidden one: the bars are searched
         if flyout.main and not (on and held:IsVisible()) then moved = true end
@@ -2705,7 +2885,12 @@ function F.Roomy()
 end
 function F.Open() return open end
 function F.Lost(flyout) return Run(flyout).lost == true end
-function F.UnitOf(flyout) return Run(flyout).unit end
+function F.UnitOf(flyout)
+    local unit = Run(flyout).unit
+    -- asleep on a page of Action Bar 1 out of view: no button to be shown, turned or edited on
+    if unit and unit.asleep then return nil end
+    return unit
+end
 function F.Pause(on) paused = on end
 -- whether the pad is the input in use right now, and the command that tells
 function F.PadInUse() return PadInUse(), witness end
@@ -3116,6 +3301,11 @@ function F.Discard(flyout)
     for _, button in ipairs(Bars.All()) do
         if Bars.Holds(button, flyout.main) then return false end
     end
+    -- on a page of Action Bar 1 out of view it is on a button still
+    if F.Sleeps(flyout) then
+        inHand[flyout] = nil
+        return false
+    end
     inHand[flyout] = nil
     ns.Log(("the button of %s was done away with: its flyout is removed"):format(Name(flyout.main)))
     Forget(flyout)
@@ -3134,7 +3324,7 @@ local function Lifted()
     for _, flyout in ipairs(list) do
         -- off its button just now: one that was waiting already (its ability carried in from the
         -- spellbook) was lifted off nothing
-        if flyout.main and Same(flyout.main, carried) and not Run(flyout).lost then
+        if flyout.main and Same(flyout.main, carried) and not Run(flyout).lost and not F.Sleeps(flyout) then
             local held = Bars.Named(flyout.host)
             if not (held and Bars.Holds(held, flyout.main)) then inHand[flyout] = true end
         end

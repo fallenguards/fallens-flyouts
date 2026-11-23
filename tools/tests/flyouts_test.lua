@@ -4549,6 +4549,143 @@ do
     login("Player-1-0000000A")
 end
 
+print("a druid's form turns Action Bar 1 to another page: its flyouts follow at once, in a fight too")
+do
+    -- His words (2026-11-23): "ours is not working on druid forms... i make the flyout then click it and it
+    -- takes me out of form (casting the first ability immediately) instead of opening the flyout, and then i
+    -- go back into form and it's not even a flyout at all anymore"; "the flyouts on the same bar out of form
+    -- have a delay on showing the flyout symbol, and in fact even acting as a flyout"; "cant be having delays
+    -- like that". Seen on his druid (/ffdev forms): each shift left a button of the bar wrong for 0.4 to 0.9 s.
+    -- Every check here is made the moment the game has turned the bar, with no time let pass.
+    login("Player-1-0000000P")
+    local F11 = NS.Flyouts
+    local r = root()
+    local errors = #W.caught
+    W.placed = W.placed or {}
+    -- Bear Form's page, as on his druid: the bar's buttons stand for slots 97 to 108, button 1 holds Maul
+    -- there and button 2 Growl
+    W.placed[97], W.placed[98] = 6807, 6795
+    local one, two = W.frames.ActionButton1, W.frames.ActionButton2
+    -- out of form a flyout on button 2, as his Wrath one
+    stack("ActionButton2", 501)
+    rebound()
+    flushAll()
+    local caster, cu = F11.At("ActionButton2")
+    check(caster ~= nil and caster.main.id == 102 and opener("Q") == cu.index and cu.opener:IsShown(),
+        "out of form: a flyout on button 2, its keys open it and its arrow shows")
+
+    -- into the form, out of a fight
+    TurnPage(9)
+    local casts = #W.casts
+    mouse(two)
+    check(r.attrs["host-ActionButton2"] == nil and #W.casts == casts + 1 and W.casts[#W.casts] == "bar:ActionButton2"
+        and not cu.menu:IsShown(), "into the form: at once a click on button 2 casts Growl, what it holds there; its "
+        .. "flyout does not open")
+    check(not opens("Q") and not opens("2") and not cu.opener:IsShown() and F11.At("ActionButton2") == nil,
+        "at once its keys are the bar's own again, and no arrow shows")
+    flushAll()
+    check(F11.Of(caster.main) == caster and F11.Sleeps(caster), "the flyout of the other page is kept, asleep")
+
+    -- a flyout made in the form, on button 1 (Maul)
+    stack("ActionButton1", 502)
+    rebound()
+    flushAll()
+    local bear, bu = F11.At("ActionButton1")
+    check(bear ~= nil and bear ~= caster and bear.main.id == 6807 and opener("1") == bu.index and bu.opener:IsShown()
+        and F11.Sleeps(caster), "in the form a flyout made on button 1 is led by Maul, its own; the other is untouched")
+    casts = #W.casts
+    mouse(one)
+    check(bu.menu:IsShown() and #W.casts == casts, "a click on button 1 opens it and casts nothing")
+    mouse(one)
+
+    -- out of the form: each the moment the bar is turned back
+    TurnPage(1)
+    casts = #W.casts
+    mouse(one)
+    check(r.attrs["host-ActionButton1"] == nil and not bu.opener:IsShown() and not opens("1") and #W.casts == casts + 1
+        and not bu.menu:IsShown(), "out of the form: at once button 1 is a plain button again, its key and a click "
+        .. "the bar's")
+    check(r.attrs["host-ActionButton2"] == cu.index and opener("Q") == cu.index and opener("2") == cu.index
+        and cu.opener:IsShown() and F11.At("ActionButton2") == caster, "and at once the flyout of button 2 is back: "
+        .. "its arrow, and its keys open it")
+    casts = #W.casts
+    mouse(two)
+    check(cu.menu:IsShown() and #W.casts == casts, "a click on button 2 opens it and casts nothing")
+    mouse(two)
+
+    -- back into the form: the flyout made there is still one
+    TurnPage(9)
+    check(F11.At("ActionButton1") == bear and opener("1") == bu.index and bu.opener:IsShown() and not opens("Q"),
+        "back in the form, at once: the flyout made there is on button 1 again, a flyout still")
+    TurnPage(1)
+    flushAll()
+
+    -- in a fight: the same, by the secure code alone
+    W.guard = true
+    fire("PLAYER_REGEN_DISABLED")
+    W.combat = true
+    flushAll()
+    TurnPage(9)
+    casts = #W.casts
+    local keyOpens = opener("1") == bu.index
+    mouse(one)
+    check(r.attrs["host-ActionButton1"] == bu.index and bu.opener:IsShown() and keyOpens
+        and bu.menu:IsShown() and #W.casts == casts, "in a fight, into the form: at once a click on button 1 opens "
+        .. "the form's flyout, its key too")
+    mouse(one)
+    casts = #W.casts
+    mouse(two)
+    check(r.attrs["host-ActionButton2"] == nil and not cu.opener:IsShown() and not opens("Q") and #W.casts == casts + 1,
+        "and button 2 casts what it holds in the form")
+    TurnPage(1)
+    casts = #W.casts
+    mouse(two)
+    check(r.attrs["host-ActionButton2"] == cu.index and opener("Q") == cu.index and cu.menu:IsShown()
+        and #W.casts == casts, "in a fight, out of the form: at once button 2 opens its flyout again")
+    mouse(two)
+    check(r.attrs["host-ActionButton1"] == nil and not bu.opener:IsShown() and not opens("1"),
+        "and button 1 is a plain button")
+    TurnPage(9)
+    W.combat = false
+    fire("PLAYER_REGEN_ENABLED")
+    for _ = 1, 6 do flushAll() end
+    W.guard = nil
+    check(F11.At("ActionButton1") == bear and F11.Sleeps(caster) and opener("1") == F11.UnitOf(bear).index
+        and not opens("Q") and #F11.List() == 2, "the fight over, in the form: all as the secure code left it, "
+        .. "both flyouts kept")
+
+    -- the addon's own pass, as the seconds go by, changes nothing
+    for _ = 1, 3 do rebound() end
+    flushAll()
+    check(F11.At("ActionButton1") == bear and F11.At("ActionButton2") == nil and F11.Sleeps(caster),
+        "the once-a-second pass leaves them as they are")
+
+    -- The ability of the flyout asleep, carried from the spellbook and let go of: that flyout stays (its
+    -- ability is on its page still). A flyout taken off by a drag that ends nowhere is for one whose
+    -- ability left the bars.
+    C_Spell.PickupSpell(102)
+    fire("ACTIONBAR_SHOWGRID")
+    fire("ACTIONBAR_SLOT_CHANGED", 99)
+    ClearCursor()
+    fire("ACTIONBAR_HIDEGRID")
+    fire("CURSOR_CHANGED")
+    for _ = 1, 4 do flushAll() end
+    TurnPage(1)
+    check(F11.At("ActionButton2") == caster and #F11.List() == 2, "its ability carried and let go of in the form, "
+        .. "the flyout of the other page is still there when the bar turns back")
+    check(#W.caught == errors, "no error on the way: " .. tostring(W.caught[#W.caught]))
+
+    -- the bars as they were
+    local all = F11.List()
+    for i = #all, 1, -1 do table.remove(all, i) end
+    W.placed[97], W.placed[98] = nil, nil
+    F11.Apply()
+    rebound()
+    flushAll()
+    check(not opens("1") and not opens("Q") and r.attrs["page-1"] == nil and r.attrs["page-2"] == nil
+        and r.attrs["page-97"] == nil, "none left behind for what follows")
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")

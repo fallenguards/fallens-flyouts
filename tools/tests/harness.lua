@@ -268,6 +268,10 @@ function Frame:GetEffectiveScale() return (self.scale or 1) * (self.parent and s
 function Frame:SetAttribute(k, v)
     assert(k ~= "unit" or v == nil or type(v) == "string", "a unit attribute must be a unit name")
     self.attrs[k] = v
+    -- a wrap of the frame's OnAttributeChanged: its body runs for any name but one starting "_"
+    -- (the client's Wrapped_Attribute)
+    local wrapped = self.wraps and self.wraps.OnAttributeChanged
+    if wrapped and type(k) == "string" and not k:find("^_") then RunAttributeWrap(self, wrapped, k, v) end
 end
 function Frame:GetAttribute(k) return self.attrs[k] end
 -- as the client: a frame kept for the snippets under an attribute of its own
@@ -1034,6 +1038,15 @@ local function boot(alone)
     -- not placed yet, as at a login before the UI addon has moved its bars
     if unplaced then main.w, main.h = 40, 500 end
     for i = 1, 12 do actionButton("ActionButton" .. i, i, main) end
+    -- As the game's own: the bar's buttons take their slot off the bar's page ("useparent-actionpage")
+    -- and have no "action" of their own. Another addon's bars keep the one it gives them.
+    if kind == "game" then
+        main.attrs.actionpage = 1
+        for i = 1, 12 do
+            local b = W.frames["ActionButton" .. i]
+            b.attrs.action, b.attrs["useparent-actionpage"] = nil, true
+        end
+    end
     if kind == "helper" then
         local bar = CreateFrame("Frame", "SideBarFrame2", UIParent)
         bar.w, bar.h = 500, 40
@@ -1137,6 +1150,28 @@ local function secureRun(frame, body, signature, ...)
     W.secure = false
     if not ok then error(a, 0) end
     return a, b
+end
+-- a frame's OnAttributeChanged wrap (Frame:SetAttribute): its body, run as secure code
+function RunAttributeWrap(frame, wrapped, name, value)
+    local was = W.secure
+    secureRun(frame, wrapped.before, "self, name, value, owner", frame, name, value, wrapped.header)
+    W.secure = was
+end
+-- The game turning Action Bar 1 to another page (a druid's form, a stance): its ActionBarController sets
+-- the bar's "actionpage", in a fight too, and then each of the bar's buttons takes its slot off it anew
+-- (CalculateAction: (page - 1) * 12 + the button's number). Then the events the client sends with it.
+function TurnPage(page)
+    local bar = W.frames.MainActionBar
+    local was = W.secure
+    W.secure = true
+    bar:SetAttribute("actionpage", page)
+    W.secure = was
+    for i = 1, 12 do
+        local b = W.frames["ActionButton" .. i]
+        if b and b.attrs.action == nil then b.action = (page - 1) * 12 + i end
+    end
+    fire("UPDATE_SHAPESHIFT_FORM")
+    fire("UPDATE_BONUS_ACTIONBAR")
 end
 -- A drag begun on a frame, as the client runs it: the wrap's body first, which may refuse it or put
 -- something on the cursor; else the frame's own handler.
