@@ -222,8 +222,9 @@ local function NoPicture()
     return false
 end
 -- `where`: a button to stand around (in place), or a box to stand under. `flyout`: the one drawn, nil
--- for one not made yet; `lead`: what its button holds; `marked`: an icon's place.
-local function Picture(where, flyout, lead, entries, marked)
+-- for one not made yet; `lead`: what its button holds; `marked`: an icon's place; `button`: the bar
+-- button a flyout not made yet will be on, whose cross says how it will pick.
+local function Picture(where, flyout, lead, entries, marked, button)
     -- only a flyout that will stand around its button is drawn so
     if not holder or not F.Around() or (flyout and flyout.side) then return NoPicture() end
     local v = View()
@@ -245,7 +246,7 @@ local function Picture(where, flyout, lead, entries, marked)
     end
     v.around = where.button
     Art.LayDisc(v.plate, v, F.Plate() and radius or nil)
-    local faces = F.Faces(flyout)
+    local faces = F.Faces(flyout or { cross = true, host = button and button:GetName() or "" })
     local pads = F.RingPads(entries, faces)
     local hub = v.tokens[0]
     hub:ClearAllPoints()
@@ -342,7 +343,7 @@ local function Show(frame, moving, done)
         drawn = Picture(Where(frame, latestSlot), latest, latest.main, latest.entries)
     elseif offer then
         local flyout, entries = WouldBe(offer)
-        drawn = Picture(Where(frame, offer.slot), flyout, offer.old, entries)
+        drawn = Picture(Where(frame, offer.slot), flyout, offer.old, entries, nil, offer.button)
     else
         NoPicture()
     end

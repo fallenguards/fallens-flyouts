@@ -367,6 +367,13 @@ W.CHANGES = {
                 "see-through that background is.",
         } },
         { name = "Changed", items = {
+            "With a controller, a flyout made from now on picks its icons with the other cross from its " ..
+                "button: a flyout on a face button picks with the D-pad, and one on the D-pad with the face " ..
+                "buttons (on any other button, the D-pad). New flyouts pick with, on the Controller page, offers " ..
+                "the D-pad, the face buttons, or the same cross as its button instead. It takes the place of Pick " ..
+                "with the face buttons. Flyouts made before keep how they pick, and if you had Pick with the face " ..
+                "buttons on, new flyouts keep picking with the face buttons till you choose. Any flyout can still " ..
+                "be swapped as it is made, or in Edit Flyout.",
             "Moving an icon inside its flyout works as adding one does. Over the middle of another icon, that " ..
                 "icon lights up, and letting go trades their places. Pause between two icons and they part to " ..
                 "make room; let go between two icons, parted or not, and it goes in between. An icon dragged off " ..
@@ -384,11 +391,11 @@ W.CHANGES = {
                 "also one of its icon keys (a flyout on 1, say) is as before: 1 then 1 casts its first icon.",
             "The settings are easier to find your way in. What only a controller needs has a page of its own, " ..
                 "Controller, under Fallen's Flyouts in the game's options beside Automatic Flyouts, and says so " ..
-                "at the top: Open around the button in gamepad mode, Pick with the face buttons, Round background " ..
-                "behind it, and Arrange a flyout (moving icons without a drag). The settings for every flyout " ..
-                "(Keep a spell's ranks in order, Hide items I have none of, Press a flyout's key again for the " ..
-                "last one used) are under General on the addon's own page. Until now all of them stood together " ..
-                "under Arrange a flyout.",
+                "at the top: Open around the button in gamepad mode, Round background behind it, New flyouts pick " ..
+                "with, and Arrange a flyout (moving icons without a drag). The settings for every flyout (Keep a " ..
+                "spell's ranks in order, Hide items I have none of, Press a flyout's key again for the last one " ..
+                "used) are under General on the addon's own page. Until now all of them stood together under " ..
+                "Arrange a flyout.",
         } },
     } },
     { version = "1.1.6", date = "2026-11-23", parts = {

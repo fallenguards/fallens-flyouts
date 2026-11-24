@@ -99,9 +99,13 @@ local TEXT = {
     plate = "Round background behind it",
     plateTip = "A flyout that opens around its button has a round plate behind it, so an open flyout is "
         .. "seen at a glance.",
-    faces = "Pick with the face buttons",
-    facesTip = "On a controller the first four icons take the face buttons, and the D-pad takes any past "
-        .. "them. Off, the D-pad comes first. Each flyout can be swapped as it is made in gamepad mode.",
+    faces = "New flyouts pick with",
+    facesTip = "On a controller, which of the pad's crosses picks the icons of a flyout made from now on. "
+        .. "The other cross from its button: a flyout on a face button picks with the D-pad, and one on the "
+        .. "D-pad with the face buttons; one on any other button picks with the D-pad. Flyouts made before "
+        .. "keep how they pick. Any flyout can be swapped as it is made in gamepad mode, or in Edit Flyout.",
+    cross = { opposite = "The other cross from its button", dpad = "The D-pad", face = "The face buttons",
+        same = "The same cross as its button" },
 }
 A.TEXT = TEXT
 
@@ -288,7 +292,7 @@ function A.Refresh()
         p.off:SetEnabled(held ~= nil)
         p.icon:SetEnabled(flyout ~= nil)
         p.around:SetChecked(F.Around())
-        p.faces:SetChecked(F.Faces())
+        p.faces:GenerateMenu()
         p.plate:SetChecked(F.Plate())
         for i, button in ipairs(p.icons) do
             local entry = flyout and flyout.entries[i]
@@ -560,10 +564,17 @@ function A.Around(on)
     if not ok and why then ns.Warn(why) end
     A.Refresh()
 end
-function A.Faces(on)
-    local ok, why = F.SetFaces(on)
+-- the four ways a new flyout's cross is chosen, as the drop down lists them
+function A.Cross(cross)
+    local ok, why = F.SetCross(cross)
     if not ok and why then ns.Warn(why) end
     A.Refresh()
+end
+function A.FillCross(_, root)
+    local function IsOn(cross) return F.Cross() == cross end
+    for _, cross in ipairs({ "opposite", "dpad", "face", "same" }) do
+        root:CreateRadio(TEXT.cross[cross], IsOn, A.Cross, cross)
+    end
 end
 function A.Plate(on)
     local ok, why = F.SetPlate(on)
@@ -665,13 +676,22 @@ function A.BuildPad(page, scrolled)
     p.live:SetJustifyH("LEFT")
     p.live:SetText(TEXT.live)
     local padHead = Head(padHolder, TEXT.padHead, p.live, -GAP * 3)
-    local aroundLabel
-    p.around, aroundLabel = Check(padHolder, TEXT.around, TEXT.aroundTip, A.Around, nil, padHead)
+    p.around = Check(padHolder, TEXT.around, TEXT.aroundTip, A.Around, nil, padHead)
     p.around:ClearAllPoints()
     p.around:SetPoint("TOPLEFT", padHead, "BOTTOMLEFT", 0, -GAP)
-    p.faces = Check(padHolder, TEXT.faces, TEXT.facesTip, A.Faces, aroundLabel)
     p.plate = Check(padHolder, TEXT.plate, TEXT.plateTip, A.Plate, nil, p.around)
-    local head = Head(padHolder, TEXT.head, p.plate, -GAP * 3)
+    -- which cross picks the icons of a flyout made from now on: the game's drop down, its words over it
+    local crossLabel = padHolder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    crossLabel:SetPoint("TOPLEFT", p.plate, "BOTTOMLEFT", 0, -GAP)
+    crossLabel:SetText(TEXT.faces)
+    p.faces = CreateFrame("DropdownButton", nil, padHolder, "WowStyle1DropdownTemplate")
+    p.faces:SetPoint("TOPLEFT", crossLabel, "BOTTOMLEFT", 0, -GAP / 2)
+    p.faces:SetWidth(260)
+    p.faces.tip = TEXT.facesTip
+    p.faces:HookScript("OnEnter", ShowTip)
+    p.faces:HookScript("OnLeave", HideTip)
+    p.faces:SetupMenu(A.FillCross)
+    local head = Head(padHolder, TEXT.head, p.faces, -GAP * 3)
     p.status = padHolder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     p.status:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -GAP)
     p.status:SetJustifyH("LEFT")

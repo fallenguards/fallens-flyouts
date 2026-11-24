@@ -1811,9 +1811,14 @@ print("the key that opened a flyout, pressed again, picks its spot: under a held
 do
     -- his controller (2026-11-21): a shoulder held and D-pad down opens a flyout; the same again
     -- only shut it, where D-pad down stands for the spot by the button
-    local _, unit = NS.Flyouts.At("ActionButton1")
+    local padOne, unit = NS.Flyouts.At("ActionButton1")
     W.base["SHIFT-PADDDOWN"] = "ACTIONBUTTON1"
     rebound()
+    -- made now and opened from the D-pad, a flyout picks with the face buttons (New flyouts pick with,
+    -- 2026-11-24); this one is given the D-pad, to pick as his did
+    NS.Bars.KeyMap(true)
+    check(NS.Flyouts.Faces(padOne) == true, "made now and opened from the D-pad, a flyout picks with the face buttons")
+    NS.Flyouts.SetCross("dpad")
     local first = "CLICK FallensFlyoutsEntry" .. unit.index .. "_1:Key"
     check(opener("SHIFT-PADDDOWN") == one, "a D-pad button under a held shoulder is the flyout's key")
     local castsBefore = #W.casts
@@ -1826,6 +1831,7 @@ do
     tap("SHIFT-PADDDOWN")
     tap("SHIFT-PADDUP")
     check(W.casts[#W.casts] == "spell:502" and not unit.menu:IsShown(), "the other D-pad buttons under the shoulder pick their spots as before")
+    NS.Flyouts.SetCross("opposite")
     W.base["SHIFT-PADDDOWN"] = nil
     rebound()
     check(opener("SHIFT-PADDDOWN") == nil and opener("1") == one, "the key taken away, all is as before")
@@ -3991,24 +3997,25 @@ do
     check((NS.Turn.Grip() == nil or not NS.Turn.Grip():IsShown()) and NS.Turn.Start(unit) == false and NS.Move.Start(entry(unit.index, 2)) == false,
         "it has no end to pull and no line to slide along: no grip, and no icon is lifted")
     unit.menu.over = nil
-    -- the face buttons first, for every flyout of the profile
-    check(F2.SetFaces(true) == true and pads() == "PAD4 PAD2 PAD1 PAD3 PADDUP",
+    -- the face buttons first, for a flyout made now, by New flyouts pick with
+    check(flyout.cross == true, "a flyout made now is one that picks by New flyouts pick with")
+    check(F2.SetCross("face") == true and pads() == "PAD4 PAD2 PAD1 PAD3 PADDUP",
         "with the face buttons picked in the settings they come first, each on its side, and the D-pad takes the fifth: " .. pads())
     -- one flyout's own word, as the quick swap in the bind dialog gives it
     F2.SetFace(flyout, false)
-    check(pads() == "PADDUP PADDRIGHT PADDDOWN PADDLEFT PAD4" and F2.Faces() == true, "a flyout's own choice stands over the profile's")
+    check(pads() == "PADDUP PADDRIGHT PADDDOWN PADDLEFT PAD4" and F2.Cross() == "face", "a flyout's own choice stands over the profile's")
     F2.SetFace(flyout, nil)
-    F2.SetFaces(false)
+    F2.SetCross("opposite")
     -- a strip again where the player wants one
     check(F2.SetAround(false) == true and unit.radial == false and unit.strip.first.shown ~= false
         and entry(unit.index, 2).point[1] ~= "CENTER",
         "with that turned off in the settings it opens as a strip, as on any bar")
     check(unit.arrow:IsShown() and unit.dots.shown == false and not unit.plate.rim.shown and not unit.hub.shown,
         "a strip has the bar's arrow again, and neither dots nor plate")
-    F2.SetFaces(true)
+    F2.SetCross("face")
     check(pads() == table.concat({ "PAD1", "PAD3", "PAD2", "PAD4", "PADDUP" }, " "),
         "a strip picked with the face buttons takes the one on the same side as each D-pad button was: " .. pads())
-    F2.SetFaces(false)
+    F2.SetCross("opposite")
     F2.SetAround(true)
     F2.SetShape(flyout, "RIGHT")
     _, unit = F2.At(NAME)
@@ -4021,8 +4028,65 @@ do
     NS.ControllerUI.Build()
     NS.Arrange.Refresh()
     local padArrange = NS.ControllerUI.panel.arrange
-    check(padArrange.around:GetChecked() == true and padArrange.faces:GetChecked() == false,
+    check(padArrange.around:GetChecked() == true and padArrange.faces.Text.text == "The other cross from its button",
         "the Controller page shows both choices")
+    -- His words (2026-11-24): "shouldnt we have the flyout start d pad for face button bases and face buttons
+    -- for d pad bases? can have option in settings to always start with d or always with face or always d
+    -- with d and face with face though too", then "we shouldnt override existing players stuff for that.
+    -- just have the default change going forward".
+    do
+        local left, right = CreateFrame("Frame", nil, padBar), CreateFrame("Frame", nil, padBar)
+        padBar.Left, padBar.Right = left, right
+        local onD = actionButton("GamepadMainActionBarFrameTestActionButton9", 29, left)
+        local onFace = actionButton("GamepadMainActionBarFrameTestActionButton10", 30, right)
+        check(F2.ButtonCross(onD) == "dpad" and F2.ButtonCross(onFace) == "face",
+            "a button of gamepad mode's bars is on its bar's D-pad side or its face buttons' side")
+        W.base.PAD1, W.base["CTRL-PADDUP"] = "ACTIONBUTTON2", "ACTIONBUTTON3"
+        NS.Bars.KeyMap(true)
+        check(F2.ButtonCross(_G.ActionButton2) == "face" and F2.ButtonCross(_G.ActionButton3) == "dpad"
+            and F2.ButtonCross(_G.ActionButton4) == nil,
+            "a button of the other bars goes by the pad button bound to it, with a modifier or not; with none, neither")
+        W.base.PAD1, W.base["CTRL-PADDUP"] = nil, nil
+        NS.Bars.KeyMap(true)
+        local made = { cross = true, host = onD:GetName() }
+        local madeFace = { cross = true, host = onFace:GetName() }
+        local older = { host = onD:GetName() }
+        check(F2.Cross() == "opposite" and F2.Faces(made) == true and F2.Faces(madeFace) == false
+            and F2.Faces({ cross = true, host = "ActionButton4" }) == false,
+            "made now, a flyout on the D-pad picks with the face buttons, one on a face button with the D-pad, "
+            .. "one on any other button with the D-pad")
+        check(F2.Faces(older) == false, "one made before picks as it always has")
+        F2.SetCross("same")
+        check(F2.Faces(made) == false and F2.Faces(madeFace) == true, "the same cross as its button, when that is picked")
+        F2.SetCross("dpad")
+        check(F2.Faces(made) == false and F2.Faces(madeFace) == false, "the D-pad, always")
+        F2.SetCross("face")
+        check(F2.Faces(made) == true and F2.Faces(madeFace) == true and F2.Faces(older) == false,
+            "the face buttons, always; and one made before still as it was")
+        F2.SetCross("opposite")
+        -- one who had Pick with the face buttons on before keeps it
+        local data = NS.Profiles.Data()
+        data.padFace = true
+        check(F2.Faces(older) == true and F2.Cross() == "face" and F2.Faces(madeFace) == true,
+            "one who had Pick with the face buttons on keeps it: flyouts made before, and new ones till they choose")
+        F2.SetCross("opposite")
+        check(data.padCross == "opposite" and F2.Faces(older) == true and F2.Faces(madeFace) == false,
+            "choosing the usual one then is kept as chosen, and the flyouts made before are untouched")
+        data.padFace, data.padCross = nil, nil
+        -- the drop down on the Controller page
+        local drop = padArrange.faces
+        drop:GenerateMenu()
+        check(#drop.rows == 4 and drop.rows[1].label == "The other cross from its button"
+            and drop.Text.text == "The other cross from its button" and drop.rows[4].label == "The same cross as its button",
+            "New flyouts pick with: a drop down of four, the other cross from its button picked to begin with")
+        drop.rows[3].pick()
+        check(F2.Cross() == "face" and drop.Text.text == "The face buttons", "a choice picked is set, and shown")
+        drop.rows[1].pick()
+        check(F2.Cross() == "opposite" and data.padCross == nil, "back to the usual one, nothing is kept")
+        check(pcall(drop.scripts.OnEnter, drop) and W.tipLines[1][1] == NS.Arrange.TEXT.facesTip,
+            "its tooltip says what it does, and that flyouts made before keep how they pick")
+        padBar.Left, padBar.Right = nil, nil
+    end
     -- His words (2026-11-21): "why would we not let users move an icon anywhere they want on the dial? why
     -- would they HAVE to swap with an existing one?" An icon stands on the spot it is put on, taken or
     -- empty, and the flyout itself, open in play, shows it there and picks it by the pad button of that side.

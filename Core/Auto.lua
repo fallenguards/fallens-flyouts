@@ -329,7 +329,7 @@ local function Flyout(kind, name)
             return flyout
         end
     end
-    local flyout = { host = "", main = { kind = "macro", id = name }, auto = kind.id, entries = {} }
+    local flyout = { host = "", main = { kind = "macro", id = name }, auto = kind.id, entries = {}, cross = true }
     list[#list + 1] = flyout
     return flyout
 end

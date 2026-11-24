@@ -3198,20 +3198,79 @@ function F.SetPlate(on)
     return true
 end
 
--- Whether a controller picks with its face buttons before its D-pad: the flyout's own word where it has
--- one, else the profile's (the D-pad first unless turned on).
-function F.Faces(flyout)
-    if flyout and flyout.face ~= nil then return flyout.face == true end
-    local data = P.Data()
-    return data ~= nil and data.padFace == true
+-- Which cross of the pad presses a button: "dpad", "face", or nil (another pad button, a key, or none).
+-- A button of the game's gamepad bars stands on one side of its bar, the D-pad's (Left, its square slots)
+-- or the face buttons' (Right, its round ones), as the game's own edit view draws them; a button of the
+-- other bars goes by the pad button bound to it, with or without a modifier.
+F.SIDE_CROSS = { Left = "dpad", Right = "face" }
+F.KEY_CROSS = { PADDUP = "dpad", PADDDOWN = "dpad", PADDLEFT = "dpad", PADDRIGHT = "dpad",
+    PAD1 = "face", PAD2 = "face", PAD3 = "face", PAD4 = "face" }
+function F.ButtonCross(button)
+    if type(button) ~= "table" then return nil end
+    if Bars.Pad(button) then
+        local parent = button:GetParent()
+        local up = parent
+        for _ = 1, 4 do
+            if type(up) ~= "table" then return nil end
+            for side, cross in pairs(F.SIDE_CROSS) do
+                local group = up[side]
+                if type(group) == "table" then
+                    if group == parent then return cross end
+                    for _, held in pairs(group) do
+                        if held == button then return cross end
+                    end
+                end
+            end
+            up = type(up.GetParent) == "function" and up:GetParent() or nil
+        end
+        return nil
+    end
+    for _, key in ipairs(Bars.Keys(button)) do
+        local cross = F.KEY_CROSS[key:match("([^%-]+)$") or key]
+        if cross then return cross end
+    end
+    return nil
 end
-function F.SetFaces(on)
+
+-- How a flyout made from now on picks (one made since 1.1.7 carries `cross`). His words (2026-11-24):
+-- "shouldnt we have the flyout start d pad for face button bases and face buttons for d pad bases? can
+-- have option in settings to always start with d or always with face or always d with d and face with
+-- face though too", then "we shouldnt override existing players stuff for that. just have the default
+-- change going forward". So the profile's padCross: "opposite" (the usual one), "dpad", "face" or "same".
+-- One who had Pick with the face buttons on before (padFace) is given "face" till they choose.
+F.CROSSES = { opposite = true, dpad = true, face = true, same = true }
+function F.Cross()
+    local data = P.Data()
+    local cross = data and data.padCross
+    if cross and F.CROSSES[cross] then return cross end
+    if data and data.padFace == true then return "face" end
+    return "opposite"
+end
+function F.SetCross(cross)
     if InCombatLockdown() then return false, TEXT.fight end
     local data = P.Data()
-    if not data then return false end
-    data.padFace = on or nil
+    if not (data and F.CROSSES[cross]) then return false end
+    -- the usual one is kept as nothing, unless an older choice would speak in its stead
+    data.padCross = (cross ~= "opposite" or data.padFace == true) and cross or nil
     F.Apply()
     return true
+end
+
+-- Whether a controller picks a flyout's icons with its face buttons before its D-pad: the flyout's own
+-- word where it has one; for one made since 1.1.7, the profile's padCross by the cross of its button; for
+-- one made before, as it always has: the profile's Pick with the face buttons, the D-pad unless that was
+-- turned on. Without a flyout: that older choice.
+function F.Faces(flyout)
+    if flyout and flyout.face ~= nil then return flyout.face == true end
+    if flyout and flyout.cross then
+        local rule = F.Cross()
+        if rule == "dpad" or rule == "face" then return rule == "face" end
+        local on = F.ButtonCross(Bars.Named(flyout.host))
+        if rule == "same" then return on == "face" end
+        return on == "dpad"
+    end
+    local data = P.Data()
+    return data ~= nil and data.padFace == true
 end
 -- one flyout's own word on it; nil gives it the profile's again
 function F.SetFace(flyout, on)
@@ -3358,7 +3417,8 @@ function F.Stack(button, entry)
         Run(flyout).lost = nil
     else
         if Same(main, entry) then return nil, TEXT.twice end
-        flyout = { host = name, main = main, entries = { Copy(main) }, slot = F.SlotOn(button) }
+        -- made now: it picks by New flyouts pick with (F.Faces)
+        flyout = { host = name, main = main, entries = { Copy(main) }, slot = F.SlotOn(button), cross = true }
         list[#list + 1] = flyout
     end
     Append(flyout, entry)
@@ -3384,7 +3444,7 @@ function F.StackLed(main, entry, button)
             Append(flyout, entry)
         end
     else
-        flyout = { host = name or "", main = Copy(main), entries = { Copy(main), Copy(entry) } }
+        flyout = { host = name or "", main = Copy(main), entries = { Copy(main), Copy(entry) }, cross = true }
         list[#list + 1] = flyout
     end
     if name then
