@@ -892,10 +892,10 @@ do
     -- resting between two icons: they part there after a moment
     W.mouseX, W.mouseY = point(1.02)
     Move.Tick(0.1)
-    Move.Tick(0.45)
-    check(p.gap == 4 and p.between == 2, "between the first icon and the second, nothing moves for a while")
-    Move.Tick(0.15)
-    check(p.gap == 2 and p.between == nil, "after a rest of 0.65 s there, as Android's home screen waits, the gap goes there")
+    Move.Tick(0.2)
+    check(p.gap == 4 and p.between == 2, "between the first icon and the second, nothing moves for a moment")
+    Move.Tick(0.1)
+    check(p.gap == 2 and p.between == nil, "after a rest of 0.35 s there, Android's first wait, the gap goes there")
     -- off the plus, along the flyout
     tab.over, p.catcher.over = false, true
     W.mouseX, W.mouseY = point(1.02)

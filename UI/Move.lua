@@ -287,8 +287,11 @@ local catcher, ghost
 -- (Launcher3, Workspace.java) moves apps aside after a rest of 650 ms (REORDER_TIMEOUT), and makes a folder,
 -- at once, where the dragged icon's middle is within 0.55 of an icon's size of another's middle
 -- (mMaxDistanceForFolderCreation). On a phone an icon is about seven tenths of its cell, so that is the
--- middle seven tenths of a place, and a rim of 0.15 of a place at each end moves things.
-local RIM, REST = 0.15, 0.65
+-- middle seven tenths of a place, and a rim of 0.15 of a place at each end moves things. Of the 650 ms: "is
+-- the delay the standard one? feels slightly long." Launcher3 waited 350 ms first and raised it for fingers,
+-- which are slow and land roughly; a mouse aims exactly, and a drop between two icons goes in there without
+-- waiting at all, so the rest only says when they part to show it: Launcher3's first 350 ms.
+local RIM, REST = 0.15, 0.35
 -- how long the cursor may be off the plus and the flyout before the flyout shuts again
 local AWAY = 0.25
 -- the catcher's reach past the strip, in the strip's measure
