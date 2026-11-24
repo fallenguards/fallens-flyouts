@@ -212,13 +212,16 @@ local function SayAim(m, x, y)
         or ("on the gap at %d"):format(m.at)))
 end
 
--- every icon a step nearer its place; true while any is still on its way
-local function Slide(unit, elapsed, from, at)
+-- every icon a step nearer its place; true while any is still on its way. `lit`: the icon lit for a trade,
+-- which goes into the free place (`at`), its own left open under the cursor: what a let-go does, shown. His
+-- recording (2026-11-24): over the middle of an icon the flyout showed nothing happening, "many times get
+-- stuck in this mode where things don't move when they clearly should".
+local function Slide(unit, elapsed, from, at, lit)
     local busy = false
     local step = math.min(1, elapsed * SLIDE)
     for j, frame in ipairs(unit.entries) do
         if j ~= from and unit.flyout.entries[j] then
-            local want = F.Slot(from and Place(j, from, at) or j)
+            local want = F.Slot(from and (j == lit and at or Place(j, from, at)) or j)
             local now = frame.slide or F.Slot(j)
             if now ~= want then
                 now = now + (want - now) * step
@@ -406,7 +409,7 @@ function M.Step(elapsed)
     if carried and not moving then Slide(carried.unit, elapsed, carried.from, #carried.flyout.entries) end
     if moving then
         moving.grown = math.min(1, moving.grown + elapsed / GROW_TIME)
-        Slide(moving.unit, elapsed, moving.from, moving.at)
+        Slide(moving.unit, elapsed, moving.from, moving.at, moving.target)
         for j, frame in ipairs(moving.unit.entries) do
             if j == moving.target then frame:LockHighlight() else frame:UnlockHighlight() end
         end

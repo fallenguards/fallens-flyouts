@@ -829,7 +829,14 @@ check(Move.Moving() ~= nil and Move.Moving().target == nil and Move.Moving().at 
     "on the middle of the last icon it is not lit at once: on the way past an icon, none is")
 Move.Tick(0.12)
 check(Move.Moving().target == 3 and Move.Moving().at == 1 and entry(one, 3).lit and not entry(one, 2).lit,
-    "staying there a fifth of a second, that icon is lit, and nothing moves")
+    "staying there a fifth of a second, that icon is lit")
+settle()
+check(along(entry(one, 3)) == slot(1) and along(entry(one, 2)) == slot(2),
+    "and it slides into the free place, its own left open under the cursor: what a let-go does, shown")
+-- no tooltip while an icon is moved: they covered the icons being aimed at
+W.tip = nil
+entry(one, 2).scripts.OnEnter(entry(one, 2))
+check(W.tip == nil, "a hover on another icon while one is moved shows no tooltip")
 local edgeX, edgeY = middle(2)
 local midX, midY = middle(3)
 W.mouseX, W.mouseY = edgeX + (midX - edgeX) * 0.6, edgeY + (midY - edgeY) * 0.6
