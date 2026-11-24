@@ -334,77 +334,30 @@ end
 W.CHANGES = {
     { version = "1.1.7", date = "2026-11-24", parts = {
         { name = "Added", items = {
-            "Gear sets go in a flyout, from the equipment manager or off a bar, as mounts and pets do: the " ..
-                "set's picture and tooltip show, and a click puts the set on, as /equipset does. In a fight they " ..
-                "wait, as mounts and pets do.",
-            "Every flyout key in one place: under Flyout keys in the settings (/ff), a Default flyout binds " ..
-                "bar above each flyout's own sets the keys of the twelve spots of every flyout, the same keys as " ..
-                "the game's Keybindings options. Click a key and press the new one; right-click gives the usual " ..
-                "one back. A key that did something else is taken from it, as in the game's own options, and a " ..
-                "red line says what it did. The Fallen's Flyouts section of the game's Keybindings options now " ..
-                "says that every flyout key is in the addon's settings.",
-            "A Feedback page in the settings, beside Automatic Flyouts and Controller. Report a Bug and " ..
-                "Suggest an Idea make a link to a new issue on GitHub with the addon's status already filled in, " ..
-                "ready to copy into your browser; What's New shows what changed in this version. Under Status is " ..
-                "that status in full: everything the addon knows of your setup, with nothing of who you are. /ff " ..
-                "status opens the page.",
-            "After an update, the first time you play, the chat thanks you for updating, with the version you " ..
-                "now have, the addon's icon and name, and a link to what changed since the version you had.",
-            "Adding to a flyout shows where it goes. With a spell, an item or anything else on the cursor, " ..
-                "point at the + of a button that has a flyout: the flyout opens with a gap nearest the button. " ..
-                "Onto a flyout already open, point at any of its icons: the gap stands at its far end, so nothing " ..
-                "moves, and the flyout stays open if you take it away again. Pause between two icons and they " ..
-                "part around the gap there; let go between two icons, parted or not, and it goes in between. Stay " ..
-                "on the middle of an icon for a moment and that icon lights up instead, and letting go takes its " ..
-                "place, as on a bar slot; let go before it lights and it goes in on the nearer side of that icon. " ..
-                "Letting go on the + itself puts it first, nearest the button.",
-            "A flyout's bar button can be given its icon and name with a controller too: RB in Edit Flyout " ..
-                "(from the game's Edit Action Bar) opens the same window a right-click opens with a mouse, and so " ..
-                "does the Icon and Name button on the Controller page of the settings. In Edit Flyout, Show or " ..
-                "Hide Background moves to LB.",
-            "A gray hint at the foot of a flyout's bar button tooltip: right-click (or RB in Edit Flyout) to " ..
-                "change what the button shows. Show hints in tooltips, under General in the settings, turns these " ..
-                "hints off for the whole account, the one on a flyout's icons too.",
-            "Under Size and background in the settings (/ff): a Match Base Icon Size button, which makes a " ..
-                "flyout's icons as large as the icon of the bar button it opens from; Show the flyout background, " ..
-                "to draw the flyout without the background behind its icons; and Background opacity, how " ..
-                "see-through that background is.",
+            "Gear sets go in flyouts, like mounts and pets.",
+            "Adding to a flyout shows where it goes: bring a spell or item to a button's + or onto an open " ..
+                "flyout, then let go between two icons to insert it, or on an icon to replace it.",
+            "Default flyout binds, in /ff above each flyout's own keys: the keys every flyout picks with.",
+            "A Feedback page in the settings: Report a Bug or Suggest an Idea with your setup filled in, and " ..
+                "What's New. /ff status opens it.",
+            "After an update, a link to what changed.",
+            "Size and background settings: Match Base Icon Size, Show the flyout background and Background " ..
+                "opacity.",
+            "A hint at the foot of a flyout button's tooltip on changing what it shows. Show hints in " ..
+                "tooltips turns it off.",
+            "Controller: in Edit Flyout, RB changes a flyout button's icon and name, and LB shows or hides " ..
+                "the background.",
         } },
         { name = "Changed", items = {
-            "With a controller, a flyout made from now on picks its icons with the other cross from its " ..
-                "button: a flyout on a face button picks with the D-pad, and one on the D-pad with the face " ..
-                "buttons (on any other button, the D-pad). New flyouts pick with, on the Controller page, offers " ..
-                "the D-pad, the face buttons, or the same cross as its button instead. It takes the place of Pick " ..
-                "with the face buttons. Flyouts made before keep how they pick, and if you had Pick with the face " ..
-                "buttons on, new flyouts keep picking with the face buttons till you choose. Any flyout can still " ..
-                "be swapped as it is made, or in Edit Flyout.",
-            "Moving an icon inside its flyout works as adding one does. Stay on the middle of another icon " ..
-                "for a moment and it lights up, with a faint copy of it in the place it would trade into, and " ..
-                "letting go trades their places; let go before it lights and it goes in on the nearer side of " ..
-                "that icon. Pause between two icons and they part to make room; let go between two icons, parted " ..
-                "or not, and it goes in between. No tooltips pop up over the icons while you move one, and the " ..
-                "icon you move is drawn a little smaller, as the game's own dragged icons are. An icon dragged " ..
-                "off its flyout is off it, as anything carried from elsewhere: the others close up and the flyout " ..
-                "is a place shorter, and brought back onto it, it goes in again as anything carried onto a flyout " ..
-                "does, into a free place or in the place of an icon, that one onto the cursor. Let go anywhere " ..
-                "else and it is off, as before.",
-            "A right-click on an icon in a flyout casts it, as on a bar button, so a macro that does one " ..
-                "thing on a left-click and another on a right-click ([button:2]) works in a flyout too. To take " ..
-                "an icon off a flyout, drag it off (Shift-drag where your bars are locked) and let go, as off a " ..
-                "bar; its tooltip says so. Until now a right-click took the icon off.",
-            "The flyout size is set on the game's own slider with a stepper at each end, as in the game's " ..
-                "options. The Smaller and Larger buttons are gone.",
-            "Turning on Press a flyout's key again for the last one used now asks first, and its tooltip says " ..
-                "the same: what it does, and in red what it costs. With it on, a flyout's key no longer shuts the " ..
-                "open flyout; Escape (B on a controller) or a click on its bar button does. A flyout whose key is " ..
-                "also one of its icon keys (a flyout on 1, say) is as before: 1 then 1 casts its first icon.",
-            "The settings are easier to find your way in. What only a controller needs has a page of its own, " ..
-                "Controller, under Fallen's Flyouts in the game's options beside Automatic Flyouts, and says so " ..
-                "at the top: Open around the button in gamepad mode, Round background behind it, New flyouts pick " ..
-                "with, and Arrange a flyout (moving icons without a drag). The settings for every flyout (Keep a " ..
-                "spell's ranks in order, Hide items I have none of, Press a flyout's key again for the last one " ..
-                "used) are under General on the addon's own page. Until now all of them stood together under " ..
-                "Arrange a flyout.",
+            "Moving icons inside a flyout: let go on an icon to swap the two, or between two icons to insert. " ..
+                "An icon dragged off a flyout counts as any other dragged icon.",
+            "A right-click on a flyout icon casts it, so [button:2] macros work. Drag an icon off to take it " ..
+                "off.",
+            "With a controller, a new flyout picks with the other cross from its button's. New flyouts pick " ..
+                "with, on the Controller page, changes that. Flyouts you have keep how they pick.",
+            "The flyout size uses the game's slider.",
+            "Press a flyout's key again for the last one used now says what it changes before it turns on.",
+            "The settings are regrouped: what only a controller needs has its own Controller page.",
         } },
     } },
     { version = "1.1.6", date = "2026-11-23", parts = {
