@@ -817,6 +817,31 @@ for place = 1, 3 do
     check(Move.Where(unitOne, middle(place)) == place, "the middle of place " .. place .. " is place " .. place)
 end
 check(Move.Where(unitOne, 5000, 5000) == nil, "a point far off the flyout is no place")
+-- His words (2026-11-24): "why is this bouncing back despite lighting up the literal icon im trying to drop it
+-- to?", "only happens on the icons adjacent to the flyout", "and its not just to the right". A point just past
+-- the strip's side, where a bar button beside the flyout stands, is off it for an icon moved.
+do
+    local rimScale = menu:GetEffectiveScale()
+    local rimMidX, rimMidY = middle(1)
+    local rimSideX = (menu.rect[2] + 10) * rimScale
+    local rimBaseY = (menu.rect[4] - 10) * rimScale
+    check(Move.Where(unitOne, rimSideX, rimMidY, 0) == nil and Move.Where(unitOne, rimMidX, rimBaseY, 0) == nil,
+        "a point just past the strip's side or its base is off it, for an icon moved")
+    W.mouseDown = true
+    drag(entry(one, 1))
+    W.mouseX, W.mouseY = rimSideX, rimMidY
+    Move.Tick(0.02)
+    check(Move.Moving() == nil and Move.Carried() ~= nil and W.cursor ~= nil,
+        "an icon moved there is out of the flyout at once, on the cursor, for the bar button there to take")
+    W.mouseDown = false
+    Move.Tick(0.02)
+    Move.Tick(0.02)
+    flushAll()
+    W.cursor = nil
+    stack("ActionButton1", 502)
+    NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 3, 1)
+    flushAll()
+end
 -- His words (2026-11-24): "if i pull an item from an existing flyout, it doesnt have same behavior as
 -- dragging in ability in from somewhere else. is that intended? like i have to drag out of flyout and back
 -- to be able to do swaps." The mouse goes by the rules of something added.

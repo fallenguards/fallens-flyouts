@@ -133,8 +133,8 @@ local function Against(unit, x, y)
 end
 
 -- the place under a screen point; nil when the point is off the flyout
-local function Where(unit, x, y)
-    local r = Along(unit, x, y)
+local function Where(unit, x, y, reach)
+    local r = Along(unit, x, y, reach)
     if not r then return nil end
     return math.max(1, math.min(#unit.flyout.entries, math.floor(r) + 1))
 end
@@ -369,8 +369,8 @@ function M.Drop()
         if why then ns.Warn(why) end
         return false
     end
-    ns.Log(("move: %s from place %d to %d%s"):format(tostring(flyout.host), from, land,
-        lit and (", trading places with the icon lit, which went to %d"):format(at) or ""))
+    ns.Log(("move: %s from place %d to %d%s; let go with the %s"):format(tostring(flyout.host), from, land,
+        lit and (", trading places with the icon lit, which went to %d"):format(at) or "", Against(unit, was.x, was.y)))
     landing = { unit = unit, at = land, x = was.x, y = was.y, grown = was.grown, scale = was.scale, t = 0 }
     for place, out in pairs(drawn) do
         if unit.entries[place] then unit.entries[place].slide = out end
@@ -406,7 +406,13 @@ end
 function M.At(x, y, elapsed)
     if not moving then return end
     moving.x, moving.y = x, y
-    local place = Where(moving.unit, x, y)
+    -- On the strip itself, or out of it: an icon moved is out the moment the cursor leaves the strip, so a
+    -- let-go on a bar button beside the flyout is that button's, as the game shows it lit. It stayed in till
+    -- REACH past the strip on every side, over the buttons around the flyout's base, and went back to its
+    -- place. His words (2026-11-24): "why is this bouncing back despite lighting up the literal icon im
+    -- trying to drop it to?", "only happens on the icons adjacent to the flyout", "the exact. thing. still.
+    -- happens. and its not just to the right".
+    local place = Where(moving.unit, x, y, 0)
     if not place then
         ns.Log(("move: %s place %d off the strip: %s"):format(tostring(moving.flyout.host), moving.from,
             Against(moving.unit, x, y)))
