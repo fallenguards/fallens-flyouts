@@ -571,21 +571,64 @@ do
     check(NS.Keys.Start == nil and StaticPopupDialogs.FALLENSFLYOUTS_KEYS == nil, "and no key setting window of the addon's own")
 end
 
-print("flyout size")
-local base = menu.scale
-check(entry(one, 1).w == 30 and entry(one, 1).h == 30, "by default the icons are the game's own flyout size, 30 wide")
-check(page.slider.value == 100 and page.sizeText.text == "100%", "the size slider starts at 100%")
-page.slider:SetValue(150)
-check(math.abs(menu.scale - base * 1.5) < 0.001 and NS.Profiles.Data().size == 1.5 and page.sizeText.text == "150%",
-    "at 150% a flyout is half again as big, and the profile keeps it")
-page.larger.scripts.OnClick(page.larger)
-check(page.slider.value == 155, "Larger steps it up")
-W.combat = true
-page.slider:SetValue(100)
-check(math.abs(menu.scale - base * 1.55) < 0.001 and page.slider.value == 155, "no size change in a fight")
-W.combat = false
-page.slider:SetValue(100)
-check(math.abs(menu.scale - base) < 0.001 and NS.Profiles.Data().size == nil, "back at 100% it is the game's size again")
+print("flyout size, on the game's own stepper slider")
+do
+    -- His words (2026-11-24): "bro what is this \"smaller, larger\" lmao. just throwing away ui principles? why
+    -- not just follow the api's scroll anyway?" with a snip of the game's own stepper slider, and "i feel like
+    -- we should have a button for \"match base icon size\" (which does what you would think) and maybe a box
+    -- nearby to toggle whether the flyout background is shown at all, and an opacity for the flyout
+    -- background."
+    local base = menu.scale
+    local slider = page.slider
+    check(slider.template == "MinimalSliderWithSteppersTemplate" and page.smaller == nil and page.larger == nil,
+        "the size is the game's slider with a stepper at each end, and no Smaller or Larger button")
+    check(entry(one, 1).w == 30 and entry(one, 1).h == 30, "by default the icons are the game's own flyout size, 30 wide")
+    check(slider:GetValue() == 100 and slider.RightText.text == "100%", "the size slider starts at 100%, said at its right")
+    slider:SetValue(150)
+    check(math.abs(menu.scale - base * 1.5) < 0.001 and NS.Profiles.Data().size == 1.5 and slider.RightText.text == "150%",
+        "at 150% a flyout is half again as big, and the profile keeps it")
+    slider.Forward.scripts.OnClick(slider.Forward)
+    check(slider:GetValue() == 155 and NS.Profiles.Data().size == 1.55, "its right stepper steps it up")
+    slider.Back.scripts.OnClick(slider.Back)
+    check(slider:GetValue() == 150, "and its left stepper down")
+    W.combat = true
+    slider:SetValue(100)
+    check(math.abs(menu.scale - base * 1.5) < 0.001 and slider:GetValue() == 150, "no size change in a fight")
+    W.combat = false
+    slider:SetValue(100)
+    check(math.abs(menu.scale - base) < 0.001 and NS.Profiles.Data().size == nil, "back at 100% it is the game's size again")
+    -- the bar's own icon size: an icon of the flyout as large as the bar button's
+    page.match.scripts.OnClick(page.match)
+    check(math.abs(entry(one, 1).w * menu.scale - host:GetWidth() * host:GetEffectiveScale() / UIParent:GetEffectiveScale())
+        < 0.01 and slider:GetValue() == 150,
+        ("Match Base Icon Size: its icons as large as the bar button's (%s against %s)"):format(
+            tostring(entry(one, 1).w * menu.scale), tostring(host:GetWidth())))
+    slider:SetValue(100)
+    -- the background: shown or not, and how opaque
+    local unit = select(2, NS.Flyouts.At(host:GetName()))
+    local strip = unit.strip
+    local function seen() return strip.first.shown and strip.last.shown end
+    check(page.back:GetChecked() and seen() and page.opacity:GetValue() == 100 and strip.first:GetAlpha() == 1,
+        "the background is shown and whole to begin with")
+    page.opacity:SetValue(40)
+    check(math.abs(strip.first:GetAlpha() - 0.4) < 0.001 and math.abs(strip.last:GetAlpha() - 0.4) < 0.001
+        and NS.Profiles.Data().backAlpha == 0.4 and page.opacity.RightText.text == "40%",
+        "at 40% the background is that opaque, and the profile keeps it")
+    page.back.checked = false
+    page.back.scripts.OnClick(page.back)
+    check(not seen() and NS.Profiles.Data().noBack == true and not page.opacity:IsSliderEnabled(),
+        "unticked, no background is drawn, and its opacity is grayed out")
+    W.combat = true
+    page.back.checked = true
+    page.back.scripts.OnClick(page.back)
+    check(not seen() and not page.back:GetChecked(), "in a fight it does not change, and the box shows it")
+    W.combat = false
+    page.back.checked = true
+    page.back.scripts.OnClick(page.back)
+    page.opacity:SetValue(100)
+    check(seen() and NS.Profiles.Data().noBack == nil and NS.Profiles.Data().backAlpha == nil and page.opacity:IsSliderEnabled(),
+        "ticked again and back at 100%, nothing is kept in the profile: it is how flyouts are")
+end
 
 print("an icon's own key inside its flyout")
 local mine = NS.Profiles.Data().flyouts[1]

@@ -2155,7 +2155,8 @@ local function Lay(unit)
         menu:SetSize(span, span)
         Art.HideStrip(unit.strip)
         -- the plate, where wanted, and the button's icon at its middle, as large as the button
-        Art.LayDisc(unit.plate, menu, F.Plate() and F.PlateReach(TopSpot(flyout.entries), unit.reach) or nil)
+        Art.LayDisc(unit.plate, menu, F.Plate() and F.Back() and F.PlateReach(TopSpot(flyout.entries), unit.reach)
+            or nil)
         unit.hub:SetShown(unit.plate.radius ~= nil)
         unit.hub:SetScale(Art.BUTTON / F.Size() / Art.ICON)
         unit.hub.icon:SetTexture(flyout.icon or (flyout.main and F.Icon(flyout.main)) or nil)
@@ -2174,7 +2175,9 @@ local function Lay(unit)
         menu:SetSize(upright and Art.STRIP or long, upright and long or Art.STRIP)
         -- lying along the side, neither end opens onto the button: both are closed
         Art.LayStrip(unit.strip, menu, runName, sideName ~= runName)
+        if not F.Back() then Art.HideStrip(unit.strip) end
     end
+    Art.Fade(unit.strip, unit.plate, F.BackAlpha())
 
     for i, frame in ipairs(unit.entries) do
         local entry = flyout.entries[i]
@@ -3140,6 +3143,42 @@ function F.Plate()
     local data = P.Data()
     return not (data and data.padBare)
 end
+
+-- Whether a flyout's background is drawn (the game's strip behind its icons, and the round plate behind
+-- icons around a button), and how opaque it is: the profile's, shown and whole unless set otherwise.
+-- His words (2026-11-24): "bro what is this \"smaller, larger\" lmao. just throwing away ui principles? why
+-- not just follow the api's scroll anyway?" with a snip of the game's own stepper slider, and "i feel like
+-- we should have a button for \"match base icon size\" (which does what you would think) and maybe a box
+-- nearby to toggle whether the flyout background is shown at all, and an opacity for the flyout
+-- background."
+function F.Back()
+    local data = P.Data()
+    return not (data and data.noBack)
+end
+function F.SetBack(on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    data.noBack = not on or nil
+    F.Apply()
+    return true
+end
+function F.BackAlpha()
+    local data = P.Data()
+    local alpha = data and tonumber(data.backAlpha) or 1
+    return math.max(0, math.min(1, alpha))
+end
+function F.SetBackAlpha(alpha)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    alpha = math.max(0, math.min(1, tonumber(alpha) or 1))
+    data.backAlpha = alpha < 1 and alpha or nil
+    F.Apply()
+    return true
+end
+-- the size at which a flyout's icons are as large as its bar button's own icon
+function F.BarSize() return Art.BUTTON / Art.ICON end
 function F.SetPlate(on)
     if InCombatLockdown() then return false, TEXT.fight end
     local data = P.Data()

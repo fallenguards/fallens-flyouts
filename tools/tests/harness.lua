@@ -400,11 +400,59 @@ local function iconWindow(f)
     }
 end
 
+-- The game's slider with a stepper at each end (MinimalSliderWithSteppersTemplate, MinimalSlider.lua): Init
+-- sets its ends and step and its value, then listens; each value it is moved to is written in its labels
+-- by their formatters and told to those registered for it; a stepper moves it one step, not past an end.
+MinimalSliderWithSteppersMixin = {
+    Event = { OnValueChanged = "OnValueChanged", OnInteractStart = "OnInteractStart", OnInteractEnd = "OnInteractEnd" },
+    Label = { Left = 1, Right = 2, Top = 3, Min = 4, Max = 5 },
+}
+function CreateMinimalSliderFormatter(_, value)
+    if type(value) == "function" then return value end
+    return function(v) return value == nil and v or value end
+end
+local function minimalSlider(f)
+    f.Slider = CreateFrame("Slider", nil, f)
+    f.Back, f.Forward = CreateFrame("Button", nil, f), CreateFrame("Button", nil, f)
+    f.LeftText, f.RightText = f:CreateFontString(), f:CreateFontString()
+    f.Labels = { [1] = f.LeftText, [2] = f.RightText }
+    f.callbacks = {}
+    function f:RegisterCallback(event, fn, owner) self.callbacks[event] = { fn, owner } end
+    function f:Init(value, low, high, steps, formatters)
+        self.Slider:SetMinMaxValues(low, high)
+        self.step, self.formatters = (high - low) / steps, formatters
+        self.Slider.scripts.OnValueChanged = nil
+        self.Slider:SetValue(value)
+        for id, format in pairs(formatters or {}) do self.Labels[id]:SetText(format(value)) end
+        self.Slider.scripts.OnValueChanged = function(_, v)
+            for id, format in pairs(self.formatters or {}) do self.Labels[id]:SetText(format(v)) end
+            local told = self.callbacks.OnValueChanged
+            if told then told[1](told[2], v) end
+        end
+    end
+    function f:SetValue(v) self.Slider:SetValue(v) end
+    function f:GetValue() return self.Slider:GetValue() end
+    function f:SetEnabled(on)
+        self.sliderEnabled = on
+        self.Slider:SetEnabled(on)
+        self.Back:SetEnabled(on)
+        self.Forward:SetEnabled(on)
+    end
+    function f:IsSliderEnabled() return self.sliderEnabled ~= false end
+    f.Back.scripts.OnClick = function()
+        f.Slider:SetValue(math.max(f.Slider.low, f.Slider:GetValue() - f.step))
+    end
+    f.Forward.scripts.OnClick = function()
+        f.Slider:SetValue(math.min(f.Slider.high, f.Slider:GetValue() + f.step))
+    end
+end
+
 function CreateFrame(otype, name, parent, template)
     local protected = template ~= nil and template:find("Secure") ~= nil
     local f = setmetatable({ name = name, scripts = {}, attrs = {}, shown = true, otype = otype, parent = parent,
         protected = protected, template = template }, Frame)
     if template == "IconSelectorPopupFrameTemplate" then iconWindow(f) end
+    if template == "MinimalSliderWithSteppersTemplate" then minimalSlider(f) end
     -- the game's search box: a prompt of its own inside it
     if template == "SearchBoxTemplate" then f.Instructions = region() end
     -- the game's flat panel: its title is a text of its own in the bar at its top

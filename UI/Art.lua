@@ -231,6 +231,13 @@ function A.HideStrip(strip)
     for _, piece in ipairs({ strip.first, strip.last, strip.upright, strip.level }) do piece:Hide() end
 end
 
+-- the background behind a flyout's icons, the strip and the plate, this opaque
+function A.Fade(strip, disc, alpha)
+    for _, piece in ipairs({ strip.first, strip.last, strip.upright, strip.level, disc.rim, disc.fill }) do
+        piece:SetAlpha(alpha)
+    end
+end
+
 -- an icon cut to the game's bar button shape
 function A.Dress(owner, icon)
     local mask = owner:CreateMaskTexture()

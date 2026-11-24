@@ -4,6 +4,7 @@ local _, ns = ...
 -- luacheck: read globals CreateFrame Settings MenuUtil StaticPopup_Show InCombatLockdown C_Timer
 -- luacheck: read globals OKAY CANCEL YES NO GameTooltip SettingsPanel SmartNavigation
 -- luacheck: read globals SmartNavigation_MarkFrameIgnored SmartNavigation_ClearIgnoreStatus ScrollUtil
+-- luacheck: read globals MinimalSliderWithSteppersMixin CreateMinimalSliderFormatter
 
 -- The Profiles page in the game's options; /ff and /flyouts open it.
 local P = ns.Profiles
@@ -34,12 +35,27 @@ local TEXT = {
     askCopyFrom = "Replace the flyouts of %s with those of %s?",
     noOthers = "There is no other profile to copy from.",
     fight = "The options open out of a fight.",
-    sizeHead = "Flyout size",
+    sizeHead = "Size and background",
+    size = "Flyout size",
     sizeNote = "100% is the size of the game's own flyouts.",
+    match = "Match Base Icon Size",
+    matchTip = "Makes a flyout's icons as large as the icon of the bar button it opens from.",
+    back = "Show the flyout background",
+    backTip = "The game's flyout background behind the icons, and the round one behind a flyout that opens "
+        .. "around its button. Off, the icons stand on their own.",
+    alpha = "Background opacity",
     percent = "%d%%",
 }
--- the size slider: its ends and step in percent, its floor width and height
-local SIZE_LOW, SIZE_HIGH, SIZE_STEP, SLIDER_FLOOR, SLIDER_H = 50, 200, 5, 200, 17
+-- His words (2026-11-24): "bro what is this \"smaller, larger\" lmao. just throwing away ui principles? why
+-- not just follow the api's scroll anyway?" with a snip of the game's own stepper slider, and "i feel like
+-- we should have a button for \"match base icon size\" (which does what you would think) and maybe a box
+-- nearby to toggle whether the flyout background is shown at all, and an opacity for the flyout
+-- background."
+-- The sliders are the game's own with a stepper at each end (MinimalSliderWithSteppersTemplate, as its
+-- options have them): their ends and step in percent, the room for a row's name, and a slider's width.
+local SIZE_LOW, SIZE_HIGH, SIZE_STEP = 50, 200, 5
+local ALPHA_LOW, ALPHA_HIGH, ALPHA_STEP = 0, 100, 5
+local NAME_W, SLIDER_W = 170, 250
 
 local panel, category
 
@@ -202,12 +218,15 @@ function UI.Refresh()
     end
     panel.rename:SetEnabled(P.Kind(active) == nil)
     panel.delete:SetEnabled(active ~= P.Own())
-    -- the size belongs to the profile in use
-    local percent = math.floor(ns.Flyouts.Size() * 100 + 0.5)
+    -- the size and the background belong to the profile in use
+    local F = ns.Flyouts
+    local percent = math.floor(F.Size() * 100 + 0.5)
     panel.syncing = true
     panel.slider:SetValue(percent)
+    panel.opacity:SetValue(math.floor(F.BackAlpha() * 100 + 0.5))
     panel.syncing = nil
-    panel.sizeText:SetText(TEXT.percent:format(percent))
+    panel.back:SetChecked(F.Back())
+    panel.opacity:SetEnabled(F.Back())
     ns.Arrange.Refresh()
     UI.Fit()
 end
@@ -263,13 +282,39 @@ function UI.SetSize(percent)
     UI.Refresh()
 end
 
-local function Step(by) UI.SetSize(math.floor(ns.Flyouts.Size() * 100 + 0.5) + by) end
+-- the background's opacity from its slider, in percent
+function UI.SetOpacity(percent)
+    if panel.syncing then return end
+    percent = math.max(ALPHA_LOW, math.min(ALPHA_HIGH, math.floor(percent / ALPHA_STEP + 0.5) * ALPHA_STEP))
+    local ok, why = ns.Flyouts.SetBackAlpha(percent / 100)
+    if not ok then Warn(why) end
+    UI.Refresh()
+end
 
--- under the profiles: the size
-local MORE = {
-    { key = "smaller", label = "Smaller", tip = "Makes flyouts smaller.", run = function() Step(-SIZE_STEP) end },
-    { key = "larger", label = "Larger", tip = "Makes flyouts larger.", run = function() Step(SIZE_STEP) end },
-}
+-- the background shown or not, from its check box
+function UI.SetBack(on)
+    local ok, why = ns.Flyouts.SetBack(on)
+    if not ok then Warn(why) end
+    UI.Refresh()
+end
+
+-- The game's slider with its steppers, its value in percent at its right; `run` is told each value it is
+-- moved to. A row: its name, then the slider.
+local function Slider(content, name, low, high, step, run)
+    local label = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    label:SetText(name)
+    local slider = CreateFrame("Frame", nil, content, "MinimalSliderWithSteppersTemplate")
+    slider:SetWidth(SLIDER_W)
+    slider:SetPoint("LEFT", label, "LEFT", NAME_W, 0)
+    local right = MinimalSliderWithSteppersMixin.Label.Right
+    slider:Init(low, low, high, (high - low) / step, {
+        [right] = CreateMinimalSliderFormatter(right, function(value) return TEXT.percent:format(value) end),
+    })
+    slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value) run(value) end,
+        slider)
+    slider.label = label
+    return slider, label
+end
 
 function UI.Build()
     if panel.built then return end
@@ -321,25 +366,38 @@ function UI.Build()
     local sizeHead = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     sizeHead:SetPoint("TOPLEFT", panel.new, "BOTTOMLEFT", 0, -GAP * 3)
     sizeHead:SetText(TEXT.sizeHead)
+    -- the size, and beside it a button for the bar's own icon size
+    local sizeLabel
+    panel.slider, sizeLabel = Slider(content, TEXT.size, SIZE_LOW, SIZE_HIGH, SIZE_STEP, UI.SetSize)
+    sizeLabel:SetPoint("TOPLEFT", sizeHead, "BOTTOMLEFT", 0, -GAP * 3)
+    local match = Make({ key = "match", label = TEXT.match, tip = TEXT.matchTip,
+        run = function() UI.SetSize(ns.Flyouts.BarSize() * 100) end })
+    match:SetPoint("LEFT", panel.slider, "RIGHT", GAP * 5, 0)
     local sizeNote = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    sizeNote:SetPoint("TOPLEFT", sizeHead, "BOTTOMLEFT", 0, -GAP)
+    sizeNote:SetPoint("TOPLEFT", sizeLabel, "BOTTOMLEFT", 0, -GAP * 2)
     sizeNote:SetText(TEXT.sizeNote)
-    -- the game's own slider; the two buttons are for a controller's cursor
-    local slider = CreateFrame("Slider", nil, content, "UISliderTemplate")
-    slider:SetPoint("TOPLEFT", sizeNote, "BOTTOMLEFT", 0, -GAP * 2)
-    slider:SetSize(SLIDER_FLOOR, SLIDER_H)
-    slider:SetMinMaxValues(SIZE_LOW, SIZE_HIGH)
-    slider:SetValueStep(SIZE_STEP)
-    slider:SetObeyStepOnDrag(true)
-    slider:SetScript("OnValueChanged", function(_, value) UI.SetSize(value) end)
-    panel.slider = slider
-    panel.sizeText = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    panel.sizeText:SetPoint("LEFT", slider, "RIGHT", GAP, 0)
-    local smaller, larger = Make(MORE[1]), Make(MORE[2])
-    smaller:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -GAP * 2)
-    larger:SetPoint("LEFT", smaller, "RIGHT", GAP / 2, 0)
-    -- under it: General and Flyout keys (Options/Arrange.lua)
-    ns.Arrange.Build(panel, smaller, content)
+    -- the background: shown or not, and how opaque
+    local back = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+    back:SetPoint("TOPLEFT", sizeNote, "BOTTOMLEFT", -4, -GAP)
+    local backText = back.Text or back.text
+    if not backText then
+        backText = back:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        backText:SetPoint("LEFT", back, "RIGHT", GAP / 2, 0)
+    end
+    backText:SetText(TEXT.back)
+    back.tip = TEXT.backTip
+    back:SetScript("OnClick", function(self) UI.SetBack(self:GetChecked() and true or false) end)
+    back:SetScript("OnEnter", ShowTip)
+    back:SetScript("OnLeave", HideTip)
+    panel.back = back
+    local alphaLabel
+    panel.opacity, alphaLabel = Slider(content, TEXT.alpha, ALPHA_LOW, ALPHA_HIGH, ALPHA_STEP, UI.SetOpacity)
+    alphaLabel:SetPoint("TOPLEFT", back, "BOTTOMLEFT", 4, -GAP * 2)
+    -- under it: General and Flyout keys (Options/Arrange.lua), under the opacity's row
+    local foot = CreateFrame("Frame", nil, content)
+    foot:SetSize(1, 1)
+    foot:SetPoint("TOPLEFT", alphaLabel, "BOTTOMLEFT", 0, -GAP)
+    ns.Arrange.Build(panel, foot, content)
     panel.built = true
     P.OnChange(UI.Refresh)
 end
