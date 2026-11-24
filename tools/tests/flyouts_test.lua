@@ -815,15 +815,56 @@ for place = 1, 3 do
     check(Move.Where(unitOne, middle(place)) == place, "the middle of place " .. place .. " is place " .. place)
 end
 check(Move.Where(unitOne, 5000, 5000) == nil, "a point far off the flyout is no place")
+-- His words (2026-11-24): "if i pull an item from an existing flyout, it doesnt have same behavior as
+-- dragging in ability in from somewhere else. is that intended? like i have to drag out of flyout and back
+-- to be able to do swaps." The mouse goes by the rules of something added.
 W.mouseDown = true
 drag(entry(one, 1))
 W.mouseX, W.mouseY = middle(3)
 Move.Tick(0.02)
-check(Move.Moving() ~= nil and Move.Moving().at == 3, "held over the last place, the gap goes there")
+check(Move.Moving() ~= nil and Move.Moving().target == 3 and Move.Moving().at == 1 and entry(one, 3).lit
+    and not entry(one, 2).lit, "held over the middle of the last icon, that icon is lit, and nothing moves")
 W.mouseDown = false
 Move.Tick(0.02)
 settle()
-check(order() == "101 501 502" and Move.Moving() == nil and Move.Landing() == nil, "let go, it is last again")
+check(order() == "501 101 502" and Move.Moving() == nil and Move.Landing() == nil and not entry(one, 3).lit
+    and not entry(one, 1).lit, "let go, the two trade places: the lit one into the gap, the held one in its place")
+check(entry(one, 1).alpha == 1 and entry(one, 3).alpha == 1 and along(entry(one, 1)) == slot(1)
+    and along(entry(one, 3)) == slot(3), "and each is seen, in its place")
+-- between two icons: they part after a rest, and a let-go goes in there
+show()
+W.mouseDown = true
+drag(entry(one, 1))
+local ax, ay = middle(2)
+local bx, by = middle(3)
+W.mouseX, W.mouseY = (ax + bx) / 2, (ay + by) / 2
+Move.Tick(0.1)
+check(Move.Moving().at == 1 and Move.Moving().between == 2 and Move.Moving().target == nil and not entry(one, 2).lit
+    and not entry(one, 3).lit, "between the second icon and the third, nothing moves for a moment, nothing lit")
+Move.Tick(0.1)
+check(Move.Moving().at == 2 and Move.Moving().between == nil, "after a rest there, the gap is there")
+settle()
+check(along(entry(one, 2)) == slot(1) and along(entry(one, 3)) == slot(3), "the icons parted round it")
+W.mouseDown = false
+Move.Tick(0.02)
+settle()
+check(order() == "101 501 502", "let go, it goes in there")
+-- let go between two before they part: in there all the same
+show()
+W.mouseDown = true
+drag(entry(one, 3))
+ax, ay = middle(1)
+bx, by = middle(2)
+W.mouseX, W.mouseY = (ax + bx) / 2, (ay + by) / 2
+Move.Tick(0.05)
+check(Move.Moving().at == 3 and Move.Moving().between == 2, "between the first icon and the second, not parted yet")
+W.mouseDown = false
+Move.Tick(0.02)
+settle()
+check(order() == "101 502 501", "let go at once, it goes in between all the same")
+NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 2, 3)
+flushAll()
+check(order() == "101 501 502", "put back as it was for the checks that follow")
 local record = NS.Flyouts.At("ActionButton1")
 NS.Flyouts.SetKey(record, 3, "T", false)
 show()
@@ -1034,6 +1075,37 @@ do
     flushAll()
     check(count(one) == 3 and order() == "101 501 502" and W.cursor == nil and entry(one, 3).alpha == 1,
         "let go on its own button's plus, it stays in its flyout, seen again")
+    -- His words (2026-11-24): "and even then, when i drop onto another item in the flyout, what should be a
+    -- swap doesnt. it just puts it back in the flyout?"
+    show()
+    drag(entry(one, 3))
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    check(Move.Carried() ~= nil and W.cursor ~= nil and W.cursor[4] == 502, "dragged out, it is on the cursor")
+    entry(one, 1).scripts.OnReceiveDrag(entry(one, 1))
+    W.mouseDown = false
+    Move.Tick(0.02)
+    Move.Tick(0.02)
+    flushAll()
+    check(order() == "502 501 101" and W.cursor == nil and count(one) == 3 and entry(one, 1).alpha == 1
+        and entry(one, 3).alpha == 1 and menu:IsShown(),
+        "let go on another of its flyout's icons, the two trade places, the flyout still open: " .. order())
+    -- on its own place it stays
+    drag(entry(one, 1))
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    entry(one, 1).scripts.OnReceiveDrag(entry(one, 1))
+    W.mouseDown = false
+    Move.Tick(0.02)
+    Move.Tick(0.02)
+    flushAll()
+    check(order() == "502 501 101" and W.cursor == nil and count(one) == 3 and entry(one, 1).alpha == 1,
+        "let go on its own place, it stays there")
+    NS.Flyouts.Swap(NS.Flyouts.At("ActionButton1"), 1, 3)
+    flushAll()
+    check(order() == "101 501 502", "and the flyout is put back as it was for the checks that follow")
     show()
 end
 W.shift, W.locked = false, false

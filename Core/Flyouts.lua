@@ -3466,8 +3466,23 @@ function F.Dropped(frame)
     local flyout = unit and unit.flyout
     local old = flyout and flyout.entries[i]
     if not old then return end
-    -- an icon dragged out of this flyout and let go on one of its icons: it stays in
-    if ns.Move and ns.Move.PutBack(flyout) then return ClearCursor() end
+    -- An icon dragged out of this flyout and let go on another of its icons: the two trade places, as when
+    -- moved inside it; on its own place it stays. His words (2026-11-24): "and even then, when i drop onto
+    -- another item in the flyout, what should be a swap doesnt. it just puts it back in the flyout?"
+    local back, held
+    if ns.Move then back, held = ns.Move.PutBack(flyout) end
+    if back then
+        ClearCursor()
+        local from
+        for k, other in ipairs(flyout.entries) do
+            if other == held then from = k end
+        end
+        if from and from ~= i and F.Swap(flyout, from, i) then
+            ns.Log(("%s traded places with %s in the flyout on %s"):format(Name(held), Name(old),
+                tostring(flyout.host)))
+        end
+        return
+    end
     local entry = ns.Drop and ns.Drop.Carried()
     if not entry then return end
     if Same(old, entry) then return ClearCursor() end
@@ -3628,6 +3643,22 @@ function F.Place(flyout, i, spot)
         taken[entry.spot] = true
     end
     local shown = open ~= nil and open.flyout == flyout
+    F.Apply()
+    local unit = shown and Run(flyout).unit
+    if unit then F.Show(unit.index) end
+    return true
+end
+
+-- two icons of a flyout trade places, each with its own key
+function F.Swap(flyout, a, b)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local entries = flyout and flyout.entries
+    if not (list and entries and entries[a] and entries[b]) then return false end
+    if flyout.auto then return false, TEXT.auto end
+    if a == b then return true end
+    local shown = open ~= nil and open.flyout == flyout
+    entries[a], entries[b] = entries[b], entries[a]
+    Mirror(flyout)
     F.Apply()
     local unit = shown and Run(flyout).unit
     if unit then F.Show(unit.index) end

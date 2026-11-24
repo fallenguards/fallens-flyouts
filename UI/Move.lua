@@ -2,8 +2,9 @@ local _, ns = ...
 -- luacheck: read globals UIParent CreateFrame InCombatLockdown GetCursorPosition IsMouseButtonDown IsModifiedClick
 -- luacheck: read globals GameTooltip GetCursorInfo ClearCursor
 
--- An icon moved inside its flyout, as icons move on a phone's home screen:
--- held, it lifts and grows; the others slide out of its way; it lands in the gap.
+-- An icon moved inside its flyout, as icons move on a phone's home screen: held, it lifts and grows; the
+-- others part for it after a rest between two of them; over the middle of another, that one is lit, and the
+-- two trade places on the let-go; it lands where it goes.
 local M = {}
 ns.Move = M
 local F, Art = ns.Flyouts, ns.Art
@@ -14,6 +15,25 @@ local GROW, GROW_TIME, SLIDE, LAND_TIME = 1.25, 0.12, 16, 0.12
 local REACH = Art.ICON * 0.75
 -- a slide this close to its place is there
 local NEAR = 0.25
+-- As a phone's home screen does it, between dropping into an app and moving apps about. His words
+-- (2026-11-24), of the first tuning, where an edge of an icon moved the gap at once: "when i try to replace,
+-- it just bounces out of my way", then "honestly i feel like this is basically standard with app movement
+-- on phones, no? ... so maybe we just need to tune our sensitvity." The way to an icon's middle crosses its
+-- edge first, so nothing moves the moment the cursor passes: the icons part only after it rests between
+-- two of them for REST seconds, and most of an icon (all but RIM of each place at each end) takes a drop as
+-- a replacement at once. Then: "yeah use standard phone-tuned values for this." Android's own home screen
+-- (Launcher3, Workspace.java) moves apps aside after a rest of 650 ms (REORDER_TIMEOUT), and makes a folder,
+-- at once, where the dragged icon's middle is within 0.55 of an icon's size of another's middle
+-- (mMaxDistanceForFolderCreation). On a phone an icon is about seven tenths of its cell, so that is the
+-- middle seven tenths of a place, and a rim of 0.15 of a place at each end moves things. Of the 650 ms: "is
+-- the delay the standard one? feels slightly long." Launcher3 waited 350 ms first and raised it for fingers,
+-- which are slow and land roughly; a mouse aims exactly, and a drop between two icons goes in there without
+-- waiting at all, so the rest only says when they part to show it: Launcher3's first 350 ms. Then: "the
+-- delay stillll feels a bit much." The rest is only there so a cursor passing between two icons does not
+-- part them: that space is two rims, three tenths of a place, about 10 pixels at the usual size, crossed in
+-- some 35 ms at an ordinary speed and 100 ms slowly, so 150 ms still lets a pass go by.
+-- An icon moved inside its flyout goes by the same rules (AimMove).
+local RIM, REST = 0.15, 0.15
 
 local moving, landing
 -- something carried, its flyout open for it with a gap where it would go (further down)
@@ -63,8 +83,9 @@ local function Centre(frame)
     return x * s, y * s
 end
 
--- the place under a screen point; nil when the point is off the flyout
-local function Where(unit, x, y)
+-- the place in the strip a point is at, as a number of places from its start (0.5 the first icon's middle),
+-- nil off the strip
+local function Along(unit, x, y)
     local menu = unit.menu
     local left, right, top, bottom = menu:GetLeft(), menu:GetRight(), menu:GetTop(), menu:GetBottom()
     if not (left and right and top and bottom) then return nil end
@@ -79,8 +100,14 @@ local function Where(unit, x, y)
     elseif unit.way == "LEFT" then
         along = right - x
     end
-    local place = math.floor((along - Art.FIRST + Art.NEXT / 2) / (Art.ICON + Art.NEXT)) + 1
-    return math.max(1, math.min(#unit.flyout.entries, place))
+    return (along - Art.FIRST + Art.NEXT / 2) / (Art.ICON + Art.NEXT)
+end
+
+-- the place under a screen point; nil when the point is off the flyout
+local function Where(unit, x, y)
+    local r = Along(unit, x, y)
+    if not r then return nil end
+    return math.max(1, math.min(#unit.flyout.entries, math.floor(r) + 1))
 end
 M.Where = Where
 
@@ -88,6 +115,53 @@ M.Where = Where
 local function Place(j, from, at)
     local rank = j < from and j or j - 1
     return rank < at and rank or rank + 1
+end
+
+-- the icon in place s while icon `from` is held over place `at`; none on the gap
+local function InPlace(s, from, at)
+    if s == at then return nil end
+    local rank = s < at and s or s - 1
+    return rank < from and rank or rank + 1
+end
+
+-- An icon moved by the mouse goes by the rules of one added (Aim, further down). His words (2026-11-24):
+-- "if i pull an item from an existing flyout, it doesnt have same behavior as dragging in ability in from
+-- somewhere else. is that intended? like i have to drag out of flyout and back to be able to do swaps."
+-- Over the middle of another icon, that one is lit (`target`): let go, the two trade places, the lit one
+-- into the gap. Between two icons (`between`, the place it would take) they part after a rest of REST; let
+-- go there, parted or not, it goes in between. On the gap, it goes into the gap.
+local function AimMove(m, x, y, elapsed)
+    local r = Along(m.unit, x, y)
+    if not r then return end
+    local n = #m.flyout.entries
+    local s, f
+    if r >= n then
+        s, f = n, 1
+    else
+        r = math.max(0, r)
+        s = math.floor(r) + 1
+        f = r - (s - 1)
+    end
+    local icon = InPlace(s, m.from, m.at)
+    if not icon then
+        m.target, m.between, m.rest = nil, nil, 0
+        return
+    end
+    if f > RIM and f < 1 - RIM then
+        m.target, m.between, m.rest = icon, nil, 0
+        return
+    end
+    m.target = nil
+    -- the place it would take: before this icon, or after it
+    local to
+    if f <= RIM then to = m.at < s and s - 1 or s else to = m.at < s and s or s + 1 end
+    if to == m.at then
+        m.between, m.rest = nil, 0
+        return
+    end
+    if m.between ~= to then m.between, m.rest = to, 0 end
+    m.rest = m.rest + (elapsed or 0)
+    if m.rest >= REST then m.at, m.between, m.rest = to, nil, 0 end
 end
 
 -- every icon a step nearer its place; true while any is still on its way
@@ -116,6 +190,7 @@ local function Still(unit)
     for j, frame in ipairs(unit.entries) do
         frame:SetAlpha(1)
         frame.slide = nil
+        frame:UnlockHighlight()
         if not locked and unit.flyout and unit.flyout.entries[j] then F.Put(unit, frame, F.Slot(j)) end
     end
     -- a fight began mid-move: the layout is set right when it ends
@@ -165,32 +240,41 @@ local function EndCarry()
     if unit and at and not InCombatLockdown() then F.TakeOff(unit, at) end
 end
 
--- Dropped back on the plus of its own flyout's button while on its way out: it stays where it was.
+-- Dropped back on its own flyout while on its way out: on the plus it stays where it was; on another of its
+-- icons the two trade places (F.Dropped). The second value: what it held.
 function M.PutBack(flyout)
     local was = carried
     if not (was and was.flyout == flyout) then return false end
     carried = nil
     Still(was.unit)
-    ns.Log(("move: %s the icon dragged out was put back on its own button"):format(tostring(flyout.host)))
-    return true
+    ns.Log(("move: %s the icon dragged out was let go on its own flyout"):format(tostring(flyout.host)))
+    return true, was.entry
 end
 
--- let go: the icon lands in the gap, the rest stay where they slid to
+-- let go: the icon lands in the gap, or in the place of the icon lit, that one going into the gap; the rest
+-- stay where they slid to
 function M.Drop()
     local was = moving
     if not was then return false end
-    local unit, flyout, from, at = was.unit, was.flyout, was.from, was.at
+    -- between two icons that have not parted yet: in there all the same
+    if was.between then was.at, was.between = was.between, nil end
+    local unit, flyout, from, at, lit = was.unit, was.flyout, was.from, was.at, was.target
     -- where each icon is drawn just now, by the place it ends in
     local drawn = {}
     for j, frame in ipairs(unit.entries) do
-        if j ~= from and frame.slide then drawn[Place(j, from, at)] = frame.slide end
+        if j ~= from and flyout.entries[j] then
+            drawn[j == lit and at or Place(j, from, at)] = frame.slide or F.Slot(j)
+        end
     end
+    local land = lit and Place(lit, from, at) or at
     moving = nil
     for _, frame in ipairs(unit.entries) do
         frame:SetAlpha(1)
         frame.slide = nil
+        frame:UnlockHighlight()
     end
     local ok, why = F.Move(flyout, from, at)
+    if ok and lit then ok, why = F.Swap(flyout, at, land) end
     unit = ok and F.UnitOf(flyout)
     if not unit then
         if lift then lift:Hide() end
@@ -198,12 +282,13 @@ function M.Drop()
         if why then ns.Warn(why) end
         return false
     end
-    ns.Log(("move: %s from place %d to %d"):format(tostring(flyout.host), from, at))
-    landing = { unit = unit, at = at, x = was.x, y = was.y, grown = was.grown, scale = was.scale, t = 0 }
+    ns.Log(("move: %s from place %d to %d%s"):format(tostring(flyout.host), from, land,
+        lit and (", trading places with the icon lit, which went to %d"):format(at) or ""))
+    landing = { unit = unit, at = land, x = was.x, y = was.y, grown = was.grown, scale = was.scale, t = 0 }
     for place, out in pairs(drawn) do
         if unit.entries[place] then unit.entries[place].slide = out end
     end
-    unit.entries[at]:SetAlpha(0)
+    unit.entries[land]:SetAlpha(0)
     return true
 end
 
@@ -212,7 +297,7 @@ function M.Aim(place)
     local was = moving
     if not was then return end
     if place then
-        was.at = place
+        was.at, was.target, was.between = place, nil, nil
         return
     end
     M.Cancel()
@@ -229,11 +314,13 @@ function M.Aim(place)
     Driver():Show()
 end
 
--- the held icon is at that screen point now
-function M.At(x, y)
+-- the held icon is at that screen point now; off the flyout it is out of it, onto the cursor
+function M.At(x, y, elapsed)
     if not moving then return end
     moving.x, moving.y = x, y
-    M.Aim(Where(moving.unit, x, y))
+    local place = Where(moving.unit, x, y)
+    if not place or moving.driven then return M.Aim(place) end
+    AimMove(moving, x, y, elapsed)
 end
 
 -- one frame of growing, sliding and landing
@@ -242,6 +329,9 @@ function M.Step(elapsed)
     if moving then
         moving.grown = math.min(1, moving.grown + elapsed / GROW_TIME)
         Slide(moving.unit, elapsed, moving.from, moving.at)
+        for j, frame in ipairs(moving.unit.entries) do
+            if j == moving.target then frame:LockHighlight() else frame:UnlockHighlight() end
+        end
         Hold(moving, moving.x, moving.y, 1 + (GROW - 1) * moving.grown)
     elseif landing then
         local l = landing
@@ -278,24 +368,6 @@ end
 -- its place, as on a bar slot. Out of a fight, and not for icons around their button (no line to slide
 -- along) nor a flyout that fills itself.
 local catcher, ghost
--- As a phone's home screen does it, between dropping into an app and moving apps about. His words
--- (2026-11-24), of the first tuning, where an edge of an icon moved the gap at once: "when i try to replace,
--- it just bounces out of my way", then "honestly i feel like this is basically standard with app movement
--- on phones, no? ... so maybe we just need to tune our sensitvity." The way to an icon's middle crosses its
--- edge first, so nothing moves the moment the cursor passes: the icons part only after it rests between
--- two of them for REST seconds, and most of an icon (all but RIM of each place at each end) takes a drop as
--- a replacement at once. Then: "yeah use standard phone-tuned values for this." Android's own home screen
--- (Launcher3, Workspace.java) moves apps aside after a rest of 650 ms (REORDER_TIMEOUT), and makes a folder,
--- at once, where the dragged icon's middle is within 0.55 of an icon's size of another's middle
--- (mMaxDistanceForFolderCreation). On a phone an icon is about seven tenths of its cell, so that is the
--- middle seven tenths of a place, and a rim of 0.15 of a place at each end moves things. Of the 650 ms: "is
--- the delay the standard one? feels slightly long." Launcher3 waited 350 ms first and raised it for fingers,
--- which are slow and land roughly; a mouse aims exactly, and a drop between two icons goes in there without
--- waiting at all, so the rest only says when they part to show it: Launcher3's first 350 ms. Then: "the
--- delay stillll feels a bit much." The rest is only there so a cursor passing between two icons does not
--- part them: that space is two rims, three tenths of a place, about 10 pixels at the usual size, crossed in
--- some 35 ms at an ordinary speed and 100 ms slowly, so 150 ms still lets a pass go by.
-local RIM, REST = 0.15, 0.15
 -- how long the cursor may be off the plus and the flyout before the flyout shuts again
 local AWAY = 0.25
 -- the catcher's reach past the strip, in the strip's measure
@@ -317,26 +389,6 @@ local function Ghost()
     ghost.frame:SetSize(Art.FRAME, Art.FRAME)
     ghost.frame:SetPoint("TOPLEFT")
     return ghost
-end
-
--- the place in the strip a point is at, as a number of places from its start (0.5 the first icon's middle),
--- nil off the strip
-local function Along(unit, x, y)
-    local menu = unit.menu
-    local left, right, top, bottom = menu:GetLeft(), menu:GetRight(), menu:GetTop(), menu:GetBottom()
-    if not (left and right and top and bottom) then return nil end
-    local s = menu:GetEffectiveScale()
-    x, y = x / s, y / s
-    if x < left - REACH or x > right + REACH or y < bottom - REACH or y > top + REACH then return nil end
-    local along = y - bottom
-    if unit.way == "DOWN" then
-        along = top - y
-    elseif unit.way == "RIGHT" then
-        along = x - left
-    elseif unit.way == "LEFT" then
-        along = right - x
-    end
-    return (along - Art.FIRST + Art.NEXT / 2) / (Art.ICON + Art.NEXT)
 end
 
 -- where icon j is laid while the gap is at `gap` (no gap: in its own place)
@@ -571,7 +623,12 @@ end
 function M.Tick(elapsed)
     if preview then PreviewTick(elapsed) end
     if moving and not moving.driven then
-        if IsMouseButtonDown("LeftButton") then M.At(GetCursorPosition()) else M.Drop() end
+        if IsMouseButtonDown("LeftButton") then
+            local x, y = GetCursorPosition()
+            M.At(x, y, elapsed)
+        else
+            M.Drop()
+        end
     end
     if carried then
         -- the frame after the let-go: the game's own drop has been dealt with by then
@@ -602,7 +659,7 @@ function M.Start(frame, driven)
     if ns.Keys then ns.Keys.Leave() end
     local x, y = Centre(frame)
     if not x then x, y = GetCursorPosition() end
-    moving = { unit = unit, flyout = flyout, from = i, at = i, driven = driven, x = x, y = y, grown = 0,
+    moving = { unit = unit, flyout = flyout, from = i, at = i, driven = driven, x = x, y = y, grown = 0, rest = 0,
         scale = unit.menu:GetEffectiveScale() / UIParent:GetEffectiveScale() }
     frame:SetAlpha(0)
     local held = Lift()
