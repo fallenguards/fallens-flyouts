@@ -49,6 +49,15 @@ function P.Active() return Record().profile end
 function P.Mine() return Record() end
 function P.Data() return db.profiles[P.Active()] end
 
+-- Whether the addon's tooltips end with a hint in gray of what a click or a button does there: for the
+-- whole account, as what a player knows does not change with the profile. On unless turned off.
+function P.Hints() return not (db and db.hintsOff) end
+function P.SetHints(on)
+    if not db then return false end
+    db.hintsOff = not on or nil
+    return true
+end
+
 -- the three every character is offered
 local function Standard()
     return { { name = P.Own(), kind = "own" }, { name = P.Class(), kind = "class" }, { name = ALL, kind = "all" } }

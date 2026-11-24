@@ -82,6 +82,13 @@ local TEXT = {
         .. "button does.",
     twiceAsk = "%s\n\n%s\n\n|cffff2020%s|r",
     twiceOn = "Turn On",
+    hints = "Show hints in tooltips",
+    hintsTip = "A gray line at the foot of a flyout's tooltips says what a click or a button does there: a "
+        .. "right-click on its bar button to change what the button shows and its name, a drag to move an "
+        .. "icon. For every character on this account.",
+    iconName = "Icon and Name",
+    iconNameTip = "Opens the window that changes what this flyout's bar button shows (its icon, tooltip and "
+        .. "cooldown) and its name, as a right-click on the button does, or RB in Edit Flyout.",
     plate = "Round background behind it",
     plateTip = "A flyout that opens around its button has a round plate behind it, so an open flyout is "
         .. "seen at a glance.",
@@ -211,6 +218,7 @@ function A.Refresh()
         w.ranks:SetChecked(F.Ranked())
         w.hide:SetChecked(F.Hiding())
         w.twice:SetChecked(F.Twice())
+        w.hints:SetChecked(ns.Profiles.Hints())
     end
     local p = padPage and padPage.arrange
     if p then
@@ -222,6 +230,7 @@ function A.Refresh()
         p.next:SetEnabled(count > 1)
         p.turn:SetEnabled(flyout ~= nil and F.UnitOf(flyout) ~= nil)
         p.off:SetEnabled(held ~= nil)
+        p.icon:SetEnabled(flyout ~= nil)
         p.around:SetChecked(F.Around())
         p.faces:SetChecked(F.Faces())
         p.plate:SetChecked(F.Plate())
@@ -422,6 +431,18 @@ function A.Hide(on)
     A.Refresh()
 end
 
+-- the hints at the foot of the addon's tooltips, for the whole account
+function A.Hints(on)
+    ns.Profiles.SetHints(on)
+    A.Refresh()
+end
+
+-- the icon and name window for the flyout shown on the Controller page
+function A.IconName()
+    local flyout = Current()
+    if flyout and ns.Icon then ns.Icon.Open(flyout) end
+end
+
 -- a flyout's key pressed again while it is open casts the icon picked last from it, or only shuts it
 function A.Twice(on)
     local ok, why = F.SetTwice(on)
@@ -524,8 +545,10 @@ function A.Build(page, above, scrolled)
     w.ranks:ClearAllPoints()
     w.ranks:SetPoint("TOPLEFT", general, "BOTTOMLEFT", 0, -GAP)
     w.hide = Check(holder, TEXT.hide, TEXT.hideTip, A.Hide, ranksLabel)
-    w.twice = Check(holder, TEXT.twice, TEXT.twiceTip, A.AskTwice, nil, w.ranks)
+    local twiceLabel
+    w.twice, twiceLabel = Check(holder, TEXT.twice, TEXT.twiceTip, A.AskTwice, nil, w.ranks)
     w.twice.warn = TEXT.twiceWarn
+    w.hints = Check(holder, TEXT.hints, TEXT.hintsTip, A.Hints, twiceLabel)
     local keysHead = Head(holder, TEXT.keysHead, w.twice, -GAP * 3)
     w.keysNote = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     w.keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)
@@ -597,6 +620,9 @@ function A.BuildPad(page, scrolled)
     end
     p.off = Button(TEXT.off, TEXT.offTip, A.TakeOff)
     p.off:SetPoint("TOPLEFT", p.icons[1], "BOTTOMLEFT", -GAP / 2, -GAP * 2)
+    -- the icon and name window for the flyout shown here, as a right-click on its bar button opens it
+    p.icon = Button(TEXT.iconName, TEXT.iconNameTip, A.IconName)
+    p.icon:SetPoint("LEFT", p.off, "RIGHT", GAP / 2, 0)
     padPage.arrange = p
     Watch()
     A.Refresh()

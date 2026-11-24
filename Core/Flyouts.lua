@@ -926,8 +926,8 @@ local function EntryTip(self)
             GameTooltip:SetText(Macros.Name(entry) or tostring(entry.id))
         end
     end
-    -- says so beforehand when the flyout would go with it
-    if not InCombatLockdown() then
+    -- says so beforehand when the flyout would go with it; a hint, so not where hints are turned off
+    if not InCombatLockdown() and P.Hints() then
         local flyout = self.flyout
         local last = flyout and F.Ends(flyout, self.entryIndex)
         local how = TEXT.how

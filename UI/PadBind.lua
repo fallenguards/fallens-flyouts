@@ -41,6 +41,8 @@ local TEXT = {
     toolMove = "Move Icon On",
     toolOff = "Take Icon Off",
     unbind = "Unbind",
+    icon = "Icon and Name",
+    iconNote = "The icon and name window opens then.",
     -- Edit Flyout: asked for in the game's dialog, done in an editor of ours once the dialog is left
     editTitle = "Edit Flyout",
     openEditor = "Open Flyout Editor",
@@ -82,7 +84,10 @@ local PANEL_LEVEL = 100
 local NOTE_Y, NOTE_STEP, NOTE_GLYPH, NOTE_WIDTH = 56, 28, 18, 430
 -- The editor: the pad button that shows or hides the plate, what the names of its bound buttons begin
 -- with, the room between its picture, its bar and its hint, and the sides a ring has.
-local KEY_PLATE, EDIT_BUTTON, EDIT_GAP, RING_SIDES = "PADRSHOULDER", "FallensFlyoutsPadEdit", 8, 4
+-- In Edit Flyout LB shows or hides the background and RB opens the icon and name window, RB as the
+-- right-click a mouse gives a flyout's bar button for it.
+local KEY_PLATE, KEY_ICON, EDIT_BUTTON, EDIT_GAP, RING_SIDES = "PADLSHOULDER", "PADRSHOULDER", "FallensFlyoutsPadEdit",
+    8, 4
 -- how often the open editor looks at its button, and how long the button may be out of view
 local EDIT_LOOK, EDIT_UNSEEN = 0.2, 1
 -- a prompt for the hint bar, made by the game's own maker once the bar is
@@ -434,8 +439,10 @@ local function ShowPicked(frame)
     prompts.left:SetShown(armed == nil)
     prompts.left:SetPromptText(TEXT.unbindFlyout)
     prompts.back:Show()
-    prompts.back:SetPromptText(armed and TEXT.openEditor or (FRAME_ACTION_CANCEL or TEXT.cancel))
+    prompts.back:SetPromptText(armed and (armed.icon and TEXT.icon or TEXT.openEditor)
+        or (FRAME_ACTION_CANCEL or TEXT.cancel))
     if prompts.plate then prompts.plate:Hide() end
+    if prompts.icon then prompts.icon:Hide() end
     -- Waiting to be left, the dialog is either still holding (its box of the held ability is up, and the
     -- notice stands in it) or back at its first step, where the bar alone says it. Just picked up, the
     -- box of the held ability is the one the game is about to put up.
@@ -443,7 +450,11 @@ local function ShowPicked(frame)
     local holding = armed ~= nil and type(box) == "table" and box:IsShown()
     Up(frame, bar, armed ~= nil and not holding)
     Cover(frame, holding)
-    if holding then Notice(frame, { TEXT.note1:format(F.PadText(KEY_BACK, NOTE_GLYPH)), TEXT.note2, TEXT.note3 }) end
+    if holding and armed.icon then
+        Notice(frame, { TEXT.note1:format(F.PadText(KEY_BACK, NOTE_GLYPH)), TEXT.iconNote })
+    elseif holding then
+        Notice(frame, { TEXT.note1:format(F.PadText(KEY_BACK, NOTE_GLYPH)), TEXT.note2, TEXT.note3 })
+    end
 end
 
 local function Hide()
@@ -551,7 +562,8 @@ local EDIT_KEYS = {
     { key = "PADDUP", act = "side", side = 1 }, { key = "PADDRIGHT", act = "side", side = 2 },
     { key = "PADDDOWN", act = "side", side = 3 }, { key = "PADDLEFT", act = "side", side = 4 },
     { key = KEY_ADD, act = "next" }, { key = KEY_LEFT, act = "off" }, { key = KEY_EDIT, act = "pads" },
-    { key = KEY_PLATE, act = "plate" }, { key = KEY_BACK, act = "done" }, { key = "ESCAPE", act = "done" },
+    { key = KEY_PLATE, act = "plate" }, { key = KEY_ICON, act = "icon" }, { key = KEY_BACK, act = "done" },
+    { key = "ESCAPE", act = "done" },
 }
 local editor
 E.KEYS = EDIT_KEYS
@@ -669,6 +681,11 @@ function E.Draw()
         prompts.plate:Show()
         prompts.plate:SetPromptText(F.Plate() and TEXT.plateOff or TEXT.plateOn)
     end
+    if not prompts.icon then prompts.icon = MakePrompt(KEY_ICON, TEXT.icon) end
+    if prompts.icon then
+        prompts.icon:Show()
+        prompts.icon:SetPromptText(TEXT.icon)
+    end
     local entry = flyout.entries[e.mark]
     if e.inside then
         -- the game's box holds the words, and our bar stands where the game's does
@@ -689,11 +706,32 @@ function E.Draw()
     return true
 end
 
+-- RB in the editor: the icon and name window for the flyout being edited, as a right-click on its bar
+-- button opens it. The editor closes, so that the window has the pad. Inside the game's dialog, which keeps
+-- the pad while it is up, the window opens once the dialog is left.
+function E.Icon()
+    local e = editing
+    if not (e and ns.Icon) then return false end
+    local flyout = e.flyout
+    if e.inside then
+        if armed then armed.icon = true end
+        E.Close(true)
+        ShowPicked(watched)
+        ns.Log("pad edit: the icon and name window opens once the dialog is left")
+        return true
+    end
+    E.Close()
+    ns.Icon.Open(flyout)
+    ns.Log(("pad edit: the icon and name window for the flyout on %s"):format(tostring(flyout.host)))
+    return true
+end
+
 -- one press in the editor
 function E.Do(bind)
     local e = editing
     if not e then return false end
     if InCombatLockdown() or bind.act == "done" then return E.Close() end
+    if bind.act == "icon" then return E.Icon() end
     local flyout = e.flyout
     local spots = F.Spots(flyout.entries)
     if bind.act == "side" then
@@ -988,7 +1026,11 @@ function G.Install(frame)
         F.Moved()
         C_Timer.After(FIND_AFTER, function()
             F.Follow()
-            if next then E.Open(next.flyout) end
+            if next and next.icon and ns.Icon then
+                ns.Icon.Open(next.flyout)
+            elseif next then
+                E.Open(next.flyout)
+            end
         end)
     end
     hooksecurefunc(frame, "ExitBindingMode", Guard(function()

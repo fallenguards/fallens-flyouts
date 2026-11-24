@@ -1238,6 +1238,10 @@ do
     check(w.which.text == "1 of 2: Spell 101", "and round to the first again")
     NS.Flyouts.Remove(NS.Flyouts.At("ActionButton2"), 2)
     check(w.which.text == "1 of 1: Spell 101", "a flyout taken away elsewhere is gone from the page too")
+    press(w.icon)
+    check(NS.Icon.Target() == NS.Flyouts.At("ActionButton1") and NS.Icon.Target() ~= nil,
+        "Icon and Name opens the icon and name window for the flyout shown, as a right-click on its button does")
+    W.frames.FallensFlyoutsIconPopup:Hide()
     pad:Hide()
 end
 
@@ -2164,8 +2168,8 @@ do
         press("PADDLEFT", 6)
         check(dial() == "2 4 3" and slots() == held and W.placed[6] == false, "D-pad left: to the empty left side; the empty bar spot stays empty")
         press("PADLTRIGGER", 5)
-        press("PADLSHOULDER", 5)
-        check(slots() == held and Edit.Editing() ~= nil, "a trigger or a shoulder button is kept from the dialog as well, and does nothing")
+        press("PADRTRIGGER", 5)
+        check(slots() == held and Edit.Editing() ~= nil, "a trigger is kept from the dialog as well, and does nothing")
         -- B: done, and the same press is the dialog's own Cancel: one press, back at Edit Action Bar's first step
         press("PAD2")
         check(Edit.Editing() == nil and not catcher:IsVisible() and Pad.Armed() == nil and not up(),
@@ -2178,6 +2182,20 @@ do
         dialog:ExitEditMode()
         flushAll()
         check(Edit.Editing() == nil and not bound("PADDUP"), "the dialog left after that: nothing else opens")
+        -- RB in the dialog: the icon and name window, once the dialog is left (it keeps the pad while it is up)
+        dialog:EnterEditMode()
+        pickUp(7)
+        press("PAD1")
+        check(Edit.Editing() ~= nil and Edit.Editing().inside == dialog, "the editor up in the dialog again")
+        press("PADRSHOULDER", 7)
+        check(Edit.Editing() == nil and Pad.Armed() ~= nil and Pad.Armed().icon == true and NS.Icon.Target() == nil
+            and prompts.back.label == "Icon and Name",
+            "RB in the dialog: the editor closes, and the icon and name window waits for the dialog to be left")
+        dialog:ExitEditMode()
+        flushAll()
+        check(NS.Icon.Target() == target and Edit.Editing() == nil,
+            "the dialog left, the icon and name window opens for that flyout, and not the editor")
+        W.frames.FallensFlyoutsIconPopup:Hide()
         -- as it was, for what follows
         for _, e in ipairs(target.entries) do e.spot = nil end
         NS.Flyouts.Apply()
@@ -2302,13 +2320,16 @@ do
         local e = Edit.Editing()
         check(e ~= nil and e.flyout == target and e.mark == 1 and not dialog:IsShown(), "the dialog left, the editor opens for that flyout")
         check(bound("PADDUP") and bound("PADDRIGHT") and bound("PADDDOWN") and bound("PADDLEFT") and bound("PAD1") and bound("PAD2")
-            and bound("PAD3") and bound("PAD4") and bound("PADRSHOULDER"),
+            and bound("PAD3") and bound("PAD4") and bound("PADLSHOULDER") and bound("PADRSHOULDER"),
             "in it the pad's buttons are the editor's own")
         check(Pad.View():IsShown() and Pad.View().around == W.frames.ActionButton7 and Pad.View().marked == 1 and Pad.View().tokens[1].ring.shown,
             "the flyout is pictured in place around its own button, the first icon selected")
         check(prompts.add.label == "Select Next Icon" and prompts.left.label == "Take Icon Off" and prompts.edit.label == "Use Face Buttons"
-            and prompts.back.label == "Done" and prompts.plate ~= nil and prompts.plate.label == "Hide Background",
-            "the bar names every button: A selects, X takes off, Y swaps the pad's crosses, RB the background, B is Done")
+            and prompts.back.label == "Done" and prompts.plate ~= nil and prompts.plate.label == "Hide Background"
+            and prompts.plate.key == "PADLSHOULDER" and prompts.icon ~= nil and prompts.icon.label == "Icon and Name"
+            and prompts.icon.key == "PADRSHOULDER",
+            "the bar names every button: A selects, X takes off, Y swaps the pad's crosses, LB the background, RB the "
+                .. "icon and name, B is Done")
         -- what he did: an icon selected, then D-pad for the side it should go to
         local function spots() return table.concat(NS.Flyouts.Spots(target.entries), " ") end
         local tokens = Pad.View().tokens
@@ -2349,10 +2370,10 @@ do
         check(NS.Flyouts.Faces(target) == true and prompts.edit.label == "Use D-Pad" and tokens[1].pad == "PAD2",
             "Y: this flyout picks with the face buttons, the picture with it")
         tap("PAD4")
-        tap("PADRSHOULDER")
+        tap("PADLSHOULDER")
         check(NS.Flyouts.Plate() == false and prompts.plate.label == "Show Background" and not Pad.View().plate.rim.shown,
-            "RB: the background is off, in the picture too")
-        tap("PADRSHOULDER")
+            "LB: the background is off, in the picture too")
+        tap("PADLSHOULDER")
         tap("PAD1")
         tap("PAD3")
         check(ids() == "771 773" and spots() == "2 4" and Edit.Editing() ~= nil and Edit.Editing().mark == 2 and Pad.View().count == 2,
@@ -2360,6 +2381,13 @@ do
         tap("PAD2")
         check(Edit.Editing() == nil and not bound("PADDUP") and not bound("PAD2") and not up() and NS.Flyouts.At("ActionButton7") == target,
             "B: done. The pad's buttons are the game's again and the flyout stays as edited")
+        -- RB: the icon and name window for the flyout being edited, as a right-click on its bar button opens it
+        Edit.Open(target)
+        check(Edit.Editing() ~= nil, "the editor up again")
+        tap("PADRSHOULDER")
+        check(Edit.Editing() == nil and not bound("PADDUP") and NS.Icon.Target() == target,
+            "RB: the editor closes, its buttons the game's again, and the icon and name window is open for that flyout")
+        W.frames.FallensFlyoutsIconPopup:Hide()
         -- its button out of view for a while (the pad put down, another page of the bar): it ends by itself
         Edit.Open(target)
         local editor = W.frames.FallensFlyoutsPadEditor
@@ -5142,6 +5170,70 @@ do
     W.combat = false
     fire("PLAYER_REGEN_ENABLED")
     flushAll()
+end
+
+print("a hint at the foot of a flyout's bar button tooltip, and one box for every hint, for the whole account")
+do
+    -- His words (2026-11-24): "for flyouts, can we have a message at bottom of the tooltip in gray like \"Right
+    -- click to change icon/name. Turn hint off in settings.\" and then obv add ability to hide in settings?",
+    -- "maybe right click to change tooltip/name. since icon doesnt really represent fact that it does/can
+    -- reprsent cd too", "what is the gamepad equivalent of right click to change/select icon etc? we need to
+    -- allow them to too.", and "i feel like we should switch show/hide background to lb and have rb be the one
+    -- to open this to be more consistent with mouse, esp for ppl that frequently swap btwn mouse keyboard and
+    -- controller".
+    login("Player-1-0000000K")
+    local F17 = NS.Flyouts
+    stack("ActionButton1", 501)
+    flushAll()
+    local button = W.frames.ActionButton1
+    local function tip(frame, slot)
+        W.tipLines = nil
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:SetAction(slot)
+        return W.tipLines or {}
+    end
+    local function has(lines, text)
+        for _, line in ipairs(lines) do
+            if line[1] == text then return line end
+        end
+    end
+    local lines = tip(button, 1)
+    local hint = has(lines, NS.Icon.HINT.mouse)
+    check(hint ~= nil and hint[2] == 0.6 and hint[3] == 0.6 and hint[4] == 0.6 and has(lines, "Hints can be turned off in /ff.") ~= nil,
+        "a flyout's bar button tooltip ends with the hint in gray, and how to turn hints off")
+    check(hint ~= nil and hint[1]:find("Right-click to change what this button shows (its icon, tooltip and cooldown)", 1, true) == 1,
+        "it says what a right-click changes: what the button shows, its tooltip and cooldown too, and its name")
+    check(has(tip(W.frames.ActionButton2, 2), NS.Icon.HINT.mouse) == nil, "a bar button with no flyout has no hint")
+    W.combat = true
+    check(has(tip(button, 1), NS.Icon.HINT.mouse) == nil, "in a fight there is none: the window opens out of one only")
+    W.combat = false
+    -- an icon of the flyout has its own hint, drawn by the addon itself
+    local function iconSays()
+        local _, unit = F17.At("ActionButton1")
+        F17.Show(unit.index)
+        W.tipLines = nil
+        local icon = unit.entries[2]
+        icon.scripts.OnEnter(icon)
+        local said = {}
+        for _, line in ipairs(W.tipLines or {}) do said[#said + 1] = tostring(line[1]) end
+        F17.Shut()
+        return table.concat(said, " | ")
+    end
+    check(iconSays():find("to move it", 1, true) ~= nil, "an icon of the flyout ends with its own hint: " .. iconSays())
+    -- the box under General
+    NS.ProfileUI.Build()
+    NS.Arrange.Refresh()
+    local box = NS.ProfileUI.panel.arrange.hints
+    check(box ~= nil and box:GetChecked(), "Show hints in tooltips is under General, ticked")
+    box.checked = false
+    box.scripts.OnClick(box)
+    check(not NS.Profiles.Hints() and has(tip(button, 1), NS.Icon.HINT.mouse) == nil,
+        "unticked, the bar button's tooltip has no hint")
+    check(not iconSays():find("to move it", 1, true), "nor does an icon of the flyout")
+    -- for the whole account: another character finds them off too
+    login("Player-1-0000000L")
+    check(not NS.Profiles.Hints(), "another character finds them off too: they are the account's, not a profile's")
+    NS.Profiles.SetHints(true)
 end
 
 -- what ships names nobody else's addon and nothing of the dev folder

@@ -4,6 +4,8 @@ local _, ns = ...
 -- luacheck: read globals InputUtil SmartNavigation
 -- luacheck: read globals IconDataProviderMixin IconDataProviderExtraType CreateAndInitFromMixin GenerateClosure
 -- luacheck: read globals C_SpellBook C_Spell C_Item C_Container GetNumMacros GetMacroInfo NUM_BAG_SLOTS GameTooltip
+-- luacheck: read globals hooksecurefunc geterrorhandler
+-- luacheck: globals FallensFlyouts_TooltipHint
 
 -- The game's own icon window, for the icon a flyout shows on its bar button.
 local I = {}
@@ -461,4 +463,46 @@ function I.Open(flyout)
     popup:Hide()
     target = flyout
     popup:Show()
+end
+
+-- the flyout the window is open for, if it is up
+function I.Target() return popup and popup:IsShown() and target or nil end
+
+-- A hint at the foot of the game's own tooltip for a flyout's bar button, in gray, as the icons of a
+-- flyout have theirs: how to open this window, by the right-click a mouse gives it or by RB in Edit Flyout
+-- with a controller. Added after the game has filled the tooltip in, so on any bar's buttons. Not in a
+-- fight (the window opens out of one only), and not where hints are turned off.
+-- His words (2026-11-24): "for flyouts, can we have a message at bottom of the tooltip in gray like \"Right
+-- click to change icon/name. Turn hint off in settings.\" and then obv add ability to hide in settings?",
+-- "maybe right click to change tooltip/name. since icon doesnt really represent fact that it does/can
+-- reprsent cd too", "what is the gamepad equivalent of right click to change/select icon etc? we need to
+-- allow them to too.", and "i feel like we should switch show/hide background to lb and have rb be the one
+-- to open this to be more consistent with mouse, esp for ppl that frequently swap btwn mouse keyboard and
+-- controller".
+do
+    local HINT = {
+        mouse = "Right-click to change what this button shows (its icon, tooltip and cooldown) and its name.",
+        pad = "In Edit Flyout, RB changes what this button shows (its icon, tooltip and cooldown) and its name.",
+        off = "Hints can be turned off in /ff.",
+    }
+    I.HINT = HINT
+    local GRAY = 0.6
+    local function Hint(tip)
+        if InCombatLockdown() or not (ns.Profiles and ns.Profiles.Hints()) then return end
+        local owner = tip:GetOwner()
+        local name = owner and owner.GetName and owner:GetName()
+        if type(name) ~= "string" or not F.At(name) then return end
+        tip:AddLine(F.PadInUse() and HINT.pad or HINT.mouse, GRAY, GRAY, GRAY, true)
+        tip:AddLine(HINT.off, GRAY, GRAY, GRAY, true)
+        tip:Show()
+    end
+    -- Listened to once in a session, and what it runs is the copy of the addon loaded last: the test
+    -- client loads the addon again at each login of one session, and the listeners stay.
+    local first = FallensFlyouts_TooltipHint == nil
+    FallensFlyouts_TooltipHint = Hint
+    if first and GameTooltip and GameTooltip.SetAction then
+        hooksecurefunc(GameTooltip, "SetAction", function(tip)
+            xpcall(FallensFlyouts_TooltipHint, geterrorhandler(), tip)
+        end)
+    end
 end
