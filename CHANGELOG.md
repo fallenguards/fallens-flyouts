@@ -4,21 +4,19 @@
 
 ### Added
 - Gear sets go in flyouts, like mounts and pets.
-- Adding to a flyout shows where it goes: bring a spell or item to a button's + or onto an open flyout, then let go between two icons to insert it, or on an icon to replace it.
-- Default flyout binds, in `/ff` above each flyout's own keys: the keys every flyout picks with.
-- A Feedback page in the settings: Report a Bug or Suggest an Idea with your setup filled in, and What's New. `/ff status` opens it.
-- After an update, a link to what changed.
-- Size and background settings: Match Base Icon Size, Show the flyout background and Background opacity.
+- Adding to a flyout shows where it goes. Bring a spell or item to a button's + or onto an open flyout, then let go between two icons to insert it or on an icon to replace it.
+- Default flyout binds in `/ff` set the keys every flyout picks with, above each flyout's own keys.
+- A Feedback page in the settings has Report a Bug, Suggest an Idea, and What's New. Reports come with your setup filled in, and `/ff status` opens the page.
+- Match Base Icon Size, Show the flyout background, and Background opacity settings.
 - A hint at the foot of a flyout button's tooltip on changing what it shows. Show hints in tooltips turns it off.
-- Controller: in Edit Flyout, RB changes a flyout button's icon and name, and LB shows or hides the background.
+- With a controller, RB in Edit Flyout changes a flyout button's icon and name, and LB shows or hides the background.
 
 ### Changed
-- Moving icons inside a flyout: let go on an icon to swap the two, or between two icons to insert. An icon dragged off a flyout counts as any other dragged icon.
+- Inside a flyout, let go of an icon on another to swap the two, or between two icons to insert it. An icon dragged off a flyout counts as any other dragged icon.
 - A right-click on a flyout icon casts it, so `[button:2]` macros work. Drag an icon off to take it off.
-- With a controller, a new flyout picks with the other cross from its button's. New flyouts pick with, on the Controller page, changes that. Flyouts you have keep how they pick.
+- With a controller, a new flyout picks with the other cross from its button's, so one on the D-pad picks with the face buttons. New flyouts pick with, on the Controller page, changes this, and flyouts you have keep how they pick.
 - The flyout size uses the game's slider.
-- Press a flyout's key again for the last one used now says what it changes before it turns on.
-- The settings are regrouped: what only a controller needs has its own Controller page.
+- Settings only a controller needs have their own Controller page.
 
 ## [1.1.6] - 2026-11-23
 

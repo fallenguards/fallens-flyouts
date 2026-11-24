@@ -199,7 +199,8 @@ do
     W.UPDATE = SAY
     -- the link's own color, as the game draws a link that opens a window of its own
     local LINK_COLOR = "|cff71d5ff"
-    -- the window: its size, and how long after the login the line comes, under the game's own lines
+    -- the window: its width and its greatest height, and how long after the login the line comes, under the
+    -- game's own lines
     local NEWS_W, NEWS_H, SAY_AFTER = 560, 440, 6
 
     function W.Version()
@@ -252,6 +253,17 @@ do
         news:SetScript("OnDragStart", function(self) self:StartMoving() end)
         news:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
         news:SetSize(NEWS_W, NEWS_H)
+        -- Opaque, under the game's own panel art, whose ground lets the world show through. His words
+        -- (2026-11-24): "make background for the whatsnew opaque."
+        local ground = news:CreateTexture(nil, "BACKGROUND", nil, -8)
+        if news.Bg then
+            ground:SetAllPoints(news.Bg)
+        else
+            ground:SetPoint("TOPLEFT", news, "TOPLEFT", 4, -4)
+            ground:SetPoint("BOTTOMRIGHT", news, "BOTTOMRIGHT", -4, 4)
+        end
+        ground:SetColorTexture(0, 0, 0, 1)
+        news.ground = ground
         local title = news.TitleContainer and news.TitleContainer.TitleText
         if not title then
             title = news:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -293,6 +305,18 @@ do
         return table.concat(out, "\n")
     end
 
+    -- As high as its words need, up to NEWS_H, past which they scroll. His words (2026-11-24): "the whats new
+    -- box needs to smart resize up to its current size and then have a scroll ... when it's under this max
+    -- size (the current one), it should shrink height to fit the space instead of having a bunch of blank
+    -- space beneath it."
+    local function FitNews()
+        local words = news.text:GetStringHeight() or 0
+        local around = (TITLE - EDGE) + GAP * 2 + FOOT + OKAY_H + GAP
+        news:SetHeight(math.min(NEWS_H, math.ceil(words + around)))
+        ns.OptionsFit(news.page, news.text)
+    end
+    W.NEWS_H = NEWS_H
+
     -- the window, with what changed since `from`
     function W.ShowChanges(from)
         BuildNews()
@@ -302,7 +326,9 @@ do
             news:SetPoint("TOP", UIParent, "TOP", 0, -FROM_TOP)
         end
         news:Show()
-        C_Timer.After(0, function() ns.OptionsFit(news.page, news.text) end)
+        FitNews()
+        -- once more when the text has been laid out at its width
+        C_Timer.After(0, FitNews)
         return news
     end
     function W.News() return news end
@@ -335,29 +361,27 @@ W.CHANGES = {
     { version = "1.1.7", date = "2026-11-24", parts = {
         { name = "Added", items = {
             "Gear sets go in flyouts, like mounts and pets.",
-            "Adding to a flyout shows where it goes: bring a spell or item to a button's + or onto an open " ..
-                "flyout, then let go between two icons to insert it, or on an icon to replace it.",
-            "Default flyout binds, in /ff above each flyout's own keys: the keys every flyout picks with.",
-            "A Feedback page in the settings: Report a Bug or Suggest an Idea with your setup filled in, and " ..
-                "What's New. /ff status opens it.",
-            "After an update, a link to what changed.",
-            "Size and background settings: Match Base Icon Size, Show the flyout background and Background " ..
-                "opacity.",
+            "Adding to a flyout shows where it goes. Bring a spell or item to a button's + or onto an open " ..
+                "flyout, then let go between two icons to insert it or on an icon to replace it.",
+            "Default flyout binds in /ff set the keys every flyout picks with, above each flyout's own keys.",
+            "A Feedback page in the settings has Report a Bug, Suggest an Idea, and What's New. Reports come " ..
+                "with your setup filled in, and /ff status opens the page.",
+            "Match Base Icon Size, Show the flyout background, and Background opacity settings.",
             "A hint at the foot of a flyout button's tooltip on changing what it shows. Show hints in " ..
                 "tooltips turns it off.",
-            "Controller: in Edit Flyout, RB changes a flyout button's icon and name, and LB shows or hides " ..
-                "the background.",
+            "With a controller, RB in Edit Flyout changes a flyout button's icon and name, and LB shows or " ..
+                "hides the background.",
         } },
         { name = "Changed", items = {
-            "Moving icons inside a flyout: let go on an icon to swap the two, or between two icons to insert. " ..
-                "An icon dragged off a flyout counts as any other dragged icon.",
+            "Inside a flyout, let go of an icon on another to swap the two, or between two icons to insert " ..
+                "it. An icon dragged off a flyout counts as any other dragged icon.",
             "A right-click on a flyout icon casts it, so [button:2] macros work. Drag an icon off to take it " ..
                 "off.",
-            "With a controller, a new flyout picks with the other cross from its button's. New flyouts pick " ..
-                "with, on the Controller page, changes that. Flyouts you have keep how they pick.",
+            "With a controller, a new flyout picks with the other cross from its button's, so one on the " ..
+                "D-pad picks with the face buttons. New flyouts pick with, on the Controller page, changes this, " ..
+                "and flyouts you have keep how they pick.",
             "The flyout size uses the game's slider.",
-            "Press a flyout's key again for the last one used now says what it changes before it turns on.",
-            "The settings are regrouped: what only a controller needs has its own Controller page.",
+            "Settings only a controller needs have their own Controller page.",
         } },
     } },
     { version = "1.1.6", date = "2026-11-23", parts = {

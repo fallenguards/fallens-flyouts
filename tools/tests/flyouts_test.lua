@@ -5810,6 +5810,18 @@ do
             check(not text:find("v" .. entry.version .. "|", 1, true), "and nothing of a version still to come: " .. entry.version)
         end
     end
+    -- His words (2026-11-24): "the whats new box needs to smart resize up to its current size and then have a
+    -- scroll", and "make background for the whatsnew opaque."
+    news.text.w = 500
+    Welcome.ShowChanges(Welcome.Version())
+    flushAll()
+    local short = news.h
+    Welcome.ShowChanges("0.0.1")
+    flushAll()
+    check(short ~= nil and short < Welcome.NEWS_H and news.h == Welcome.NEWS_H,
+        ("a few lines, it is as high as they need (%s); many, it stops at its height and they scroll (%s)"):format(
+            tostring(short), tostring(news.h)))
+    check(news.ground ~= nil, "its ground is opaque, under the game's panel art")
     news.okay.scripts.OnClick(news.okay)
     check(not news:IsShown(), "Okay closes it")
     -- someone who had it before there was such a line: the version in use's changes
