@@ -29,8 +29,8 @@ local TEXT = {
     -- His words (2026-11-23): "why does our initial user popout not mention the right click to change
     -- flyout icon? ppl literally won't even know."
     icon = "Right-click a flyout's bar button to give it an icon and a name of its own.",
-    auto = "You can also use these preset flyouts. Each one keeps itself filled with that kind of item from "
-        .. "your bags. Drag one onto an action bar, or click it and then a bar button.",
+    auto = "You can also use these preset flyouts. Each one keeps itself filled with what you have of that kind. "
+        .. "Drag one onto an action bar, or click it and then a bar button.",
     more = "More in the settings: /ff",
 }
 W.TEXT, W.OWED, W.DONE = TEXT, OWED, DONE
@@ -78,7 +78,8 @@ local function Build()
     frame.close:SetScript("OnClick", Dismiss)
 
     local step = Art.ICON * APART
-    local wide = step * (#Auto.KINDS - 1) + Art.ICON + GAP * 2
+    local shown = Auto.Shown()
+    local wide = step * (#shown - 1) + Art.ICON + GAP * 2
     frame.wide = wide
     local function Line(font, above, gap)
         local line = frame:CreateFontString(nil, "ARTWORK", font)
@@ -98,7 +99,7 @@ local function Build()
     frame.auto:SetText(TEXT.auto)
     -- the flyouts that fill themselves, as on their settings page: picked up by a drag or a click
     frame.icons = {}
-    for i, kind in ipairs(Auto.KINDS) do
+    for i, kind in ipairs(shown) do
         local button = ns.AutoUI.Icon(kind, frame)
         if i == 1 then
             button:SetPoint("TOPLEFT", frame.auto, "BOTTOMLEFT", GAP, -GAP)
@@ -415,6 +416,14 @@ end
 -- What changed in each version, newest first: CHANGELOG.md's, written here by tools/changes.py.
 -- BEGIN generated: changes (tools/changes.py, from CHANGELOG.md)
 W.CHANGES = {
+    { version = "1.1.8", date = "2026-11-24", parts = {
+        { name = "Added", items = {
+            "Mages have \"Portals\" and \"Teleports\" preset flyouts, each holding the ones you know.",
+        } },
+        { name = "Fixed", items = {
+            "The + on a bar button no longer shows through windows over the bars.",
+        } },
+    } },
     { version = "1.1.7", date = "2026-11-24", parts = {
         { name = "Added", items = {
             "Gear sets go in flyouts, like mounts and pets.",

@@ -2,7 +2,7 @@ local _, ns = ...
 -- luacheck: globals FallensFlyoutsDB
 -- luacheck: read globals C_Container C_Item C_Spell C_Timer Enum CreateFrame InCombatLockdown UnitLevel issecretvalue
 -- luacheck: read globals CreateMacro GetMacroInfo PickupMacro ClearCursor NUM_TOTAL_EQUIPPED_BAG_SLOTS NUM_BAG_SLOTS
--- luacheck: read globals DeleteMacro EditMacro
+-- luacheck: read globals DeleteMacro EditMacro GetFlyoutInfo GetFlyoutSlotInfo IsPlayerSpell UnitClass UnitFactionGroup
 
 -- Flyouts that fill themselves from the bags: all there is to eat, all there
 -- is to drink, the potions, and so on, each kind apart. What sits on the bar
@@ -37,7 +37,10 @@ local WORD = 0.3
 -- page), the most letters a macro's name takes, and the icon of one whose parts have none (the game's
 -- question mark).
 local MIX, MIX_MOST, NAME_MOST, NO_ICON = "mix", 7, 16, 134400
--- each kind: its name on the bar, its icon, the game's name for its items; `drink` for the two that share one
+-- Each kind: its name on the bar, its icon, the game's name for its items; `drink` for the two that share one.
+-- A mage's portals and teleports are spells: the ones the mage knows of those the game keeps in its own flyouts
+-- of them, one for each side (`flyouts`), with the icon of the first. His words (2026-11-24): "also for mages,
+-- \"portals\" should be one of our preset flyouts btw.", "and teleports", "separately".
 local KINDS = {
     { id = "food", name = "Food", icon = 133952, sub = "Fooddrink", drink = false },
     { id = "drink", name = "Drink", icon = 132793, sub = "Fooddrink", drink = true },
@@ -46,6 +49,8 @@ local KINDS = {
     { id = "flasks", name = "Flasks", icon = 134842, sub = "Flasksphials" },
     { id = "scrolls", name = "Scrolls", icon = 134938, sub = "Scroll" },
     { id = "bandages", name = "Bandages", icon = 133685, sub = "Bandage" },
+    { id = "portals", name = "Portals", flyouts = { Alliance = 248, Horde = 249 }, class = "MAGE" },
+    { id = "teleports", name = "Teleports", flyouts = { Alliance = 250, Horde = 251 }, class = "MAGE" },
 }
 local TEXT = {
     fight = "Flyouts change only out of a fight.",
@@ -72,6 +77,67 @@ local grown = 0
 local events = CreateFrame("Frame")
 
 local function Hidden(v) return issecretvalue ~= nil and issecretvalue(v) end
+
+-- The spells of a kind the game keeps in flyouts of its own, in the game's order, this side's first, each
+-- once (both sides' teleports hold Dalaran); with `known`, those this character knows.
+local function Spells(kind, known)
+    local out, seen, ids = {}, {}, {}
+    if not (kind.flyouts and GetFlyoutInfo and GetFlyoutSlotInfo) then return out end
+    local side = UnitFactionGroup and UnitFactionGroup("player")
+    if kind.flyouts[side] then ids[1] = kind.flyouts[side] end
+    local others = {}
+    for name, id in pairs(kind.flyouts) do
+        if name ~= side then others[#others + 1] = id end
+    end
+    table.sort(others)
+    for _, id in ipairs(others) do ids[#ids + 1] = id end
+    for _, id in ipairs(ids) do
+        local ok, _, _, slots = pcall(GetFlyoutInfo, id)
+        for slot = 1, (ok and not Hidden(slots) and type(slots) == "number") and slots or 0 do
+            local got, spell, _, isKnown = pcall(GetFlyoutSlotInfo, id, slot)
+            if got and not Hidden(spell) and type(spell) == "number" and not seen[spell] then
+                local mine = not Hidden(isKnown) and isKnown == true
+                if not mine and IsPlayerSpell then
+                    local has = IsPlayerSpell(spell)
+                    mine = not Hidden(has) and has == true
+                end
+                if mine or not known then
+                    seen[spell] = true
+                    out[#out + 1] = spell
+                end
+            end
+        end
+    end
+    return out
+end
+
+-- a kind of spells takes the icon of the first it holds, else of the first of this side's
+local function Dress(kind)
+    if not kind.flyouts or (kind.icon and kind.icon ~= NO_ICON) then return end
+    local first = Spells(kind, true)[1] or Spells(kind)[1]
+    local icon = first and C_Spell.GetSpellTexture(first)
+    kind.icon = (not Hidden(icon) and type(icon) == "number") and icon or NO_ICON
+end
+
+-- the icon of a flyout's entry, a spell's or an item's
+local function EntryIcon(entry)
+    if not entry then return nil end
+    local icon
+    if entry.kind == "spell" then
+        icon = C_Spell.GetSpellTexture(entry.id)
+    elseif C_Item.GetItemIconByID then
+        icon = C_Item.GetItemIconByID(entry.id)
+    end
+    if Hidden(icon) or type(icon) ~= "number" then return nil end
+    return icon
+end
+
+-- whether this character has a use for a kind: a mage's are a mage's alone
+function A.Fits(kind)
+    if not (kind and kind.class) then return kind ~= nil end
+    local _, class = UnitClass("player")
+    return class == kind.class
+end
 
 local function Sub(name)
     local list = Enum and Enum.ItemConsumableSubclass
@@ -107,6 +173,19 @@ function A.Parts()
     end
     for _, part in ipairs(parts) do partOf[part.id] = part end
     return parts
+end
+
+-- the shipped kinds offered to this character, each with its icon
+function A.Shown()
+    A.Parts()
+    local out = {}
+    for _, kind in ipairs(KINDS) do
+        if A.Fits(kind) then
+            Dress(kind)
+            out[#out + 1] = kind
+        end
+    end
+    return out
 end
 
 function A.Part(id)
@@ -145,7 +224,8 @@ local function Own(saved)
         local part = partOf[id]
         if part then
             ids[#ids + 1] = id
-            icon = icon or part.icon
+            Dress(part)
+            if part.icon ~= NO_ICON then icon = icon or part.icon end
         end
     end
     if #ids == 0 then return nil end
@@ -212,6 +292,11 @@ end
 -- The items of one part among `bags` that a character of level `mine` can use, the best first.
 -- Second: the game owes word on one of them.
 local function Found(part, bags, mine)
+    if part.flyouts then
+        local spells = {}
+        for _, spell in ipairs(Spells(part, true)) do spells[#spells + 1] = { kind = "spell", id = spell } end
+        return spells, false
+    end
     local want = part.num or Sub(part.sub)
     local found, short = {}, false
     for _, item in ipairs(bags) do
@@ -244,7 +329,8 @@ local function Found(part, bags, mine)
     return found, short
 end
 
--- The items of a kind in the bags that this character can use, as a flyout's entries: the best
+-- The items of a kind in the bags that this character can use (for a kind of spells, the ones it knows), as a
+-- flyout's entries: the best
 -- first, and for a kind of the player's own each part's in the order the parts were ticked. As many
 -- as a flyout holds. Second: the game owes word on one of them.
 function A.Entries(id)
@@ -274,7 +360,7 @@ function A.Entries(id)
     end
     local entries = {}
     for i, found in ipairs(lists) do
-        for n = 1, take[i] do entries[#entries + 1] = { kind = "item", id = found[n].id } end
+        for n = 1, take[i] do entries[#entries + 1] = { kind = found[n].kind or "item", id = found[n].id } end
     end
     return entries, short
 end
@@ -308,9 +394,10 @@ end
 local function Make(kind)
     local have = A.Macro(kind.id)
     if have then return have end
+    Dress(kind)
     for _, name in ipairs(Names(kind)) do
         if not GetMacroInfo(name) then
-            local ok, index = pcall(CreateMacro, name, kind.icon, MARK .. kind.id, false)
+            local ok, index = pcall(CreateMacro, name, kind.icon or NO_ICON, MARK .. kind.id, false)
             if ok and index then return name end
             return nil
         end
@@ -337,7 +424,7 @@ end
 -- Puts a kind's macro on the cursor, to be dropped on a bar. Out of a fight.
 function A.Pick(id)
     local kind = A.Kind(id)
-    if not kind then return false end
+    if not (kind and A.Fits(kind)) then return false end
     if InCombatLockdown() then return false, TEXT.fight end
     local name = Make(kind)
     if not name then return false, TEXT.full end
@@ -376,10 +463,9 @@ function A.Mix(ids)
     own[#own + 1] = kind
     byId[kind.id] = kind
     -- parts with no icon of their own: the icon of the best the bags hold of them now
-    if kind.icon == NO_ICON and C_Item.GetItemIconByID then
-        local best = A.Entries(kind.id)[1]
-        local icon = best and C_Item.GetItemIconByID(best.id)
-        if not Hidden(icon) and type(icon) == "number" then saved.icon, kind.icon = icon, icon end
+    if kind.icon == NO_ICON then
+        local icon = EntryIcon(A.Entries(kind.id)[1])
+        if icon then saved.icon, kind.icon = icon, icon end
     end
     return kind
 end
@@ -414,10 +500,9 @@ function A.Restyle(id, name, icon)
         local fresh = Own(saved)
         kind.icon = fresh and fresh.icon or NO_ICON
         -- no icon of its own kinds: the icon of the best the bags hold of them, as when it was made
-        if kind.icon == NO_ICON and C_Item.GetItemIconByID then
-            local best = A.Entries(id)[1]
-            local found = best and C_Item.GetItemIconByID(best.id)
-            if not Hidden(found) and type(found) == "number" then saved.icon, kind.icon = found, found end
+        if kind.icon == NO_ICON then
+            local found = EntryIcon(A.Entries(id)[1])
+            if found then saved.icon, kind.icon = found, found end
         end
     elseif type(icon) == "number" then
         saved.icon, kind.icon = icon, icon
@@ -503,11 +588,26 @@ function A.Refresh()
     return changed
 end
 
-for _, event in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP" }) do
+-- whether a flyout in use holds a kind of spells, alone or among a kind of the player's own
+local function HoldsSpells()
+    for _, flyout in ipairs(F.List() or {}) do
+        local kind = flyout.auto and A.Kind(flyout.auto)
+        if kind and kind.flyouts then return true end
+        for _, id in ipairs(kind and kind.parts or {}) do
+            local part = A.Part(id)
+            if part and part.flyouts then return true end
+        end
+    end
+    return false
+end
+
+-- a spell learned is looked for in the flyouts of spells
+for _, event in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_LEVEL_UP", "SPELLS_CHANGED" }) do
     pcall(events.RegisterEvent, events, event)
 end
 events:SetScript("OnEvent", function(_, event, item)
     if not ns.started then return end
+    if event == "SPELLS_CHANGED" and not HoldsSpells() then return end
     -- word on an item comes for every item anyone asks about: only one this waits for counts
     if event == "GET_ITEM_INFO_RECEIVED" and not owed[item] then return end
     if event == "PLAYER_LEVEL_UP" then grown = Count(item) end

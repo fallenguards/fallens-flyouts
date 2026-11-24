@@ -1198,6 +1198,21 @@ C_AddOns = {
 }
 function GetBuildInfo() return "12.0.0", "70009", "Nov 1 2026", 16001 end
 function UnitClass() return char.class, char.class end
+-- W.side: the player's side; W.gameFlyouts: the game's own flyouts of spells, id to { name, spells };
+-- W.knownSpells: the spells this character knows
+function UnitFactionGroup() return W.side or "Alliance", W.side or "Alliance" end
+function GetFlyoutInfo(id)
+    local flyout = W.gameFlyouts and W.gameFlyouts[id]
+    if not flyout then return nil end
+    return flyout.name, "", #flyout.spells, false
+end
+function GetFlyoutSlotInfo(id, slot)
+    local flyout = W.gameFlyouts and W.gameFlyouts[id]
+    local spell = flyout and flyout.spells[slot]
+    if not spell then return nil end
+    return spell, spell, W.knownSpells ~= nil and W.knownSpells[spell] == true, "Spell " .. spell, 0
+end
+function IsPlayerSpell(id) return W.knownSpells ~= nil and W.knownSpells[id] == true end
 function UnitName() return "Tester", "Surname" end
 function GetUnitName() return char.name end
 function UnitGUID() return char.guid end

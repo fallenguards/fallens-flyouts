@@ -25,6 +25,8 @@ local TEXT = {
     fight = "Nothing on a bar changes in a fight: a flyout catches up when the fight ends.",
     slash = "The same from chat: /ff food, /ff drink and so on.",
     tip = "A flyout of the %s in your bags.",
+    spellTip = "A flyout of the %s you know.",
+    spells = "Portals and Teleports hold the ones you know.",
     macro = "It sits on your bar as a macro named %s.",
     ownHead = "Make Your Own",
     ownIntro = "Tick the kinds one flyout should hold, then press Create. Yours appear in the row below.",
@@ -70,7 +72,7 @@ local function ShowTip(self)
     if kind.own then
         GameTooltip:AddLine(TEXT.ownTip:format(PartNames(kind.parts)), 1, 1, 1, true)
     else
-        GameTooltip:AddLine(TEXT.tip:format(kind.name:lower()), 1, 1, 1, true)
+        GameTooltip:AddLine((kind.flyouts and TEXT.spellTip or TEXT.tip):format(kind.name:lower()), 1, 1, 1, true)
     end
     GameTooltip:AddLine(TEXT.macro:format(Auto.Macro(kind.id) or kind.name), 1, 1, 1, true)
     if kind.own then GameTooltip:AddLine(TEXT.delete, 0.6, 0.6, 0.6, true) end
@@ -176,7 +178,7 @@ function UI.Ticked() return order end
 -- the list: every kind a flyout of the player's own can hold, each with a box to tick
 function UI.Fill(_, root)
     for _, part in ipairs(Auto.Parts()) do
-        root:CreateCheckbox(part.name, IsTicked, UI.Tick, part.id)
+        if Auto.Fits(part) then root:CreateCheckbox(part.name, IsTicked, UI.Tick, part.id) end
     end
 end
 
@@ -251,10 +253,12 @@ function UI.Build()
         return line
     end
     local head = Line(TEXT.title, "GameFontNormalLarge")
-    local intro = Line(TEXT.intro, "GameFontHighlight", head, GAP)
+    local shown, spells = Auto.Shown(), false
+    for _, kind in ipairs(shown) do spells = spells or kind.flyouts ~= nil end
+    local intro = Line(spells and (TEXT.intro .. " " .. TEXT.spells) or TEXT.intro, "GameFontHighlight", head, GAP)
     local how = Line(TEXT.how, "GameFontHighlight", intro, GAP)
     panel.icons = {}
-    for i, kind in ipairs(Auto.KINDS) do
+    for i, kind in ipairs(shown) do
         local button = UI.Icon(kind, content)
         if i == 1 then
             button:SetPoint("TOPLEFT", how, "BOTTOMLEFT", GAP, -GAP * 3)
@@ -331,6 +335,6 @@ if ns.FeedbackUI then ns.FeedbackUI.Register() end
 local open = SlashCmdList.FALLENSFLYOUTS
 SlashCmdList.FALLENSFLYOUTS = function(msg)
     local id = type(msg) == "string" and msg:lower():match("^%s*(%a+)%s*$")
-    if id and Auto.Kind(id) then return UI.Pick(id) end
+    if id and Auto.Kind(id) and Auto.Fits(Auto.Kind(id)) then return UI.Pick(id) end
     if open then return open(msg) end
 end

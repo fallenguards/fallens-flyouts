@@ -1783,13 +1783,13 @@ do
         local held = #food.entries
         C_Spell.PickupSpell(501)
         DropOn(entry(foodUnit.index, 1))
-        check(#food.entries == held and W.cursor ~= nil and W.errors[#W.errors] == "That flyout fills itself from your bags.",
+        check(#food.entries == held and W.cursor ~= nil and W.errors[#W.errors] == "That flyout fills itself.",
             "a drop on an icon of a flyout that fills itself is refused in red")
         W.cursor = nil
         W.combat = true
         C_Spell.PickupSpell(501)
         DropOn(foodUnit.opener)
-        check(#food.entries == held and W.cursor ~= nil and W.errors[#W.errors] == "That flyout fills itself from your bags.",
+        check(#food.entries == held and W.cursor ~= nil and W.errors[#W.errors] == "That flyout fills itself.",
             "in a fight a drop on the arrow of a flyout that fills itself is refused in red")
         W.combat = false
         W.cursor = nil
@@ -1863,7 +1863,7 @@ do
     -- the settings page, and the same from chat
     local autoPage = NS.AutoUI.panel
     NS.AutoUI.Build()
-    check(#autoPage.icons == #Auto.KINDS and autoPage.icons[1].icon.texture == 133952,
+    check(#autoPage.icons == #Auto.Shown() and autoPage.icons[1].icon.texture == 133952,
         "the settings page has an icon for each kind, the kind's own")
     W.cursor = nil
     autoPage.icons[2].scripts.OnClick(autoPage.icons[2])
@@ -3058,7 +3058,8 @@ do
     bags({ 4540, 159, 4541, 118, 4542, 1179, 5997, 9001, 9002 })
     local names = {}
     for i, part in ipairs(Auto.Parts()) do names[i] = part.name end
-    check(table.concat(names, "|") == "Food|Drink|Potions|Elixirs|Flasks|Scrolls|Bandages|Explosives and Devices|Other",
+    check(table.concat(names, "|")
+        == "Food|Drink|Potions|Elixirs|Flasks|Scrolls|Bandages|Portals|Teleports|Explosives and Devices|Other",
         "the kinds to tick: the ready-made ones, then the game's other kinds of consumable under the game's names, none of "
             .. "them twice and none the game keeps only for old items: " .. table.concat(names, "|"))
 
@@ -4944,12 +4945,14 @@ do
         and up.icon.point[2] == up.make and up.auto.point[2] == up.icon,
         "under it, a line on the right-click that gives a flyout an icon and a name: " .. tostring(up.icon.text))
     check(up.auto.text:find("You can also use these preset flyouts.", 1, true) == 1
-        and up.auto.text:find("keeps itself filled with that kind of item from your bags", 1, true) ~= nil
+        and up.auto.text:find("keeps itself filled with what you have of that kind", 1, true) ~= nil
         and up.auto.text:find("These fill themselves", 1, true) == nil,
         "and then, in words that cannot be read as part of that line, what the preset flyouts are: " .. tostring(up.auto.text))
     local names = {}
     for i, icon in ipairs(up.icons) do names[i] = icon.kind.name end
-    check(table.concat(names, " ") == "Food Drink Potions Elixirs Flasks Scrolls Bandages" and up.icons[1].parent == up
+    -- the tests' character is a mage, offered a mage's two as well
+    check(table.concat(names, " ") == "Food Drink Potions Elixirs Flasks Scrolls Bandages Portals Teleports"
+        and up.icons[1].parent == up
         and up.more.text == "More in the settings: /ff", "under them the preset flyouts, in a row: " .. table.concat(names, " "))
     -- it can be dragged, and stays where it is put
     check(up.movable == true and up.clamped == true and up.scripts.OnDragStart ~= nil and up.scripts.OnDragStop ~= nil,
@@ -6052,6 +6055,72 @@ do
         "a spell carried, the game lifts its bars to the top layer, and the plus goes with them, over every bar")
     W.cursor = nil
     fire("CURSOR_CHANGED")
+    flushAll()
+end
+
+print("a mage's portals and teleports: preset flyouts of the ones known")
+do
+    -- His words (2026-11-24): "also for mages, \"portals\" should be one of our preset flyouts btw.", "and
+    -- teleports", "separately". The game keeps them in flyouts of its own, one for each side (read on his client).
+    local Auto = NS.Auto
+    W.side = "Horde"
+    W.gameFlyouts = {
+        [248] = { name = "Portal", spells = { 11419, 11416, 10059 } },
+        [249] = { name = "Portal", spells = { 11417, 11420, 11418 } },
+        [250] = { name = "Teleport", spells = { 3565, 3562, 3561, 1297659 } },
+        [251] = { name = "Teleport", spells = { 3567, 3566, 3563, 1297659 } },
+    }
+    W.knownSpells = { [3567] = true, [3563] = true, [1297659] = true, [11417] = true }
+    -- the tests before filled the macro list: room for this one's, the list put back after
+    local macros = W.macros
+    W.macros = {}
+    local function said(list)
+        local out = {}
+        for i, entry in ipairs(list or {}) do out[i] = entry.kind .. " " .. entry.id end
+        return table.concat(out, ", ")
+    end
+    check(said(Auto.Entries("teleports")) == "spell 3567, spell 3563, spell 1297659",
+        "Teleports holds the teleports this mage knows, in the game's order, Dalaran once: "
+            .. said(Auto.Entries("teleports")))
+    check(said(Auto.Entries("portals")) == "spell 11417", "and Portals the portals: " .. said(Auto.Entries("portals")))
+    local shown = {}
+    for _, kind in ipairs(Auto.Shown()) do shown[kind.id] = kind end
+    check(shown.portals ~= nil and shown.teleports ~= nil and shown.teleports.icon == 3567 and shown.portals.icon == 11417,
+        "a mage is offered both, each with the icon of the first it holds")
+    W.cursor = nil
+    check(Auto.Pick("portals") == true and W.cursor ~= nil and W.cursor[2] == "Portals",
+        "Portals is picked up as its macro, to go on a bar")
+    W.cursor = nil
+    fire("ACTIONBAR_HIDEGRID")
+    flushAll()
+    local portals
+    for _, flyout in ipairs(NS.Flyouts.List()) do
+        if flyout.auto == "portals" then portals = flyout end
+    end
+    W.knownSpells[11418] = true
+    fire("SPELLS_CHANGED")
+    flushAll()
+    check(portals ~= nil and said(portals.entries) == "spell 11417, spell 11418",
+        "a portal learned joins its flyout: " .. said(portals and portals.entries))
+    -- a mix of the player's own may hold them, and takes its icon from them
+    local mixed = Auto.Mix({ "teleports", "portals" })
+    check(mixed ~= nil and mixed.icon == 3567 and said(Auto.Entries(mixed.id)) == "spell 3567, spell 3563, spell 1297659, "
+        .. "spell 11417, spell 11418", "a flyout of your own can hold both, in the order ticked: "
+        .. said(mixed and Auto.Entries(mixed.id)))
+    if mixed then Auto.Unmix(mixed.id) end
+    -- anyone else is not offered them, nor can pick one up from chat
+    local was = UnitClass
+    UnitClass = function() return "Warrior", "WARRIOR" end
+    local offered = {}
+    for _, kind in ipairs(Auto.Shown()) do offered[kind.id] = true end
+    W.cursor = nil
+    check(not offered.portals and not offered.teleports and offered.food and Auto.Pick("teleports") == false
+        and W.cursor == nil, "a warrior is offered neither, and /ff teleports picks nothing up")
+    UnitClass = was
+    if portals then NS.Flyouts.Forget(portals) end
+    pcall(DeleteMacro, "Portals")
+    W.macros = macros
+    W.gameFlyouts, W.knownSpells, W.side = nil, nil, nil
     flushAll()
 end
 

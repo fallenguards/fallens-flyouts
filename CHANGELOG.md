@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.8] - 2026-11-24
+
+### Added
+- Mages have "Portals" and "Teleports" preset flyouts, each holding the ones you know.
+
+### Fixed
+- The + on a bar button no longer shows through windows over the bars.
+
 ## [1.1.7] - 2026-11-24
 
 ### Added
