@@ -103,6 +103,20 @@ local function Along(unit, x, y)
     return (along - Art.FIRST + Art.NEXT / 2) / (Art.ICON + Art.NEXT)
 end
 
+-- For the log: a screen point against the strip, in the strip's own measure. His report (2026-11-24):
+-- "moving an icon in a flyout between two other ones can be really frustrating"; his log had icons that
+-- left the strip the moment they were lifted, the cursor still on them.
+local function Against(unit, x, y)
+    if not (x and y) then return "no cursor position" end
+    local menu = unit.menu
+    local s = menu:GetEffectiveScale()
+    local left, right, top, bottom = menu:GetLeft(), menu:GetRight(), menu:GetTop(), menu:GetBottom()
+    return ("cursor %.0f,%.0f against the strip %s..%s across, %s..%s up (scale %.2f, runs %s, %d icons)"):format(
+        x / s, y / s, tostring(left and math.floor(left + 0.5)), tostring(right and math.floor(right + 0.5)),
+        tostring(bottom and math.floor(bottom + 0.5)), tostring(top and math.floor(top + 0.5)), s,
+        tostring(unit.way), #unit.flyout.entries)
+end
+
 -- the place under a screen point; nil when the point is off the flyout
 local function Where(unit, x, y)
     local r = Along(unit, x, y)
@@ -162,6 +176,19 @@ local function AimMove(m, x, y, elapsed)
     if m.between ~= to then m.between, m.rest = to, 0 end
     m.rest = m.rest + (elapsed or 0)
     if m.rest >= REST then m.at, m.between, m.rest = to, nil, 0 end
+end
+
+-- each change of what a let-go would do, in the log
+local function SayAim(m, x, y)
+    local now = ("%s/%s/%s"):format(tostring(m.target), tostring(m.between), tostring(m.at))
+    if now == m.said then return end
+    m.said = now
+    local r = Along(m.unit, x, y)
+    ns.Log(("move aim: at %s places along: %s"):format(r and ("%.2f"):format(r) or "off",
+        m.target and ("icon %d lit, a let-go trades places with it"):format(m.target)
+        or m.between and ("between, a let-go goes in at %d (the gap at %d, %.2f s of %.2f rested)"):format(m.between,
+            m.at, m.rest or 0, REST)
+        or ("on the gap at %d"):format(m.at)))
 end
 
 -- every icon a step nearer its place; true while any is still on its way
@@ -319,8 +346,13 @@ function M.At(x, y, elapsed)
     if not moving then return end
     moving.x, moving.y = x, y
     local place = Where(moving.unit, x, y)
+    if not place then
+        ns.Log(("move: %s place %d off the strip: %s"):format(tostring(moving.flyout.host), moving.from,
+            Against(moving.unit, x, y)))
+    end
     if not place or moving.driven then return M.Aim(place) end
     AimMove(moving, x, y, elapsed)
+    SayAim(moving, x, y)
 end
 
 -- one frame of growing, sliding and landing
@@ -667,7 +699,10 @@ function M.Start(frame, driven)
     Hold(moving, x, y, 1)
     held:Show()
     Driver():Show()
-    ns.Log(("move: %s place %d lifted"):format(tostring(flyout.host), i))
+    local cx, cy = GetCursorPosition()
+    ns.Log(("move: %s place %d lifted; icon at %s; %s"):format(tostring(flyout.host), i,
+        x and ("%.0f,%.0f"):format(x / unit.menu:GetEffectiveScale(), y / unit.menu:GetEffectiveScale()) or "?",
+        Against(unit, cx, cy)))
     return true
 end
 
