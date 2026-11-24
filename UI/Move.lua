@@ -487,8 +487,6 @@ end
 local catcher, ghost
 -- how long the cursor may be off the plus and the flyout before the flyout shuts again
 local AWAY = 0.25
--- the catcher's reach past the strip, in the strip's measure
-local CATCH = 12
 
 function Ghost()
     if ghost then return ghost end
@@ -709,13 +707,14 @@ end
 local function PreviewTick(elapsed)
     local p = preview
     if InCombatLockdown() or not GetCursorInfo() then return M.PreviewEnd() end
-    if catcher:IsMouseOver() or p.tab:IsMouseOver() then
+    local x, y = GetCursorPosition()
+    -- near the strip (as near as aiming reaches) it lives on; a drop counts on the strip alone (the catcher)
+    if catcher:IsMouseOver() or p.tab:IsMouseOver() or (x and Along(p.unit, x, y)) then
         p.away = 0
     else
         p.away = p.away + elapsed
         if p.away > AWAY then return M.PreviewEnd() end
     end
-    local x, y = GetCursorPosition()
     Aim(p, x, y, elapsed)
     Lay(p, elapsed)
 end
@@ -760,10 +759,13 @@ function M.PreviewStart(tab, atEnd)
     p.ghost = Ghost()
     local catch = Catcher()
     p.catcher = catch
+    -- The catcher covers the strip alone. It reached 12 past it on every side, over the corners of the bar
+    -- buttons beside the flyout: the game draws what is carried below and right of the cursor's tip, so a
+    -- spell held over the button beside the flyout had the tip in that margin, and the flyout took the drop.
+    -- His words (2026-11-24): "why is this bouncing back despite lighting up the literal icon im trying to
+    -- drop it to?", "only happens on the icons adjacent to the flyout."
     catch:ClearAllPoints()
-    local s = unit.menu:GetEffectiveScale() / catch:GetEffectiveScale()
-    catch:SetPoint("TOPLEFT", unit.menu, "TOPLEFT", -CATCH * s, CATCH * s)
-    catch:SetPoint("BOTTOMRIGHT", unit.menu, "BOTTOMRIGHT", CATCH * s, -CATCH * s)
+    catch:SetAllPoints(unit.menu)
     catch:Show()
     Lay(p)
     Driver():Show()

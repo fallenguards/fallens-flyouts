@@ -88,7 +88,12 @@ function Frame:SetPoint(...)
     self.points = self.points or {}
     self.points[#self.points + 1] = self.point
 end
-function Frame:ClearAllPoints() self.points = {} end
+function Frame:ClearAllPoints() self.points, self.allOf = {}, nil end
+-- laid over another frame exactly, as the game's SetAllPoints does: the frame it covers is kept
+function Frame:SetAllPoints(other)
+    self.points, self.point = {}, nil
+    self.allOf = other or self.parent
+end
 function Frame:GetPoint()
     if self.point then return table.unpack(self.point) end
 end

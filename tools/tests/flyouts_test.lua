@@ -964,6 +964,10 @@ do
         and along(entry(one, 1)) == slot(2),
         "pointed at the plus, the flyout opens with a gap nearest the button, where the plus is; nothing faint in it")
     check(p.gap == 1 and p.target == nil, "while the cursor stays on the plus the gap stays there")
+    -- His words (2026-11-24): "why is this bouncing back despite lighting up the literal icon im trying to drop
+    -- it to?", "only happens on the icons adjacent to the flyout."
+    check(p.catcher.allOf == p.unit.menu and #(p.catcher.points or {}) == 0,
+        "a drop is caught on the strip alone, nothing past it: the bar buttons beside it keep theirs")
     -- His words (2026-11-24): "when i try to replace, it just bounces out of my way". On the way to the
     -- first icon's middle the cursor crosses its edge: nothing moves, and its middle takes the drop.
     tab.over, p.catcher.over = false, true
