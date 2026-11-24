@@ -291,8 +291,11 @@ local catcher, ghost
 -- middle seven tenths of a place, and a rim of 0.15 of a place at each end moves things. Of the 650 ms: "is
 -- the delay the standard one? feels slightly long." Launcher3 waited 350 ms first and raised it for fingers,
 -- which are slow and land roughly; a mouse aims exactly, and a drop between two icons goes in there without
--- waiting at all, so the rest only says when they part to show it: Launcher3's first 350 ms.
-local RIM, REST = 0.15, 0.35
+-- waiting at all, so the rest only says when they part to show it: Launcher3's first 350 ms. Then: "the
+-- delay stillll feels a bit much." The rest is only there so a cursor passing between two icons does not
+-- part them: that space is two rims, three tenths of a place, about 10 pixels at the usual size, crossed in
+-- some 35 ms at an ordinary speed and 100 ms slowly, so 150 ms still lets a pass go by.
+local RIM, REST = 0.15, 0.15
 -- how long the cursor may be off the plus and the flyout before the flyout shuts again
 local AWAY = 0.25
 -- the catcher's reach past the strip, in the strip's measure
