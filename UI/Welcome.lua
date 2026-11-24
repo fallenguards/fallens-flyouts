@@ -374,7 +374,7 @@ W.CHANGES = {
         } },
         { name = "Changed", items = {
             "Inside a flyout, let go of an icon on another to swap the two, or between two icons to insert " ..
-                "it. An icon dragged off a flyout counts as any other dragged icon.",
+                "it.",
             "A right-click on a flyout icon casts it, so [button:2] macros work. Drag an icon off to take it " ..
                 "off.",
             "With a controller, a new flyout picks with the other cross from its button's, so one on the " ..

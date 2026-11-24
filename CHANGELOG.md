@@ -12,7 +12,7 @@
 - With a controller, RB in Edit Flyout changes a flyout button's icon and name, and LB shows or hides the background.
 
 ### Changed
-- Inside a flyout, let go of an icon on another to swap the two, or between two icons to insert it. An icon dragged off a flyout counts as any other dragged icon.
+- Inside a flyout, let go of an icon on another to swap the two, or between two icons to insert it.
 - A right-click on a flyout icon casts it, so `[button:2]` macros work. Drag an icon off to take it off.
 - With a controller, a new flyout picks with the other cross from its button's, so one on the D-pad picks with the face buttons. New flyouts pick with, on the Controller page, changes this, and flyouts you have keep how they pick.
 - The flyout size uses the game's slider.
