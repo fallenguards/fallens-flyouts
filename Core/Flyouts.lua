@@ -61,8 +61,8 @@ local TEXT = {
     mount = "Mounts and pets go in a flyout out of combat.",
     how = "Drag",
     howHeld = "%s-drag",
-    remove = "%s to move it. Right-click takes it off the flyout.",
-    removeLast = "%s to move it. Right-click takes it off, and the flyout with it: nothing else was added.",
+    remove = "%s to move it, or off the flyout to take it off.",
+    removeLast = "%s to move it, or off the flyout to take it off, and the flyout with it: nothing else was added.",
     it = "It",
 }
 F.MAX, F.KEYS, F.PADS, F.CLOSE_KEYS, F.TEXT = MAX, KEYS, PADS, CLOSE_KEYS, TEXT
@@ -758,13 +758,18 @@ local MOUSECAST = [[
     self:SetAttribute("unit", unit)
 ]]
 
+-- A right-click casts as a left-click does, on the release, as on a bar button: the click goes on with its
+-- button, so a macro's [button:2] runs. An icon comes off by a drag off the flyout, as off a bar.
+-- A player's word (2026-11-24): "There are macros that will do one thing if you left click and another thing
+-- if you right click. With your addon, right clicking removes the macro of the menu", with a macro of
+-- "/use [button:1] 16; [button:2] 17". His answer: "I'll switch the default to just not have right click
+-- remove since can just shift drag to remove like usual anyway."
 local ENTRY_WRAP = [[
-    if button == "RightButton" then return false end
     -- out of a fight a mouse click with something carried sets it down on this icon, as on a bar slot,
     -- and casts nothing (in a fight nothing says what the cursor holds)
     if button == "LeftButton" and owner:GetAttribute("carrying") and not PlayerInCombat() then return false end
 ]] .. MOUSECAST .. [[
-    if button == "LeftButton" then
+    if button == "LeftButton" or button == "RightButton" then
         if down then
             self:SetAttribute("useOnKeyDown", false)
             armed = self:GetName()
@@ -1322,7 +1327,6 @@ local function EntryButton(unit, i)
     -- by the place it stands in now: in a fight the secure code may have moved it
     entry:SetScript("PostClick", function(self, button, down)
         Tell("pick", unit, self.entryIndex, button, down)
-        if button == "RightButton" and not down then TakeOff(unit, self.entryIndex) end
         if button == "LeftButton" and not down and GetCursorInfo() then xpcall(F.Dropped, geterrorhandler(), self) end
     end)
     -- never a field called unit: the client takes that for a unit name

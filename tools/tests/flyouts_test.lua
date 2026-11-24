@@ -700,9 +700,11 @@ W.cursor = { "spell", 7, "spell", 504, 504 }
 tabOf("ActionButton1").scripts.OnReceiveDrag(tabOf("ActionButton1"))
 check(count(one) == 4 and W.cursor ~= nil, "a drop in a fight is refused")
 tap("1")
+local castsBefore = #W.casts
 rightClick(entry(one, 4))
-check(count(one) == 4 and menu:IsShown(), "a right-click in a fight takes nothing out")
-tap("ESCAPE")
+check(count(one) == 4 and #W.casts == castsBefore + 1 and not menu:IsShown(),
+    "in a fight a right-click casts the icon, as on a bar, and takes nothing out")
+if menu:IsShown() then tap("ESCAPE") end
 W.cursor, W.combat = nil, false
 flushAll()
 
@@ -724,13 +726,25 @@ check(opener("1") == one and opener("2") == two and opener("Q") == two and GetBi
     "shut, every key is back")
 local casts = #W.casts
 tap("E")
-rightClick(entry(one, 4))
-check(count(one) == 3 and menu:IsShown() and #W.casts == casts, "a right-click takes an entry out, casts nothing")
+-- A player's word (2026-11-24): "There are macros that will do one thing if you left click and another thing
+-- if you right click. With your addon, right clicking removes the macro of the menu", with a macro of
+-- "/use [button:1] 16; [button:2] 17". His answer: "I'll switch the default to just not have right click
+-- remove since can just shift drag to remove like usual anyway."
+rightClick(entry(one, 2))
+check(count(one) == 4 and #W.casts == casts + 1 and W.castButtons[#W.casts] == "RightButton" and not menu:IsShown(),
+    "a right-click casts the icon as on a bar, with the right button (a macro's [button:2] runs), and takes nothing out")
+casts = #W.casts
+tap("E")
+-- dragged off the flyout and let go, as off a bar
+local units = NS.Flyouts.Units()
+NS.Flyouts.CarryOff(units[one], 4)
+W.cursor = nil
+check(count(one) == 3 and #W.casts == casts, "an icon dragged off the flyout and let go is out of it, and nothing is cast")
 check(#NS.Profiles.Data().flyouts[1].entries == 3, "and it is out of the saved flyout")
 check(lastChat("taken off") == nil, "and chat says nothing of it: it was plain to see")
-tap("ESCAPE")
-tap("Q")
-rightClick(entry(two, 2))
+if menu:IsShown() then tap("ESCAPE") end
+NS.Flyouts.CarryOff(units[two], 2)
+W.cursor = nil
 check(not opens("2") and not opens("Q") and #NS.Profiles.Data().flyouts == 1,
     "with its one added entry out, the second flyout is gone")
 check(opener("1") ~= nil and GetBindingAction("2", true) == "ACTIONBUTTON2", "and its key is the bar's again")
@@ -2607,11 +2621,12 @@ flushAll()
 lead, beside = opener("1"), opener("2")
 check(lead ~= nil and beside ~= nil and count(lead) == 3 and second("2") == 601,
     "after a reload both are back from the saved profile")
-tap("E")
-rightClick(entry(lead, 3))
-rightClick(entry(lead, 2))
+local leadUnit = NS.Flyouts.Units()[lead]
+NS.Flyouts.CarryOff(leadUnit, 3)
+NS.Flyouts.CarryOff(leadUnit, 2)
+W.cursor = nil
 check(not opens("1") and not opens("E") and opens("2") and #NS.Profiles.Data().flyouts == 1,
-    "right-clicks take a flyout apart")
+    "icons dragged off one by one take a flyout apart")
 print("a login in a fight, before the bars are placed")
 check(way("2") == "UP", "on the placed bar the flyout grows up")
 unplaced = true

@@ -1492,6 +1492,9 @@ local function click(frame, down, button)
         local unit = frame.attrs.unit
         if not unit and frame.attrs.checkfocuscast and IsModifiedClick("FOCUSCAST") then unit = "focus" end
         W.casts[#W.casts + 1] = frame.attrs.type .. ":" .. tostring(frame.attrs[frame.attrs.type]) .. (unit and ("@" .. unit) or "")
+        -- the mouse button the cast went on with: a macro's [button:2] reads it
+        W.castButtons = W.castButtons or {}
+        W.castButtons[#W.casts] = button
     end
     if frame.scripts.PostClick then frame.scripts.PostClick(frame, button, down) end
     if cast then fire("UNIT_SPELLCAST_SENT", "player", "", "", 1) end
