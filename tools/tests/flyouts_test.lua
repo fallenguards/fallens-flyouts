@@ -1142,6 +1142,52 @@ do
     NS.Flyouts.Swap(NS.Flyouts.At("ActionButton1"), 1, 3)
     flushAll()
     check(order() == "101 501 502", "and the flyout is put back as it was for the checks that follow")
+    -- His report (2026-11-24): "as soon as i drag a flyout item outside of the flyout (but don't drop it) and
+    -- try to bring in back in, the swapping around just ceases to happen."
+    show()
+    drag(entry(one, 3))
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    check(Move.Carried() ~= nil and W.cursor ~= nil and Move.Moving() == nil, "dragged off, it is on the cursor")
+    W.mouseX, W.mouseY = middle(1)
+    Move.Tick(0.02)
+    check(Move.Carried() == nil and Move.Moving() ~= nil and Move.Moving().from == 3 and W.cursor == nil
+        and entry(one, 3).alpha == 0 and count(one) == 3,
+        "brought back onto the flyout with the mouse still held, it is moved inside it again, nothing on the cursor")
+    Move.Tick(0.12)
+    Move.Tick(0.12)
+    check(Move.Moving().target == 1 and entry(one, 1).lit, "an icon stayed on lights up, as before it left")
+    W.mouseDown = false
+    Move.Tick(0.02)
+    settle()
+    check(order() == "502 501 101" and count(one) == 3 and W.cursor == nil and Move.Moving() == nil
+        and Move.Carried() == nil, "let go, the two trade places: " .. order())
+    NS.Flyouts.Swap(NS.Flyouts.At("ActionButton1"), 1, 3)
+    flushAll()
+    check(order() == "101 501 502", "and put back as it was")
+    -- near the edge but not on the strip, it stays on the cursor: back means on the flyout itself
+    show()
+    drag(entry(one, 3))
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    local nearX, nearY = middle(1)
+    local backScale = menu:GetEffectiveScale()
+    if upright then
+        nearX = (menu.rect[2] + NS.Art.ICON * 0.5) * backScale
+    else
+        nearY = (menu.rect[3] + NS.Art.ICON * 0.5) * backScale
+    end
+    W.mouseX, W.mouseY = nearX, nearY
+    Move.Tick(0.02)
+    check(Move.Carried() ~= nil and Move.Moving() == nil, "just past the flyout's edge it is still on the cursor")
+    W.mouseX, W.mouseY = middle(3)
+    Move.Tick(0.02)
+    W.mouseDown = false
+    Move.Tick(0.02)
+    settle()
+    check(order() == "101 501 502" and count(one) == 3 and W.cursor == nil, "back on its own place and let go: as it was")
     show()
 end
 W.shift, W.locked = false, false

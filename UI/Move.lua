@@ -92,14 +92,15 @@ local function Centre(frame)
 end
 
 -- the place in the strip a point is at, as a number of places from its start (0.5 the first icon's middle),
--- nil off the strip
-local function Along(unit, x, y)
+-- nil off the strip; `reach`: how far past its edge still counts (REACH unless given)
+local function Along(unit, x, y, reach)
+    reach = reach or REACH
     local menu = unit.menu
     local left, right, top, bottom = menu:GetLeft(), menu:GetRight(), menu:GetTop(), menu:GetBottom()
     if not (left and right and top and bottom) then return nil end
     local s = menu:GetEffectiveScale()
     x, y = x / s, y / s
-    if x < left - REACH or x > right + REACH or y < bottom - REACH or y > top + REACH then return nil end
+    if x < left - reach or x > right + reach or y < bottom - reach or y > top + reach then return nil end
     local along = y - bottom
     if unit.way == "DOWN" then
         along = top - y
@@ -687,6 +688,36 @@ function M.PreviewStart(tab)
     return true
 end
 
+-- An icon dragged off its flyout and brought back onto it, the mouse still held: it is moved inside the
+-- flyout again, as before it left. His report (2026-11-24): "as soon as i drag a flyout item outside of the
+-- flyout (but don't drop it) and try to bring in back in, the swapping around just ceases to happen." Back
+-- means on the strip itself: it leaves REACH past the strip's edge and comes back at the edge, so the
+-- border between the two is not crossed back and forth by a hand that holds still.
+local function Return(x, y)
+    local was = carried
+    if not (was and x and y) or InCombatLockdown() then return false end
+    local unit = was.unit
+    if unit.flyout ~= was.flyout or not Along(unit, x, y, 0) then return false end
+    local from
+    for i, entry in ipairs(was.flyout.entries) do
+        if entry == was.entry then from = i end
+    end
+    if not from then return false end
+    carried = nil
+    -- what F.Pickup put on the cursor as it left goes, and the held picture is the icon again
+    if GetCursorInfo() then ClearCursor() end
+    moving = { unit = unit, flyout = was.flyout, from = from, at = from, x = x, y = y, grown = 1, rest = 0,
+        dwell = 0, scale = unit.menu:GetEffectiveScale() / UIParent:GetEffectiveScale() }
+    unit.entries[from]:SetAlpha(0)
+    local held = Lift()
+    held.icon:SetTexture(F.Icon(was.flyout.entries[from]))
+    Hold(moving, x, y, GROW)
+    held:Show()
+    ns.Log(("move: %s place %d brought back onto its strip, the mouse still held: moved inside it again")
+        :format(tostring(was.flyout.host), from))
+    return true
+end
+
 -- one frame: a move begun by the mouse follows it, and ends when it lets go
 function M.Tick(elapsed)
     if preview then PreviewTick(elapsed) end
@@ -704,6 +735,9 @@ function M.Tick(elapsed)
             EndCarry()
         elseif not IsMouseButtonDown("LeftButton") then
             carried.let = true
+        else
+            local x, y = GetCursorPosition()
+            Return(x, y)
         end
     end
     M.Step(elapsed)

@@ -379,8 +379,8 @@ W.CHANGES = {
                 "for a moment and it lights up, and letting go trades their places; let go before it lights and " ..
                 "it goes in on the nearer side of that icon. Pause between two icons and they part to make room; " ..
                 "let go between two icons, parted or not, and it goes in between. An icon dragged off its flyout " ..
-                "and let go on another of its icons trades places with it too, where before it went back to its " ..
-                "own place.",
+                "and brought back onto it before you let go is moved inside it again, as before it left; let go " ..
+                "on another of its icons, it trades places with it, where before it went back to its own place.",
             "A right-click on an icon in a flyout casts it, as on a bar button, so a macro that does one " ..
                 "thing on a left-click and another on a right-click ([button:2]) works in a flyout too. To take " ..
                 "an icon off a flyout, drag it off (Shift-drag where your bars are locked) and let go, as off a " ..
