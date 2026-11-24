@@ -610,6 +610,8 @@ do
     local function seen() return strip.first.shown and strip.last.shown end
     check(page.back:GetChecked() and seen() and page.opacity:GetValue() == 100 and strip.first:GetAlpha() == 1,
         "the background is shown and whole to begin with")
+    check(pcall(page.back.scripts.OnEnter, page.back) and W.tipLines[1][1] == "Show the flyout background",
+        "the background box's tooltip has its name for a title: " .. tostring(W.tipLines[1][1]))
     page.opacity:SetValue(40)
     check(math.abs(strip.first:GetAlpha() - 0.4) < 0.001 and math.abs(strip.last:GetAlpha() - 0.4) < 0.001
         and NS.Profiles.Data().backAlpha == 0.4 and page.opacity.RightText.text == "40%",
@@ -5624,6 +5626,14 @@ do
     FB.Refresh()
     page.idea.scripts.OnClick(page.idea)
     check(page.link:GetText():find("?template=feature_request.yml&details=", 1, true) ~= nil, "Suggest an Idea: the idea form")
+    -- the error in his game (2026-11-24): Profiles.lua:193, a tooltip with no title
+    local titled = true
+    for _, key in ipairs({ "bug", "idea", "news" }) do
+        local button = page[key]
+        local ok = pcall(button.scripts.OnEnter, button)
+        titled = titled and ok and W.tipLines[1][1] == button:GetText()
+    end
+    check(titled, "each button's tooltip has its name for a title")
     page.news.scripts.OnClick(page.news)
     check(NS.Welcome.News() ~= nil and NS.Welcome.News():IsShown(), "What's New opens what changed in this version")
     NS.Welcome.News():Hide()

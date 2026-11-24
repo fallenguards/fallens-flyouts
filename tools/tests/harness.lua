@@ -523,7 +523,13 @@ GameTooltip = {
     Show = function(self) self.shown = true end,
     SetAction = setAction,
     -- its lines, each with the color it was given (W.tipLines)
-    SetText = function(_, text, r, g, b) W.tipLines = { { text, r, g, b } } end,
+    SetText = function(_, text, r, g, b)
+        -- as the game's: a title that is no text is an error (Usage: self:SetText(text [, color, alpha, wrap]))
+        if type(text) ~= "string" and type(text) ~= "number" then
+            error("bad argument #2 to '?' (Usage: self:SetText(text [, color, alpha, wrap]))", 2)
+        end
+        W.tipLines = { { text, r, g, b } }
+    end,
     AddLine = function(_, text, r, g, b)
         W.tipLines = W.tipLines or {}
         W.tipLines[#W.tipLines + 1] = { text, r, g, b }

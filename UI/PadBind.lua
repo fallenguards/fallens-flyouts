@@ -119,6 +119,15 @@ local function Entry(fn, params)
     return nil
 end
 
+-- which of the game's pick up calls the dialog holds, for the log
+local function CallName(fn)
+    if fn == nil then return "none" end
+    if C_Spell and fn == C_Spell.PickupSpell then return "PickupSpell" end
+    if C_Item and fn == C_Item.PickupItem then return "PickupItem" end
+    if fn == PickupMacro then return "PickupMacro" end
+    return "another call (" .. type(fn) .. ")"
+end
+
 -- The bar button that shows a slot: a shown one first. The game's console bar
 -- is put away while its dialog is up, and may be on another page: none found
 -- is no fault, the flyout finds its button later.
@@ -349,6 +358,7 @@ local function Show(frame, moving, done)
     prompts.edit:SetShown(not moving)
     prompts.edit:SetPromptText(FRAME_ACTION_EDIT_ACTION_BAR or TEXT.edit)
     if prompts.plate then prompts.plate:Hide() end
+    if prompts.icon then prompts.icon:Hide() end
     prompts.back:SetShown(not (moving and done))
     if moving then
         prompts.back:SetPromptText(FRAME_ACTION_CANCEL or TEXT.cancel)
@@ -858,6 +868,14 @@ end
 -- The dialog just took a press and placed what it held; `slot` is the button's.
 local function Placed(frame, slot, possess)
     placedAt = GetTime()
+    -- His report (2026-11-24): "i hit bind and put it on one of the abilities and no longer get the flyout
+    -- question or anything... it just auto replaces the thing on the spot." Each step the dialog hands us
+    -- is said, so a save shows where the question was lost.
+    local holds, info = frame.pickupParams, frame.BindingInfoFrame
+    ns.Log(("pad bind: the dialog placed on slot %s (%s%s); it holds %s %s; its box %s, the dialog %s"):format(
+        tostring(slot), binding and "a bind" or "moving", armed and ", an edit asked for" or "",
+        CallName(frame.pickupFunc), tostring(type(holds) == "table" and holds[1] or nil),
+        type(info) == "table" and (info:IsShown() and "up" or "down") or "missing", frame:IsShown() and "up" or "down"))
     if armed then return Heal(frame, slot, possess) end
     -- set down, the picked up ability is the game's to move: Edit Flyout is no longer offered for it
     picked = nil
@@ -869,7 +887,9 @@ local function Placed(frame, slot, possess)
     -- on a taken button the dialog now holds what it took off it, and the slot the new one
     local fn, params = frame.pickupFunc, frame.pickupParams
     local old, new = Entry(fn, params), Bars.ActionAt(slot)
-    if not old then return Skip("what the button held is no spell, item or macro") end
+    if not old then
+        return Skip(("what the button held is no spell, item or macro (%s)"):format(CallName(fn)))
+    end
     if not new then return Skip("what was placed is no spell, item or macro") end
     if Same(old, new) then return Skip("the same ability") end
     local button = Live(slot)
@@ -1012,6 +1032,7 @@ function G.Install(frame)
     hooksecurefunc(frame, "EnterBindingMode", Guard(function()
         Clear()
         binding = true
+        ns.Log("pad bind: the dialog began a bind")
     end))
     hooksecurefunc(frame, "PlaceOrClearHeldActionCapturedInputHandler", Guard(Placed))
     -- the dialog gone, the console bar is back: a flyout looks for its button again
@@ -1035,6 +1056,7 @@ function G.Install(frame)
     end
     hooksecurefunc(frame, "ExitBindingMode", Guard(function()
         binding = false
+        ns.Log("pad bind: the dialog's bind ended")
         Gone()
     end))
     -- moving abilities: the held one was set down, let go or put back, or the mode left
@@ -1064,6 +1086,7 @@ function G.Install(frame)
     -- the game sets its button handler afresh each time it listens: ours rides behind each one
     local pressed = Guard(Pressed)
     hooksecurefunc(frame, "StartListeningForButtons", Guard(function(self)
+        ns.Log("pad bind: the dialog listens for the pad")
         self:HookScript("OnGamePadButtonDown", pressed)
         -- the dialog is up: its copies of the bar's buttons are found afresh and wear the flyouts' marks
         Bars.ForgetCopies()

@@ -387,7 +387,7 @@ function UI.Build()
         backText:SetPoint("LEFT", back, "RIGHT", GAP / 2, 0)
     end
     backText:SetText(TEXT.back)
-    back.tip = TEXT.backTip
+    back.label, back.tip = TEXT.back, TEXT.backTip
     back:SetScript("OnClick", function(self) UI.SetBack(self:GetChecked() and true or false) end)
     back:SetScript("OnEnter", ShowTip)
     back:SetScript("OnLeave", HideTip)
@@ -706,7 +706,7 @@ do
             local button = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
             button:SetText(spec.label)
             button:SetSize(math.max(BUTTON_FLOOR, (button:GetTextWidth() or 0) + CHROME / 2), LINE)
-            button.tip = spec.tip
+            button.label, button.tip = spec.label, spec.tip
             button:SetScript("OnClick", spec.run)
             button:SetScript("OnEnter", ShowTip)
             button:SetScript("OnLeave", HideTip)
