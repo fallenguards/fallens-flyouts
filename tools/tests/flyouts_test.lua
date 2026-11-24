@@ -895,8 +895,13 @@ do
     Move.Tick(0.1)
     Move.Tick(0.2)
     check(p.gap == 1 and p.between == 2, "between the first icon and the second, nothing moves for a moment")
+    -- His words (2026-11-24): "it keeps flashing to the 1st spot when im moving along the column to figure
+    -- out where i want to drop it?"
+    check(p.ghost.shown == false and not entry(one, 1).lit and not entry(one, 2).lit,
+        "and the faint icon does not show back at the gap by the button: a drop here goes in between")
     Move.Tick(0.1)
     check(p.gap == 2 and p.between == nil, "after a rest of 0.35 s there, Android's first wait, the gap goes there")
+    check(p.ghost.shown ~= false, "and the faint icon shows in it")
     tick()
     check(p.gap == 2 and p.target == nil and along(entry(one, 1)) == slot(1) and along(entry(one, 2)) == slot(3)
         and along(entry(one, 3)) == slot(4), "the gap between the first icon and the second, the icons parted round it")

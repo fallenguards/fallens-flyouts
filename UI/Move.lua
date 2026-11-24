@@ -412,8 +412,12 @@ local function Lay(p, elapsed)
             if j == p.target then frame:LockHighlight() else frame:UnlockHighlight() end
         end
     end
+    -- The faint icon shows only where a drop goes in: not over an icon to be replaced, and not between two
+    -- icons that have yet to part, where a drop goes in between them and not into the gap. His words
+    -- (2026-11-24): "it keeps flashing to the 1st spot when im moving along the column to figure out where i
+    -- want to drop it?" Each space between two icons the cursor crossed showed it at the gap, by the button.
     local shade = Ghost()
-    shade:SetShown(not p.full and p.target == nil)
+    shade:SetShown(not p.full and p.target == nil and p.between == nil)
     if not p.full then F.Put(unit, shade, F.Slot(p.gap)) end
 end
 
