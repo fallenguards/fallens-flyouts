@@ -19,10 +19,14 @@ local TEXT = {
     kind = "Only spells, items, toys, mounts and macros go in a flyout.",
 }
 D.GROW_FROM, D.BADGE_OUT, D.BADGE_PAST, D.TEXT = GROW_FROM, BADGE_OUT, BADGE_PAST, TEXT
--- While a spell is dragged the game lifts its bars to the top layer. The plus
--- stands there too, at a level over every bar button and the frames on it.
-local LAYER, LEVEL = "TOOLTIP", 9000
-D.LAYER, D.LEVEL = LAYER, LEVEL
+-- While a spell is dragged the game lifts its bars to the top layer: the plus stands there too, at a level
+-- over every bar button and the frames on it. An item or a macro leaves the bars where they are, under the
+-- windows over them, and the plus stands just over its own button (OVER levels up): a window over the bar
+-- covers it as it covers the button. It stood on the top layer always, over the bags. His snip (2026-11-24):
+-- "our plusses are showing through menus." The lift is read off the button itself, a few times a second while
+-- the plus is up (LOOK), since when the game lifts its bars against our own events is not ours to know.
+local LAYER, LEVEL, OVER, LOOK = "TOOLTIP", 9000, 30, 0.1
+D.LAYER, D.LEVEL, D.OVER = LAYER, LEVEL, OVER
 
 local tabs = {}
 local pop, lastKind
@@ -193,6 +197,20 @@ local function TabLeave(tab)
     if GameTooltip:IsOwned(tab) then GameTooltip:Hide() end
 end
 
+-- the plus in its button's layer: the top one while the game has lifted the bars there, else just over it
+local function Layer(tab)
+    local button = tab.button
+    local ok, strata = pcall(button.GetFrameStrata, button)
+    if ok and strata == LAYER then
+        tab:SetFrameStrata(LAYER)
+        tab:SetFrameLevel(LEVEL)
+    elseif ok and type(strata) == "string" then
+        tab:SetFrameStrata(strata)
+        tab:SetFrameLevel(math.min(LEVEL, (button:GetFrameLevel() or 1) + OVER))
+    end
+end
+D.Layer = Layer
+
 local function Tab(button, name)
     local tab = tabs[name]
     if tab then
@@ -204,6 +222,13 @@ local function Tab(button, name)
     tab:SetFrameStrata(LAYER)
     tab:SetFrameLevel(LEVEL)
     tab:EnableMouse(true)
+    tab.since = 0
+    tab:SetScript("OnUpdate", function(self, elapsed)
+        self.since = self.since + elapsed
+        if self.since < LOOK then return end
+        self.since = 0
+        Layer(self)
+    end)
     tab.host, tab.button = name, button
     tab.badge = tab:CreateTexture(nil, "ARTWORK")
     tab.badge:SetPoint("CENTER")
@@ -226,6 +251,7 @@ local function Place(tab, button)
     tab.side = Art.SIDES[tab.way]
     tab:SetScale(Bars.Scale(button))
     Reach(tab, false)
+    Layer(tab)
 end
 
 function D.Hide()
@@ -259,6 +285,7 @@ local function ShowInFight()
             tab:SetPoint("CENTER", unit.opener, "CENTER")
         end
         tab.badge:Show()
+        Layer(tab)
         tab:Show()
         shown = shown + 1
     end

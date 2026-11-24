@@ -6030,6 +6030,31 @@ do
     every.scripts.OnClick(every)
 end
 
+print("the plus stands in its button's layer: over windows only while the game lifts the bars")
+do
+    -- His snip (2026-11-24): "our plusses are showing through menus." An item carried leaves the game's bars
+    -- under the windows over them; a spell lifts them to the top layer.
+    local Drop = NS.Drop
+    W.cursor = { "item", 6948, "link" }
+    fire("CURSOR_CHANGED")
+    flushAll()
+    local tab = tabOf("ActionButton1")
+    local button = W.frames.ActionButton1
+    check(tab ~= nil and tab:IsShown() and tab:GetFrameStrata() == button:GetFrameStrata() and tab:GetFrameStrata() ~= "TOOLTIP"
+        and tab:GetFrameLevel() == button:GetFrameLevel() + Drop.OVER,
+        "an item carried: the plus stands just over its button, in its layer, under any window over the bar ("
+            .. tostring(tab and tab:GetFrameStrata()) .. ")")
+    W.cursor = { "spell", 7, "spell", 503, 503 }
+    fire("CURSOR_CHANGED")
+    flushAll()
+    tab.scripts.OnUpdate(tab, 0.2)
+    check(button:GetFrameStrata() == "TOOLTIP" and tab:GetFrameStrata() == "TOOLTIP" and tab:GetFrameLevel() == Drop.LEVEL,
+        "a spell carried, the game lifts its bars to the top layer, and the plus goes with them, over every bar")
+    W.cursor = nil
+    fire("CURSOR_CHANGED")
+    flushAll()
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")
