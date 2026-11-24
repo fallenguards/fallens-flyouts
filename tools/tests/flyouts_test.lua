@@ -1150,11 +1150,12 @@ do
     W.mouseX, W.mouseY = 5000, 5000
     Move.Tick(0.02)
     check(Move.Carried() ~= nil and W.cursor ~= nil and Move.Moving() == nil, "dragged off, it is on the cursor")
-    W.mouseX, W.mouseY = middle(1)
+    W.mouseX, W.mouseY = middle(3)
     Move.Tick(0.02)
-    check(Move.Carried() == nil and Move.Moving() ~= nil and Move.Moving().from == 3 and W.cursor == nil
-        and entry(one, 3).alpha == 0 and count(one) == 3,
+    check(Move.Carried() == nil and Move.Moving() ~= nil and Move.Moving().from == 3 and Move.Moving().at == 3
+        and W.cursor == nil and entry(one, 3).alpha == 0 and count(one) == 3,
         "brought back onto the flyout with the mouse still held, it is moved inside it again, nothing on the cursor")
+    W.mouseX, W.mouseY = middle(1)
     Move.Tick(0.12)
     Move.Tick(0.12)
     check(Move.Moving().target == 1 and entry(one, 1).lit, "an icon stayed on lights up, as before it left")
@@ -1166,6 +1167,50 @@ do
     NS.Flyouts.Swap(NS.Flyouts.At("ActionButton1"), 1, 3)
     flushAll()
     check(order() == "101 501 502", "and put back as it was")
+    -- His words (2026-11-24): "when an icon pulled fully out of the flyout, why dont the rest of the icons sink
+    -- down into a smaller flyout? they should"
+    show()
+    local _, unitSink = NS.Flyouts.At("ActionButton1")
+    local lengthKey = upright and "h" or "w"
+    local fullLength = unitSink.menu[lengthKey]
+    drag(entry(one, 2))
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    settle()
+    check(along(entry(one, 3)) == slot(2) and along(entry(one, 1)) == slot(1) and entry(one, 2).alpha == 0
+        and entry(one, 2).shown ~= false and unitSink.menu[lengthKey] == fullLength - (NS.Art.ICON + NS.Art.NEXT),
+        "dragged off, the icons after it close up over its place and the strip is a place shorter; its own frame "
+        .. "stays, unseen")
+    W.mouseX, W.mouseY = middle(1)
+    Move.Tick(0.02)
+    check(Move.Moving() ~= nil and Move.Moving().at == 1 and unitSink.menu[lengthKey] == fullLength,
+        "brought back, the strip is its length again and a place opens where it is brought back")
+    settle()
+    check(along(entry(one, 1)) == slot(2) and along(entry(one, 3)) == slot(3), "the icons there move aside for it")
+    W.mouseDown = false
+    Move.Tick(0.02)
+    settle()
+    check(order() == "501 101 502" and count(one) == 3, "let go, it is in that place: " .. order())
+    NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 1, 2)
+    flushAll()
+    check(order() == "101 501 502", "and put back")
+    -- let go off the flyout, it comes off and the strip is laid for those left
+    show()
+    drag(entry(one, 2))
+    W.mouseDown = true
+    W.mouseX, W.mouseY = 5000, 5000
+    Move.Tick(0.02)
+    W.mouseDown = false
+    Move.Tick(0.02)
+    Move.Tick(0.02)
+    flushAll()
+    check(count(one) == 2 and order() == "101 502" and unitSink.menu[lengthKey] == fullLength - (NS.Art.ICON + NS.Art.NEXT),
+        "let go off it, it is off, and the strip is the length of those left")
+    stack("ActionButton1", 501)
+    NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 3, 2)
+    flushAll()
+    check(order() == "101 501 502", "and put back as it was for the checks that follow")
     -- near the edge but not on the strip, it stays on the cursor: back means on the flyout itself
     show()
     drag(entry(one, 3))

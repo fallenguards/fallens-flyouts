@@ -253,6 +253,21 @@ local function Finish()
 end
 
 -- lets go without moving anything; an icon on its way out stays in its flyout
+-- An icon dragged off its flyout: the others close up over its place and the strip is a place shorter, as
+-- the flyout will be once it is let go. Its own frame stays as it is, unseen: the game's drag lives only
+-- while that frame is shown. His words (2026-11-24): "when an icon pulled fully out of the flyout, why dont
+-- the rest of the icons sink down into a smaller flyout? they should". The strip's length is put back when
+-- it comes back or is let go on its own flyout.
+local function Shorten(c)
+    local menu = c.unit.menu
+    c.w, c.h = menu:GetSize()
+    local less = Art.ICON + Art.NEXT
+    if c.unit.way == "UP" or c.unit.way == "DOWN" then menu:SetHeight(c.h - less) else menu:SetWidth(c.w - less) end
+end
+local function Lengthen(c)
+    if c and c.w then c.unit.menu:SetSize(c.w, c.h) end
+end
+
 function M.Cancel()
     local was = moving
     moving = nil
@@ -262,6 +277,7 @@ function M.Cancel()
     end
     if carried then
         was, carried = carried, nil
+        Lengthen(was)
         Still(was.unit)
     end
     if landing then Finish() end
@@ -284,6 +300,7 @@ local function EndCarry()
     ns.Log(("move: %s the mouse let go of the icon dragged out; the cursor holds %s"):format(tostring(was.flyout.host),
         tostring((GetCursorInfo()) or "nothing")))
     -- every frame seen again first: the one kept unseen shows the next icon once this one is off
+    Lengthen(was)
     Still(was.unit)
     if unit and at and not InCombatLockdown() then F.TakeOff(unit, at) end
 end
@@ -294,6 +311,7 @@ function M.PutBack(flyout)
     local was = carried
     if not (was and was.flyout == flyout) then return false end
     carried = nil
+    Lengthen(was)
     Still(was.unit)
     ns.Log(("move: %s the icon dragged out was let go on its own flyout"):format(tostring(flyout.host)))
     return true, was.entry
@@ -361,8 +379,9 @@ function M.Aim(place)
         return
     end
     F.Pickup(entry)
-    carried = { unit = was.unit, flyout = was.flyout, entry = entry }
+    carried = { unit = was.unit, flyout = was.flyout, entry = entry, from = was.from }
     was.unit.entries[was.from]:SetAlpha(0)
+    Shorten(carried)
     Driver():Show()
 end
 
@@ -382,7 +401,9 @@ end
 
 -- one frame of growing, sliding and landing
 function M.Step(elapsed)
-    if (moving or landing) and InCombatLockdown() then return M.Cancel() end
+    if (moving or landing or carried) and InCombatLockdown() then return M.Cancel() end
+    -- off its flyout: the others close up over its place
+    if carried and not moving then Slide(carried.unit, elapsed, carried.from, #carried.flyout.entries) end
     if moving then
         moving.grown = math.min(1, moving.grown + elapsed / GROW_TIME)
         Slide(moving.unit, elapsed, moving.from, moving.at)
@@ -704,9 +725,12 @@ local function Return(x, y)
     end
     if not from then return false end
     carried = nil
+    Lengthen(was)
     -- what F.Pickup put on the cursor as it left goes, and the held picture is the icon again
     if GetCursorInfo() then ClearCursor() end
-    moving = { unit = unit, flyout = was.flyout, from = from, at = from, x = x, y = y, grown = 1, rest = 0,
+    -- the others closed up while it was off: a place opens where it is brought back
+    local at = Where(unit, x, y) or from
+    moving = { unit = unit, flyout = was.flyout, from = from, at = at, x = x, y = y, grown = 1, rest = 0,
         dwell = 0, scale = unit.menu:GetEffectiveScale() / UIParent:GetEffectiveScale() }
     unit.entries[from]:SetAlpha(0)
     local held = Lift()
