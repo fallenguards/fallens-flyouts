@@ -350,9 +350,10 @@ W.CHANGES = {
             "Adding to a flyout shows where it goes. With a spell, an item or anything else on the cursor, " ..
                 "point at the + of a button that has a flyout: the flyout opens with a gap nearest the button and " ..
                 "what you carry faintly in it. Pause between two icons and they part around the gap there; let go " ..
-                "between two icons, parted or not, and it goes in between. Over the middle of an icon, that icon " ..
-                "lights up instead, and letting go takes its place, as on a bar slot. Letting go on the + itself " ..
-                "puts it first, nearest the button.",
+                "between two icons, parted or not, and it goes in between. Stay on the middle of an icon for a " ..
+                "moment and that icon lights up instead, and letting go takes its place, as on a bar slot; let go " ..
+                "before it lights and it goes in on the nearer side of that icon. Letting go on the + itself puts " ..
+                "it first, nearest the button.",
             "A flyout's bar button can be given its icon and name with a controller too: RB in Edit Flyout " ..
                 "(from the game's Edit Action Bar) opens the same window a right-click opens with a mouse, and so " ..
                 "does the Icon and Name button on the Controller page of the settings. In Edit Flyout, Show or " ..
@@ -374,11 +375,12 @@ W.CHANGES = {
                 "with the face buttons. Flyouts made before keep how they pick, and if you had Pick with the face " ..
                 "buttons on, new flyouts keep picking with the face buttons till you choose. Any flyout can still " ..
                 "be swapped as it is made, or in Edit Flyout.",
-            "Moving an icon inside its flyout works as adding one does. Over the middle of another icon, that " ..
-                "icon lights up, and letting go trades their places. Pause between two icons and they part to " ..
-                "make room; let go between two icons, parted or not, and it goes in between. An icon dragged off " ..
-                "its flyout and let go on another of its icons trades places with it too, where before it went " ..
-                "back to its own place.",
+            "Moving an icon inside its flyout works as adding one does. Stay on the middle of another icon " ..
+                "for a moment and it lights up, and letting go trades their places; let go before it lights and " ..
+                "it goes in on the nearer side of that icon. Pause between two icons and they part to make room; " ..
+                "let go between two icons, parted or not, and it goes in between. An icon dragged off its flyout " ..
+                "and let go on another of its icons trades places with it too, where before it went back to its " ..
+                "own place.",
             "A right-click on an icon in a flyout casts it, as on a bar button, so a macro that does one " ..
                 "thing on a left-click and another on a right-click ([button:2]) works in a flyout too. To take " ..
                 "an icon off a flyout, drag it off (Shift-drag where your bars are locked) and let go, as off a " ..

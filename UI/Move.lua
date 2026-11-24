@@ -33,7 +33,15 @@ local NEAR = 0.25
 -- part them: that space is two rims, three tenths of a place, about 10 pixels at the usual size, crossed in
 -- some 35 ms at an ordinary speed and 100 ms slowly, so 150 ms still lets a pass go by.
 -- An icon moved inside its flyout goes by the same rules (AimMove).
-local RIM, REST = 0.15, 0.15
+-- Then his log of moving icons inside a flyout (2026-11-24, "moving an icon in a flyout between two other
+-- ones can be really frustrating"): every let-go traded places. An icon was lit the moment the cursor came
+-- onto the middle seven tenths of it, and between two icons the cursor stayed 0.01 to 0.02 s on its way to
+-- the next one, so nearly every let-go found an icon lit. Now an icon is lit only after the cursor stays on
+-- its middle half (INNER of a place either side of its middle) for LIGHT seconds; lit, it stays lit while
+-- the cursor is anywhere on it. A let-go on an icon not lit yet puts it in on the nearer side of that icon.
+-- The outer quarter of each place parts the icons after REST, as before. A full flyout, which takes nothing
+-- in, lights an icon at once.
+local INNER, LIGHT, REST = 0.25, 0.2, 0.15
 
 local moving, landing
 -- something carried, its flyout open for it with a gap where it would go (further down)
@@ -141,9 +149,10 @@ end
 -- An icon moved by the mouse goes by the rules of one added (Aim, further down). His words (2026-11-24):
 -- "if i pull an item from an existing flyout, it doesnt have same behavior as dragging in ability in from
 -- somewhere else. is that intended? like i have to drag out of flyout and back to be able to do swaps."
--- Over the middle of another icon, that one is lit (`target`): let go, the two trade places, the lit one
--- into the gap. Between two icons (`between`, the place it would take) they part after a rest of REST; let
--- go there, parted or not, it goes in between. On the gap, it goes into the gap.
+-- On the middle of another icon for LIGHT seconds, that one is lit (`target`): let go, the two trade places,
+-- the lit one into the gap. Till then (`near`) a let-go puts it in on the nearer side of that icon. Between
+-- two icons (`between`, the place it would take) they part after a rest of REST; let go there, parted or
+-- not, it goes in between. On the gap, it goes into the gap.
 local function AimMove(m, x, y, elapsed)
     local r = Along(m.unit, x, y)
     if not r then return end
@@ -158,17 +167,27 @@ local function AimMove(m, x, y, elapsed)
     end
     local icon = InPlace(s, m.from, m.at)
     if not icon then
-        m.target, m.between, m.rest = nil, nil, 0
+        m.target, m.between, m.near, m.hover, m.rest, m.dwell = nil, nil, nil, nil, 0, 0
         return
     end
-    if f > RIM and f < 1 - RIM then
-        m.target, m.between, m.rest = icon, nil, 0
-        return
-    end
+    -- lit, it stays lit while the cursor is anywhere on it
+    if m.target == icon then return end
     m.target = nil
-    -- the place it would take: before this icon, or after it
+    -- the place it would take: before this icon, or after it, by the nearer side
     local to
-    if f <= RIM then to = m.at < s and s - 1 or s else to = m.at < s and s or s + 1 end
+    if f < 0.5 then to = m.at < s and s - 1 or s else to = m.at < s and s or s + 1 end
+    if math.abs(f - 0.5) < INNER then
+        m.between, m.rest = nil, 0
+        if m.hover ~= icon then m.hover, m.dwell = icon, 0 end
+        m.dwell = m.dwell + (elapsed or 0)
+        if m.dwell >= LIGHT then
+            m.target, m.near, m.hover = icon, nil, nil
+            return
+        end
+        m.near = to ~= m.at and to or nil
+        return
+    end
+    m.hover, m.dwell, m.near = nil, 0, nil
     if to == m.at then
         m.between, m.rest = nil, 0
         return
@@ -180,12 +199,13 @@ end
 
 -- each change of what a let-go would do, in the log
 local function SayAim(m, x, y)
-    local now = ("%s/%s/%s"):format(tostring(m.target), tostring(m.between), tostring(m.at))
+    local now = ("%s/%s/%s/%s"):format(tostring(m.target), tostring(m.between), tostring(m.near), tostring(m.at))
     if now == m.said then return end
     m.said = now
     local r = Along(m.unit, x, y)
     ns.Log(("move aim: at %s places along: %s"):format(r and ("%.2f"):format(r) or "off",
         m.target and ("icon %d lit, a let-go trades places with it"):format(m.target)
+        or m.near and ("on icon %d's middle, not lit yet: a let-go goes in at %d"):format(m.hover or 0, m.near)
         or m.between and ("between, a let-go goes in at %d (the gap at %d, %.2f s of %.2f rested)"):format(m.between,
             m.at, m.rest or 0, REST)
         or ("on the gap at %d"):format(m.at)))
@@ -283,8 +303,12 @@ end
 function M.Drop()
     local was = moving
     if not was then return false end
-    -- between two icons that have not parted yet: in there all the same
-    if was.between then was.at, was.between = was.between, nil end
+    -- between two icons that have not parted yet, or on an icon not lit yet: in there all the same
+    if was.between then
+        was.at, was.between = was.between, nil
+    elseif was.near then
+        was.at, was.near = was.near, nil
+    end
     local unit, flyout, from, at, lit = was.unit, was.flyout, was.from, was.at, was.target
     -- where each icon is drawn just now, by the place it ends in
     local drawn = {}
@@ -429,9 +453,10 @@ local function Parted(j, gap)
     return j + 1
 end
 
--- What a drop does with the cursor at that point, the layout as drawn: over an icon's body that icon is to
--- be replaced; on the gap, it goes into the gap; between two icons (`between`, the place it would take) it
--- goes in there, and after a rest there the gap moves there and the icons part.
+-- What a drop does with the cursor at that point, the layout as drawn: on an icon's middle for LIGHT
+-- seconds that icon is to be replaced, and till then (`near`) it goes in on the nearer side of it; on the
+-- gap, it goes into the gap; between two icons (`between`, the place it would take) it goes in there, and
+-- after a rest there the gap moves there and the icons part.
 local function Aim(p, x, y, elapsed)
     -- on the plus it came by, till it first leaves it: nearest the button
     if not p.left then
@@ -441,7 +466,7 @@ local function Aim(p, x, y, elapsed)
     end
     local r = Along(p.unit, x, y)
     if not r then
-        p.target, p.between = nil, nil
+        p.target, p.between, p.near, p.hover = nil, nil, nil, nil
         return
     end
     local slots = p.n + (p.full and 0 or 1)
@@ -459,20 +484,31 @@ local function Aim(p, x, y, elapsed)
         if s == p.gap then icon = nil elseif s > p.gap then icon = s - 1 end
     end
     if not icon then
-        p.target, p.between, p.rest = nil, nil, 0
+        p.target, p.between, p.near, p.hover, p.rest = nil, nil, nil, nil, 0
         return
     end
-    if f > RIM and f < 1 - RIM then
-        p.target, p.between, p.rest = icon, nil, 0
-        return
-    end
+    -- lit, it stays lit while the cursor is anywhere on it
+    if p.target == icon then return end
     p.target = nil
+    -- a full flyout takes nothing in: the icon under the cursor is lit at once, to be replaced
     if p.full then
-        p.between = nil
+        p.target, p.between, p.near = icon, nil, nil
         return
     end
-    -- before this icon, or after it
-    local at = f <= RIM and icon or icon + 1
+    -- before this icon, or after it, by the nearer side
+    local at = f < 0.5 and icon or icon + 1
+    if math.abs(f - 0.5) < INNER then
+        p.between, p.rest = nil, 0
+        if p.hover ~= icon then p.hover, p.dwell = icon, 0 end
+        p.dwell = (p.dwell or 0) + (elapsed or 0)
+        if p.dwell >= LIGHT then
+            p.target, p.near, p.hover = icon, nil, nil
+            return
+        end
+        p.near = at ~= p.gap and at or nil
+        return
+    end
+    p.hover, p.dwell, p.near = nil, 0, nil
     if at == p.gap then
         p.between, p.rest = nil, 0
         return
@@ -504,7 +540,7 @@ local function Lay(p, elapsed)
     -- (2026-11-24): "it keeps flashing to the 1st spot when im moving along the column to figure out where i
     -- want to drop it?" Each space between two icons the cursor crossed showed it at the gap, by the button.
     local shade = Ghost()
-    shade:SetShown(not p.full and p.target == nil and p.between == nil)
+    shade:SetShown(not p.full and p.target == nil and p.between == nil and p.near == nil)
     if not p.full then F.Put(unit, shade, F.Slot(p.gap)) end
 end
 
@@ -560,7 +596,7 @@ function M.PreviewDrop()
         return true
     end
     -- between two icons that have not parted yet: in there all the same
-    local gap, button = p.between or p.gap, p.button
+    local gap, button = p.between or p.near or p.gap, p.button
     M.PreviewEnd(true)
     local flyout, why = F.Stack(button, entry)
     if not flyout then
@@ -692,7 +728,7 @@ function M.Start(frame, driven)
     local x, y = Centre(frame)
     if not x then x, y = GetCursorPosition() end
     moving = { unit = unit, flyout = flyout, from = i, at = i, driven = driven, x = x, y = y, grown = 0, rest = 0,
-        scale = unit.menu:GetEffectiveScale() / UIParent:GetEffectiveScale() }
+        dwell = 0, scale = unit.menu:GetEffectiveScale() / UIParent:GetEffectiveScale() }
     frame:SetAlpha(0)
     local held = Lift()
     held.icon:SetTexture(F.Icon(flyout.entries[i]))

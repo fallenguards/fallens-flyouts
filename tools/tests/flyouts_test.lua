@@ -823,9 +823,19 @@ check(Move.Where(unitOne, 5000, 5000) == nil, "a point far off the flyout is no 
 W.mouseDown = true
 drag(entry(one, 1))
 W.mouseX, W.mouseY = middle(3)
+Move.Tick(0.1)
+-- His log (2026-11-24): every let-go traded places, an icon lit the moment the cursor came onto it
+check(Move.Moving() ~= nil and Move.Moving().target == nil and Move.Moving().at == 1 and not entry(one, 3).lit,
+    "on the middle of the last icon it is not lit at once: on the way past an icon, none is")
+Move.Tick(0.12)
+check(Move.Moving().target == 3 and Move.Moving().at == 1 and entry(one, 3).lit and not entry(one, 2).lit,
+    "staying there a fifth of a second, that icon is lit, and nothing moves")
+local edgeX, edgeY = middle(2)
+local midX, midY = middle(3)
+W.mouseX, W.mouseY = edgeX + (midX - edgeX) * 0.6, edgeY + (midY - edgeY) * 0.6
 Move.Tick(0.02)
-check(Move.Moving() ~= nil and Move.Moving().target == 3 and Move.Moving().at == 1 and entry(one, 3).lit
-    and not entry(one, 2).lit, "held over the middle of the last icon, that icon is lit, and nothing moves")
+check(Move.Moving().target == 3 and entry(one, 3).lit, "lit, it stays lit with the cursor near its edge, still on it")
+W.mouseX, W.mouseY = midX, midY
 W.mouseDown = false
 Move.Tick(0.02)
 settle()
@@ -864,6 +874,27 @@ W.mouseDown = false
 Move.Tick(0.02)
 settle()
 check(order() == "101 502 501", "let go at once, it goes in between all the same")
+-- on an icon's middle, let go before it is lit: in on the nearer side of it
+NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 3, 2)
+flushAll()
+show()
+W.mouseDown = true
+drag(entry(one, 1))
+ax, ay = middle(2)
+bx, by = middle(3)
+W.mouseX, W.mouseY = ax + (bx - ax) * 0.9, ay + (by - ay) * 0.9
+Move.Tick(0.05)
+check(Move.Moving().target == nil and Move.Moving().near == 2,
+    "on the third icon's middle, nearer its first side, not lit yet: a let-go puts it before that icon")
+W.mouseDown = false
+Move.Tick(0.02)
+settle()
+check(order() == "501 101 502", "let go, it went in there, nothing traded")
+NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 2, 1)
+flushAll()
+check(order() == "101 501 502", "and back")
+NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 2, 3)
+flushAll()
 NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 2, 3)
 flushAll()
 check(order() == "101 501 502", "put back as it was for the checks that follow")
@@ -929,10 +960,13 @@ do
     W.mouseX, W.mouseY = point(1.05)
     Move.Tick(0.02)
     check(p.gap == 1 and along(entry(one, 1)) == slot(2), "passing an icon's edge moves nothing")
-    W.mouseX, W.mouseY = point(1.3)
-    Move.Tick(0.02)
+    W.mouseX, W.mouseY = point(1.5)
+    Move.Tick(0.1)
+    check(p.target == nil and p.near == 2 and not entry(one, 1).lit and p.ghost.shown == false,
+        "on an icon's middle it is not lit at once: a let-go then puts it in on the nearer side")
+    Move.Tick(0.12)
     check(p.target == 1 and entry(one, 1).lit and p.gap == 1 and along(entry(one, 1)) == slot(2),
-        "most of an icon takes the drop as a replacement at once, and it stays where it is")
+        "staying there a fifth of a second, that icon is to be replaced, and it stays where it is")
     -- resting between two icons: they part there after a moment
     W.mouseX, W.mouseY = point(2.02)
     Move.Tick(0.06)
