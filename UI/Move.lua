@@ -418,23 +418,12 @@ function M.Step(elapsed)
         for j, frame in ipairs(moving.unit.entries) do
             if j == moving.target then frame:LockHighlight() else frame:UnlockHighlight() end
         end
-        -- An icon lit for a trade stays where it is, under the cursor: a faint copy of it shows in the free
-        -- place it would go to, and the held icon is half seen so the light shows through. His words
-        -- (2026-11-24), of the icon sliding over to show it: "direct swaps within flyout no longer possible?
-        -- things just auto move out of the way without a chance lol."
-        local unit, lit = moving.unit, moving.target
-        local shade = Ghost()
-        if lit and unit.flyout.entries[lit] then
-            shade:SetParent(unit.menu)
-            shade:SetFrameLevel(unit.menu:GetFrameLevel() + 2)
-            shade:SetAlpha(0.6)
-            shade.icon:SetTexture(F.Icon(unit.flyout.entries[lit]))
-            F.Put(unit, shade, F.Slot(moving.at))
-            shade:Show()
-        else
-            shade:Hide()
-        end
-        Lift():SetAlpha(lit and 0.5 or 1)
+        -- An icon lit for a trade only lights up, where it is, as a bar slot does: nothing slides, no faint
+        -- copy, no dimmed held icon. His words (2026-11-24), of the icon sliding over to show the trade:
+        -- "direct swaps within flyout no longer possible? things just auto move out of the way without a
+        -- chance lol.", then of the faint copy shown instead: "the flashing is extremely annoying. when did i
+        -- ask for that (hint, i didnt). the default game doesn't, why are we? ... wow players already know
+        -- what happens when you drag one icon onto another."
         Hold(moving, moving.x, moving.y, 1 + (GROW - 1) * moving.grown)
     elseif landing then
         local l = landing

@@ -832,9 +832,8 @@ check(Move.Moving().target == 3 and Move.Moving().at == 1 and entry(one, 3).lit 
     "staying there a fifth of a second, that icon is lit")
 settle()
 local shade = Move.Shade()
-check(along(entry(one, 3)) == slot(3) and along(entry(one, 2)) == slot(2) and shade.shown ~= false
-    and shade.icon.texture == 501 and along(shade) == slot(1),
-    "it stays where it is, lit, and a faint copy of it shows in the free place it would trade into")
+check(along(entry(one, 3)) == slot(3) and along(entry(one, 2)) == slot(2) and shade.shown == false,
+    "it stays where it is, lit, as a bar slot is, and nothing else shows")
 -- no tooltip while an icon is moved: they covered the icons being aimed at
 W.tip = nil
 entry(one, 2).scripts.OnEnter(entry(one, 2))
@@ -850,7 +849,7 @@ Move.Tick(0.02)
 settle()
 check(order() == "501 101 502" and Move.Moving() == nil and Move.Landing() == nil and not entry(one, 3).lit
     and not entry(one, 1).lit, "let go, the two trade places: the lit one into the gap, the held one in its place")
-check(Move.Shade().shown == false, "and the faint copy is gone")
+check(Move.Shade().shown == false, "no faint copy at any point of a trade")
 check(entry(one, 1).alpha == 1 and entry(one, 3).alpha == 1 and along(entry(one, 1)) == slot(1)
     and along(entry(one, 3)) == slot(3), "and each is seen, in its place")
 -- between two icons: they part after a rest, and a let-go goes in there
