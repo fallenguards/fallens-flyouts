@@ -5,17 +5,16 @@
 ### Added
 - Gear sets go in flyouts, like mounts and pets.
 - Adding to a flyout shows where it goes. Bring a spell or item to a button's + or onto an open flyout, then let go between two icons to insert it or on an icon to replace it.
-- Default flyout binds in `/ff` set the keys every flyout picks with, above each flyout's own keys.
-- A Feedback page in the settings has Report a Bug, Suggest an Idea, and What's New. Reports come with your setup filled in, and `/ff status` opens the page.
-- Match Base Icon Size, Show the flyout background, and Background opacity settings.
+- A "Default flyout binds" bar in `/ff` sets the keys every flyout picks with, above each flyout's own keys.
+- A Feedback page in the settings has "Report a Bug", "Suggest an Idea", and "What's New". Reports come with your setup filled in, and `/ff status` opens the page.
+- "Match Base Icon Size", "Show the flyout background", and "Background opacity" settings.
 - A hint at the foot of a flyout button's tooltip says how to change what it shows. You can turn hints off in `/ff`.
-- With a controller, RB in Edit Flyout changes a flyout button's icon and name, and LB shows or hides the background.
+- With a controller, RB in "Edit Flyout" changes a flyout button's icon and name, and LB shows or hides the background.
 
 ### Changed
 - Inside a flyout, let go of an icon on another to swap the two, or between two icons to insert it.
 - A right-click on a flyout icon casts it, so `[button:2]` macros work. Drag an icon off to take it off.
-- With a controller, a new flyout picks with the other cross from its button's, so one on the D-pad picks with the face buttons. New flyouts pick with, on the Controller page, changes this, and flyouts you have keep how they pick.
-- The flyout size uses the game's slider.
+- With a controller, a new flyout picks with the other cross from its button's, so one on the D-pad picks with the face buttons. The "New flyouts pick with" setting on the Controller page changes this, and flyouts you have keep how they pick.
 - Settings only a controller needs have their own Controller page.
 
 ## [1.1.6] - 2026-11-23
