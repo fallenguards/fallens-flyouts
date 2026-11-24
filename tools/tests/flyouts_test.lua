@@ -5604,8 +5604,8 @@ do
     local hint = has(lines, NS.Icon.HINT.mouse)
     check(hint ~= nil and hint[2] == 0.6 and hint[3] == 0.6 and hint[4] == 0.6 and has(lines, "Hints can be turned off in /ff.") ~= nil,
         "a flyout's bar button tooltip ends with the hint in gray, and how to turn hints off")
-    check(hint ~= nil and hint[1]:find("Right-click to change what this button shows (its icon, tooltip and cooldown)", 1, true) == 1,
-        "it says what a right-click changes: what the button shows, its tooltip and cooldown too, and its name")
+    check(hint ~= nil and hint[1] == "Right-click to change what this button shows.",
+        "it says what a right-click changes, in as few words as he cut it to: " .. tostring(hint and hint[1]))
     check(has(tip(W.frames.ActionButton2, 2), NS.Icon.HINT.mouse) == nil, "a bar button with no flyout has no hint")
     W.combat = true
     check(has(tip(button, 1), NS.Icon.HINT.mouse) == nil, "in a fight there is none: the window opens out of one only")

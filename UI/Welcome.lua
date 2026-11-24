@@ -359,9 +359,8 @@ W.CHANGES = {
                 "does the Icon and Name button on the Controller page of the settings. In Edit Flyout, Show or " ..
                 "Hide Background moves to LB.",
             "A gray hint at the foot of a flyout's bar button tooltip: right-click (or RB in Edit Flyout) to " ..
-                "change what the button shows, its icon, tooltip and cooldown, and its name. Show hints in " ..
-                "tooltips, under General in the settings, turns these hints off for the whole account, the one on " ..
-                "a flyout's icons too.",
+                "change what the button shows. Show hints in tooltips, under General in the settings, turns these " ..
+                "hints off for the whole account, the one on a flyout's icons too.",
             "Under Size and background in the settings (/ff): a Match Base Icon Size button, which makes a " ..
                 "flyout's icons as large as the icon of the bar button it opens from; Show the flyout background, " ..
                 "to draw the flyout without the background behind its icons; and Background opacity, how " ..

@@ -478,11 +478,12 @@ function I.Target() return popup and popup:IsShown() and target or nil end
 -- reprsent cd too", "what is the gamepad equivalent of right click to change/select icon etc? we need to
 -- allow them to too.", and "i feel like we should switch show/hide background to lb and have rb be the one
 -- to open this to be more consistent with mouse, esp for ppl that frequently swap btwn mouse keyboard and
--- controller".
+-- controller". Then, of "(its icon, tooltip and cooldown) and its name" struck through in his snip: "nix
+-- this red text".
 do
     local HINT = {
-        mouse = "Right-click to change what this button shows (its icon, tooltip and cooldown) and its name.",
-        pad = "In Edit Flyout, RB changes what this button shows (its icon, tooltip and cooldown) and its name.",
+        mouse = "Right-click to change what this button shows.",
+        pad = "In Edit Flyout, RB changes what this button shows.",
         off = "Hints can be turned off in /ff.",
     }
     I.HINT = HINT
