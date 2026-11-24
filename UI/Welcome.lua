@@ -240,6 +240,14 @@ do
     end
 
     local news
+    -- The list's own spacing: a marker before each line of what changed and its words indented past it, room
+    -- between lines and before each version, and the scroll bar's distance from the dark ground's edges. His
+    -- words (2026-11-24): "why is the whatsnew in a paragraph instead of in a list?", and of the scroll bar,
+    -- "slider not centered vertically in the dark background section of the window like it should be".
+    local MARK, INDENT, LINE_GAP, VERSION_GAP, BAR_EDGE = "-", 14, 4, 10, 6
+    -- the window's height besides its list: the title above it, and the Okay row below it
+    local AROUND = (TITLE - EDGE) + FOOT + OKAY_H + GAP
+    W.NEWS_AROUND = AROUND
     local function BuildNews()
         if news then return news end
         news = CreateFrame("Frame", "FallensFlyoutsWhatsNew", UIParent, "DefaultPanelFlatTemplate")
@@ -275,63 +283,109 @@ do
         news.okay = CreateFrame("Button", nil, news, "UIPanelButtonTemplate")
         news.okay:SetSize(OKAY_W, OKAY_H)
         news.okay:SetText(OKAY)
-        news.okay:SetPoint("BOTTOMRIGHT", news, "BOTTOMRIGHT", -EDGE, FOOT)
+        -- in the middle of its row (his snip, 2026-11-24: "okay button not centered")
+        news.okay:SetPoint("BOTTOM", news, "BOTTOM", 0, FOOT)
         news.okay:SetScript("OnClick", function() news:Hide() end)
         -- what changed scrolls, as the settings pages do
         news.page = CreateFrame("Frame", nil, news)
         news.page:SetPoint("TOPLEFT", news, "TOPLEFT", 0, -TITLE + EDGE)
         news.page:SetPoint("BOTTOMRIGHT", news, "BOTTOMRIGHT", 0, FOOT + OKAY_H + GAP)
-        local content = ns.OptionsScroller(news.page)
-        news.text = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-        news.text:SetPoint("TOPLEFT", content, "TOPLEFT", EDGE, -GAP)
-        news.text:SetPoint("RIGHT", content, "RIGHT", -EDGE, 0)
-        news.text:SetJustifyH("LEFT")
-        news.text:SetSpacing(2)
+        news.content = ns.OptionsScroller(news.page)
+        -- the scroll bar inside the dark ground, as far from its top as from its bottom
+        local bar = news.page.bar
+        if bar then
+            bar:ClearAllPoints()
+            bar:SetPoint("TOPRIGHT", ground, "TOPRIGHT", -BAR_EDGE, -BAR_EDGE)
+            bar:SetPoint("BOTTOMRIGHT", ground, "BOTTOMRIGHT", -BAR_EDGE, BAR_EDGE)
+        end
+        news.rows, news.marks = {}, {}
         return news
     end
 
-    -- what changed, as words: each version, its parts and their lines
+    -- what changed, as the rows of a list: each version's heading, each part's heading, and each line
+    function W.ChangesRows(entries)
+        local rows = {}
+        for _, entry in ipairs(entries) do
+            rows[#rows + 1] = { head = true, version = true,
+                text = ("|cffffd100v%s|r  |cff9d9d9d%s|r"):format(entry.version, entry.date or "") }
+            for _, part in ipairs(entry.parts) do
+                rows[#rows + 1] = { head = true, text = "|cffffd100" .. part.name .. "|r" }
+                for _, item in ipairs(part.items) do rows[#rows + 1] = { text = item } end
+            end
+        end
+        if #rows == 0 then rows[1] = { head = true, text = SAY.none } end
+        return rows
+    end
+    -- the same as words, a row to a line
     function W.ChangesText(entries)
         local out = {}
-        for _, entry in ipairs(entries) do
-            out[#out + 1] = ("|cffffd100v%s|r  |cff9d9d9d%s|r"):format(entry.version, entry.date or "")
-            for _, part in ipairs(entry.parts) do
-                out[#out + 1] = "|cffffd100" .. part.name .. "|r"
-                for _, item in ipairs(part.items) do out[#out + 1] = "- " .. item end
-            end
-            out[#out + 1] = ""
-        end
-        if #out == 0 then out[1] = SAY.none end
+        for _, row in ipairs(W.ChangesRows(entries)) do out[#out + 1] = (row.head and "" or MARK .. " ") .. row.text end
         return table.concat(out, "\n")
     end
 
-    -- As high as its words need, up to NEWS_H, past which they scroll. His words (2026-11-24): "the whats new
-    -- box needs to smart resize up to its current size and then have a scroll ... when it's under this max
-    -- size (the current one), it should shrink height to fit the space instead of having a bunch of blank
-    -- space beneath it."
-    local function FitNews()
-        local words = news.text:GetStringHeight() or 0
-        local around = (TITLE - EDGE) + GAP * 2 + FOOT + OKAY_H + GAP
-        news:SetHeight(math.min(NEWS_H, math.ceil(words + around)))
-        ns.OptionsFit(news.page, news.text)
+    -- The list laid row by row, each line's words wrapping under their own start, and the window as high as
+    -- the list needs, up to NEWS_H, past which it scrolls; till then there is nothing to scroll, and the
+    -- game's scroll bar stays away. His words (2026-11-24): "the whats new box needs to smart resize up to
+    -- its current size and then have a scroll", and "slider is present even when text doesnt warrant
+    -- scrolling yet".
+    local function LayNews(rows)
+        local content = news.content
+        local wide = content:GetWidth() or 0
+        if wide < 200 then wide = NEWS_W - 24 end
+        local y = -GAP
+        for i, row in ipairs(rows) do
+            local words, mark = news.rows[i], news.marks[i]
+            if not words then
+                words = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+                words:SetJustifyH("LEFT")
+                words:SetSpacing(2)
+                mark = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+                news.rows[i], news.marks[i] = words, mark
+            end
+            if row.version and i > 1 then y = y - VERSION_GAP end
+            local x = row.head and EDGE or EDGE + INDENT
+            words:ClearAllPoints()
+            words:SetPoint("TOPLEFT", content, "TOPLEFT", x, y)
+            words:SetWidth(wide - x - EDGE)
+            words:SetText(row.text)
+            words:Show()
+            mark:ClearAllPoints()
+            mark:SetPoint("TOPLEFT", content, "TOPLEFT", EDGE, y)
+            mark:SetText(MARK)
+            mark:SetShown(not row.head)
+            y = y - (words:GetStringHeight() or 12) - LINE_GAP
+        end
+        for i = #rows + 1, #news.rows do
+            news.rows[i]:Hide()
+            news.marks[i]:Hide()
+        end
+        local tall = math.ceil(-y - LINE_GAP + GAP)
+        content:SetHeight(tall)
+        news:SetHeight(math.min(NEWS_H, tall + AROUND))
+        local scroll = news.page.scroll
+        if scroll and scroll.UpdateScrollChildRect then scroll:UpdateScrollChildRect() end
     end
     W.NEWS_H = NEWS_H
 
     -- the window, with what changed since `from`
     function W.ShowChanges(from)
         BuildNews()
-        news.text:SetText(W.ChangesText(W.Since(from)))
+        local entries = W.Since(from)
+        local rows = W.ChangesRows(entries)
+        news.said = W.ChangesText(entries)
         if not news:IsShown() then
             news:ClearAllPoints()
             news:SetPoint("TOP", UIParent, "TOP", 0, -FROM_TOP)
         end
         news:Show()
-        FitNews()
-        -- once more when the text has been laid out at its width
-        C_Timer.After(0, FitNews)
+        LayNews(rows)
+        -- once more when the window has its width
+        C_Timer.After(0, function() LayNews(rows) end)
         return news
     end
     function W.News() return news end
+    -- what the window says, as words
+    function W.NewsText() return news and news.said or "" end
 
     -- the link clicked in chat (the game hands an addon's links on through its event registry)
     if EventRegistry and EventRegistry.RegisterCallback then

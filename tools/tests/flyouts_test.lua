@@ -5797,7 +5797,7 @@ do
     EventRegistry:TriggerEvent("SetItemRef", "addon:FallensFlyouts:changes:1.1.4", "[Here]", "LeftButton")
     local Welcome = NS.Welcome
     local news = Welcome.News()
-    local text = news and news.text and news.text.text or ""
+    local text = Welcome.NewsText()
     local wanted = Welcome.Since("1.1.4")
     local all = #wanted > 0
     for _, entry in ipairs(wanted) do
@@ -5812,15 +5812,25 @@ do
     end
     -- His words (2026-11-24): "the whats new box needs to smart resize up to its current size and then have a
     -- scroll", and "make background for the whatsnew opaque."
-    news.text.w = 500
-    Welcome.ShowChanges(Welcome.Version())
+    Welcome.ShowChanges()
     flushAll()
-    local short = news.h
+    local short, listed = news.h, news.page.content.h
+    check(short ~= nil and short < Welcome.NEWS_H and listed == short - Welcome.NEWS_AROUND,
+        ("a few lines, it is as high as they need (%s), the list just as high as its room: nothing to scroll"):format(
+            tostring(short)))
+    -- His words (2026-11-24): "why is the whatsnew in a paragraph instead of in a list?"
+    local item
+    for k, mark in ipairs(news.marks) do
+        if mark.shown ~= false and news.rows[k].shown ~= false and not item then item = k end
+    end
+    check(item ~= nil and news.marks[item].text == "-" and news.rows[item].point[4] > news.rows[1].point[4]
+        and news.marks[item].point[5] == news.rows[item].point[5],
+        "a list: each line has its marker, its words indented past it, wrapping under their own start")
+    check(news.okay.point[1] == "BOTTOM" and news.okay.point[4] == 0, "Okay stands in the middle of its row")
     Welcome.ShowChanges("0.0.1")
     flushAll()
-    check(short ~= nil and short < Welcome.NEWS_H and news.h == Welcome.NEWS_H,
-        ("a few lines, it is as high as they need (%s); many, it stops at its height and they scroll (%s)"):format(
-            tostring(short), tostring(news.h)))
+    check(news.h == Welcome.NEWS_H and news.page.content.h > news.h - Welcome.NEWS_AROUND,
+        ("many lines, it stops at its height and they scroll (%s)"):format(tostring(news.h)))
     check(news.ground ~= nil, "its ground is opaque, under the game's panel art")
     news.okay.scripts.OnClick(news.okay)
     check(not news:IsShown(), "Okay closes it")
