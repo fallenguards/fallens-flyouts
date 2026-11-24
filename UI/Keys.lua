@@ -100,6 +100,19 @@ local function Take(key, pad)
     if not w then return end
     if ALONE[key] or (IsKeyPressIgnoredForBinding and IsKeyPressIgnoredForBinding(key)) then return end
     local ok, why
+    if w.spot then
+        -- spot i of every flyout, as the game's key menu sets it
+        local Binds = ns.Binds
+        if RESET[key] then
+            ok, why = Binds.SetPick(w.i, nil, pad)
+        else
+            ok, why = Binds.SetPick(w.i, pad and key or Chord(key), pad)
+        end
+        ns.Log(("keys: %s %s for spot %d of every flyout, from the settings: %s"):format(pad and "pad button" or "key",
+            tostring(key), w.i, ok and "set" or tostring(why)))
+        if not ok and why then ns.Warn(why) end
+        return K.Stop()
+    end
     if RESET[key] then
         F.SetKey(w.flyout, w.i, nil, true)
         ok, why = F.SetKey(w.flyout, w.i, nil, false)
@@ -149,6 +162,17 @@ function K.Listen(flyout, i, owner, done, button)
     if InCombatLockdown() then return false, F.TEXT.fight end
     if waiting then K.Stop() end
     waiting = { flyout = flyout, i = i, done = done, button = button }
+    local box = Catcher(owner)
+    box:Show()
+    box:SetFocus()
+    return true
+end
+
+-- Waits for the key that spot i of every flyout is to be picked with, as K.Listen does for one icon.
+function K.ListenSpot(i, owner, done, button)
+    if InCombatLockdown() then return false, F.TEXT.fight end
+    if waiting then K.Stop() end
+    waiting = { spot = true, i = i, done = done, button = button }
     local box = Catcher(owner)
     box:Show()
     box:SetFocus()

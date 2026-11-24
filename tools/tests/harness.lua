@@ -659,6 +659,12 @@ function SetBinding(key, command)
     fire("UPDATE_BINDINGS")
     return true
 end
+-- the game's keys kept: which set (W.savedSet), and how often
+function GetCurrentBindingSet() return 2 end
+function SaveBindings(set)
+    W.savedSet = set
+    W.saves = (W.saves or 0) + 1
+end
 -- a pad button comes back as its symbol, any other key shortened
 function GetBindingText(key)
     if key:find("PAD", 1, true) then return "|A:Gamepad_Gen_" .. key .. ":14:14|a" end

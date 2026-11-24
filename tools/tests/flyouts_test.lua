@@ -1121,7 +1121,7 @@ do
     check(texts[1] == "Keys for the icons inside your flyouts, the same for every flyout."
         and texts[2]:find("1 to 9, 0, - and =", 1, true) ~= nil,
         "over the rows it says what they are, and what the keys are with none set: " .. tostring(texts[2]))
-    check(texts[3] == "For keys of one flyout rather than this general set, see the addon's settings (/ff)."
+    check(texts[3] == "All flyout keys, these and the keys of one flyout, are in the addon's settings: /ff."
         and texts[4] == "Or use Quick Keybind Mode above: open the flyout, hover an icon, press the key.",
         "under them it says where the keys of one flyout are set: the addon's settings first, as he worded it: "
         .. tostring(texts[3]) .. " " .. tostring(texts[4]))
@@ -3590,7 +3590,7 @@ do
     local box = W.focus
     check(box ~= nil and K.Waiting() ~= nil and K.Waiting().flyout == flyout and K.Waiting().i == 2 and text(2) == "Press a key"
         and row(2).key.waiting == true, "a click on a key waits for the next key pressed: a typing box holds the keyboard, and the key says so")
-    check(w.keysNote.text == NS.Arrange.TEXT.keysNote and under(one) == w.keysWait and w.keysWait.h == 14
+    check(w.keysNote.text == NS.Arrange.TEXT.keysNote and under(one) == w.every and w.keysWait.h == 14
         and w.keysWait.text == "Press a key for " .. F14.Name(flyout.entries[2]) .. ". Escape leaves it as it is.",
         "the words over the list stay as they are while it waits; the line under them says what key is waited for, "
         .. "on a line as high as it always is, so nothing on the page moves: " .. tostring(w.keysWait.text))
@@ -3599,7 +3599,7 @@ do
     W.shiftKey = true
     box.scripts.OnKeyDown(box, "R")
     W.shiftKey = nil
-    check(w.keysWait.text == "" and w.keysWait.h == 14 and under(one) == w.keysWait,
+    check(w.keysWait.text == "" and w.keysWait.h == 14 and under(one) == w.every,
         "the key set, that line is empty again and keeps its height")
     check(flyout.entries[2].key == "SHIFT-R" and K.Waiting() == nil and W.focus ~= box and text(2) == "s-R"
         and row(2).key.waiting == false,
@@ -3673,8 +3673,8 @@ do
     F14.Apply()
     flushAll()
     Arrange.Refresh()
-    check(not opens("1") and banners() == 0 and w.foot.point[2] == w.keysWait and w.keysNote.text == "No flyout is on the bars.",
-        "none left behind for what follows, and with no flyout the page says so in place of banners")
+    check(not opens("1") and banners() == 0 and w.foot.point[2] == w.every and w.keysNote.text == "No flyout is on the bars.",
+        "none left behind for what follows, and with no flyout the page says so; every flyout's spots stay")
 end
 
 print("the plus stands on the side its button's flyout opens from")
@@ -5538,6 +5538,70 @@ do
     check(W.opened == nil and W.errors[#W.errors] == "The options open out of a fight.", "not in a fight, saying so")
     W.combat = false
     page:Hide()
+end
+
+print("the keys of every flyout's spots, in the addon's settings above each flyout's own")
+do
+    -- His words (2026-11-24): "we need to provide ability to change the default flyout keybinds in our
+    -- settings menu next to the specific flyout ones too (above them) so ppl can access everything in one
+    -- place."
+    login("Player-1-0000000E")
+    local F15 = NS.Flyouts
+    stack("ActionButton1", 501)
+    stack("ActionButton1", 502)
+    rebound()
+    flushAll()
+    NS.ProfileUI.Build()
+    NS.Arrange.Refresh()
+    local w = NS.ProfileUI.panel.arrange
+    local every = w.every
+    check(every ~= nil and every:IsShown() and every.text.text == "Every flyout" and every.points[1][2] == w.keysWait
+        and w.banners[1].points[1][2] == every, "an Every flyout bar stands first, above each flyout's own")
+    every.scripts.OnClick(every)
+    check(NS.Arrange.KeysOpen("every"), "a press opens it")
+    local row = every.rows[1]
+    check(row ~= nil and row:IsShown() and row.label.text == "Spot 1" and row.key.text == "1"
+        and every.rows[12] and every.rows[12].label.text == "Spot 12" and every.rows[12].key.text == "=",
+        "twelve rows, one for each spot, each with its key: the usual 1 to =, with none set")
+    -- a new key for spot 1
+    row.key.scripts.OnClick(row.key, "LeftButton")
+    check(NS.Keys.Waiting() ~= nil and NS.Keys.Waiting().spot and row.key.text == "Press a key"
+        and w.keysWait.text == "Press a key for spot 1 of every flyout. Escape leaves it as it is.",
+        "a click waits for the next key pressed, and the line under the words says so")
+    local box = W.focus
+    W.base.T = nil
+    box.scripts.OnKeyDown(box, "T")
+    check(GetBindingAction("T") == "FALLENSFLYOUTS_PICK1" and W.saves ~= nil and NS.Keys.Waiting() == nil
+        and every.rows[1].key.text == "T", "T pressed: spot 1 of every flyout is T now, kept as the game keeps its keys")
+    -- the open flyout's keys are read again at the addon's next pass, as after the game's own key menu
+    rebound()
+    tap("1")
+    tap("T")
+    check(W.casts[#W.casts] == "spell:101", "an open flyout's first icon is picked with T: " .. tostring(W.casts[#W.casts]))
+    -- a key that did something else: taken from it, said in red
+    W.base.Y = "TOGGLEWORLDMAP"
+    BINDING_NAME_TOGGLEWORLDMAP = "World Map"
+    every.rows[2].key.scripts.OnClick(every.rows[2].key, "LeftButton")
+    box = W.focus
+    box.scripts.OnKeyDown(box, "Y")
+    check(GetBindingAction("Y") == "FALLENSFLYOUTS_PICK2" and W.errors[#W.errors] == "Y did World Map: it picks spot 2 of every flyout now.",
+        "a key that did something else is taken from it, as the game's key menu does, and said in red: "
+            .. tostring(W.errors[#W.errors]))
+    -- right-click: the usual key back
+    every.rows[1].key.scripts.OnClick(every.rows[1].key, "RightButton")
+    check((GetBindingAction("T") or "") == "" and GetBindingKey("FALLENSFLYOUTS_PICK1") == nil and every.rows[1].key.text == "1",
+        "right-click: spot 1 has its usual key again, and T does nothing in the game's keys")
+    every.rows[2].key.scripts.OnClick(every.rows[2].key, "RightButton")
+    W.base.Y = "TOGGLEWORLDMAP"
+    -- in a fight nothing changes
+    W.combat = true
+    every.rows[3].key.scripts.OnClick(every.rows[3].key, "LeftButton")
+    check(NS.Keys.Waiting() == nil and W.errors[#W.errors] == F15.TEXT.fight, "in a fight it waits for no key")
+    W.combat = false
+    -- the game's key menu sends people here
+    check(PREFACE_FALLENSFLYOUTS_ONE == "All flyout keys, these and the keys of one flyout, are in the addon's settings: /ff.",
+        "the game's key menu says every flyout key is in the addon's settings, in words a player knows")
+    every.scripts.OnClick(every)
 end
 
 -- what ships names nobody else's addon and nothing of the dev folder

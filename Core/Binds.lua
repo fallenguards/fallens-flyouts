@@ -1,5 +1,6 @@
 local _, ns = ...
--- luacheck: read globals GetBindingKey IsBindingForGamePad SETTINGS_QUICK_KEYBIND_BUTTON
+-- luacheck: read globals GetBindingKey IsBindingForGamePad SETTINGS_QUICK_KEYBIND_BUTTON InCombatLockdown
+-- luacheck: read globals SetBinding SaveBindings GetCurrentBindingSet GetBindingAction GetBindingText
 
 -- The addon's section of the game's key menu (Bindings.xml): a row for each of the twelve spots of an
 -- open flyout, the same for every flyout. A key set on a row picks that spot while a flyout is open.
@@ -28,9 +29,17 @@ local TEXT = {
     help2 = "They work while a flyout is open. With none set here they are 1 to 9, 0, - and =.",
     pick = "Spot %d of every flyout",
     -- the game's own name for its mode goes in where the game gives one
-    one = "For keys of one flyout rather than this general set, see the addon's settings (/ff).",
+    -- every key there is, sent for to the addon's settings (the game lists no more rows than these)
+    -- His words (2026-11-24): "we need to provide ability to change the default flyout keybinds in our settings
+    -- menu next to the specific flyout ones too (above them) so ppl can access everything in one place. while we
+    -- can't do that in the keybindings menu itself due to limitations, we can at least put a message there (if
+    -- there isn't already) that ... they should view our \"/ff\" settings to see full keybinding
+    -- functionality", and "maybe dont mention api. no one using it will know what that means".
+    one = "All flyout keys, these and the keys of one flyout, are in the addon's settings: /ff.",
     one2 = "Or use %s above: open the flyout, hover an icon, press the key.",
     quick = "Quick Keybind Mode",
+    -- a key that did something else, taken from it as the game's own key menu takes it
+    took = "%s did %s: it picks spot %d of every flyout now.",
 }
 B.TEXT = TEXT
 
@@ -67,6 +76,36 @@ end
 
 -- the key and the pad button set for spot i of every flyout, if any
 function B.Pick(i) return Held(PICK .. i) end
+
+-- Spot i of every flyout set to `key` (a pad button where `pad`), from the addon's settings, as the game's
+-- key menu sets its row: the row's key of that kind replaced and the game's keys saved. A key that did
+-- something else is taken from that, the game's own way, and it is said in red. No key: the row's key of
+-- that kind cleared, and spot i has its usual key again.
+function B.SetPick(i, key, pad)
+    if InCombatLockdown() then return false, ns.Flyouts.TEXT.fight end
+    if not (SetBinding and GetBindingKey) then return false end
+    local command = PICK .. i
+    local had, hadPad = Held(command)
+    if key == nil and pad == nil then
+        -- the row as it was: its usual key and pad button both
+        if had then SetBinding(had) end
+        if hadPad then SetBinding(hadPad) end
+    else
+        local old = pad and hadPad or (not pad and had)
+        if old then SetBinding(old) end
+    end
+    if key then
+        local was = GetBindingAction(key)
+        if type(was) == "string" and was ~= "" and was ~= command then
+            local named = _G["BINDING_NAME_" .. was]
+            ns.Warn(TEXT.took:format(GetBindingText and GetBindingText(key) or key,
+                type(named) == "string" and named or was, i))
+        end
+        SetBinding(key, command)
+    end
+    if SaveBindings and GetCurrentBindingSet then SaveBindings(GetCurrentBindingSet()) end
+    return true
+end
 
 -- the key and the pad button once set on row i under heading n, in the rows of before, if any
 function B.Spot(n, i)

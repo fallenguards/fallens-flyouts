@@ -13,7 +13,7 @@ local _, ns = ...
 -- are under arrange a flyout."
 local A = {}
 ns.Arrange = A
-local F, Art = ns.Flyouts, ns.Art
+local F, Art, Binds = ns.Flyouts, ns.Art, ns.Binds
 
 local EDGE, GAP, LINE, BUTTON_FLOOR, CHROME = 16, 8, 22, 70, 20
 -- The keys of each flyout, as the game's Keybindings options show a section: a banner that opens and
@@ -32,9 +32,15 @@ local WAIT_H = 14
 local GROW = 1.25
 local TEXT = {
     keysHead = "Flyout keys",
-    keysNote = "The game's Keybindings options set a key for each spot of every flyout. Here each flyout has a "
-        .. "bar: open it, click an icon's key and press the key that icon should have in that flyout. "
-        .. "Right-click gives it its spot's key back.",
+    keysNote = "Every flyout picks its icons with the keys of their spots: set those under Every flyout. A "
+        .. "flyout's own bar gives an icon a key of its own in that flyout. Click a key and press the new one; "
+        .. "right-click gives the usual one back.",
+    -- the spots of every flyout, above each flyout's own
+    every = "Every flyout",
+    spot = "Spot %d",
+    spotTip = "Click, then press the key that picks this spot of every open flyout. Right-click gives it its "
+        .. "usual key, %s.",
+    spotWait = "Press a key for spot %d of every flyout. Escape leaves it as it is.",
     keysWait = "Press a key for %s. Escape leaves it as it is.",
     keysNone = "No flyout is on the bars.",
     keyPress = "Press a key",
@@ -123,9 +129,14 @@ local function KeyName(key, pad)
     return text or ""
 end
 
--- which flyouts' banners are open: by the flyout, for as long as it is one
+-- which flyouts' banners are open: by the flyout, for as long as it is one; EVERY for the spots of every
+-- flyout
 local opened = setmetatable({}, { __mode = "k" })
+local EVERY = {}
+opened[EVERY] = nil
 local Banner, Row
+-- the addon's own picture, on the banner of every flyout's spots
+local ADDON_ICON = "Interface\\AddOns\\FallensFlyouts\\media\\icon"
 
 -- a flyout's own picture and name: those it was given, else its button's ability's
 local function Face(flyout)
@@ -147,6 +158,44 @@ function A.KeysRefresh()
         frame:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)
         frame:Show()
         last = frame
+    end
+    -- First the keys of every flyout's spots, the same rows as the game's key menu has, so that every key is
+    -- here in one place.
+    -- His words (2026-11-24): "we need to provide ability to change the default flyout keybinds in our settings
+    -- menu next to the specific flyout ones too (above them) so ppl can access everything in one place. while we
+    -- can't do that in the keybindings menu itself due to limitations, we can at least put a message there (if
+    -- there isn't already) that ... they should view our \"/ff\" settings to see full keybinding
+    -- functionality", and "maybe dont mention api. no one using it will know what that means".
+    local every = w.every
+    if not every then
+        every = Banner()
+        every.every = true
+        w.every = every
+    end
+    every.icon:SetTexture(ADDON_ICON)
+    every.text:SetText(TEXT.every)
+    local all = opened[EVERY] == true
+    every.open = all
+    every.right:SetAtlas(all and BANNER.open or BANNER.shut, true)
+    Under(every, drop)
+    drop = -GAP / 2
+    for i = 1, F.MAX do
+        local row = every.rows[i]
+        if all then
+            row = row or Row(every, i)
+            every.rows[i] = row
+            row.icon:SetTexture(nil)
+            row.label:SetText(TEXT.spot:format(i))
+            local key, pad = Binds.Pick(i)
+            local listening = waiting ~= nil and waiting.spot == true and waiting.i == i
+            row.key:SetText(listening and TEXT.keyPress or KeyName(key or F.KEYS[i], pad or F.PADS[i]))
+            row.key.tip = TEXT.spotTip:format(KeyName(F.KEYS[i], F.PADS[i]))
+            row.key.waiting = listening
+            if row.key.SetSelected then row.key:SetSelected(listening) end
+            Under(row, i == 1 and -ROW_TOP or 0)
+        elseif row then
+            row:Hide()
+        end
     end
     for n, flyout in ipairs(list) do
         local banner = w.banners[n] or Banner()
@@ -194,8 +243,13 @@ function A.KeysRefresh()
     -- in the settings? it's moving the page around and is a pain in the ass", and "you can just have the
     -- 2nd message show underneath or something idk... but you're moving the region i'm keybinding".
     w.keysNote:SetText(#list == 0 and TEXT.keysNone or TEXT.keysNote)
-    local name = waiting and waiting.flyout.entries[waiting.i] and F.Name(waiting.flyout.entries[waiting.i])
-    w.keysWait:SetText(name and TEXT.keysWait:format(name) or "")
+    local says = ""
+    if waiting and waiting.spot then
+        says = TEXT.spotWait:format(waiting.i)
+    elseif waiting and waiting.flyout and waiting.flyout.entries[waiting.i] then
+        says = TEXT.keysWait:format(F.Name(waiting.flyout.entries[waiting.i]))
+    end
+    w.keysWait:SetText(says)
     -- what stands under the list hangs on its last line
     w.foot:ClearAllPoints()
     w.foot:SetPoint("TOPLEFT", last, "BOTTOMLEFT")
@@ -205,11 +259,12 @@ end
 function A.KeysToggle(flyout)
     if not flyout then return end
     local K = ns.Keys
-    if K and K.Waiting() and K.Waiting().flyout == flyout then K.Stop() end
+    local was = K and K.Waiting()
+    if was and (was.flyout == flyout or (flyout == EVERY and was.spot)) then K.Stop() end
     opened[flyout] = not opened[flyout] or nil
     A.Refresh()
 end
-function A.KeysOpen(flyout) return opened[flyout] == true end
+function A.KeysOpen(flyout) return opened[flyout == "every" and EVERY or flyout] == true end
 
 function A.Refresh()
     local w = panel and panel.arrange
@@ -262,6 +317,23 @@ function A.Key(flyout, i, button, key)
         if not ok and why then ns.Warn(why) end
     elseif not (was and was.flyout == flyout and was.i == i) then
         local ok, why = K.Listen(flyout, i, holder, A.Refresh, key)
+        if not ok and why then ns.Warn(why) end
+    end
+    A.Refresh()
+end
+
+-- A click on the key of spot i of every flyout: the left button waits for the key it is to have, or stops
+-- waiting; the right button gives it its usual key back.
+function A.SpotKey(i, button, key)
+    local K = ns.Keys
+    if not K then return end
+    local was = K.Waiting()
+    K.Stop()
+    if button == "RightButton" then
+        local ok, why = Binds.SetPick(i, nil, nil)
+        if not ok and why then ns.Warn(why) end
+    elseif not (was and was.spot and was.i == i) then
+        local ok, why = K.ListenSpot(i, holder, A.Refresh, key)
         if not ok and why then ns.Warn(why) end
     end
     A.Refresh()
@@ -376,7 +448,7 @@ function Banner()
     banner.text:SetPoint("LEFT", banner.icon, "RIGHT", GAP, 0)
     banner.text:SetJustifyH("LEFT")
     banner.rows = {}
-    banner:SetScript("OnClick", function(self) A.KeysToggle(self.flyout) end)
+    banner:SetScript("OnClick", function(self) A.KeysToggle(self.every and EVERY or self.flyout) end)
     return banner
 end
 
@@ -400,7 +472,10 @@ function Row(banner, i)
     key:SetSize(KEY_W, KEY_H)
     key:SetPoint("LEFT", row.label, "RIGHT", GAP, 0)
     key:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    key:SetScript("OnClick", function(self, button) A.Key(banner.flyout, i, button, self) end)
+    key:SetScript("OnClick", function(self, button)
+        if banner.every then return A.SpotKey(i, button, self) end
+        A.Key(banner.flyout, i, button, self)
+    end)
     key:SetScript("OnEnter", ShowTip)
     key:SetScript("OnLeave", HideTip)
     return row
