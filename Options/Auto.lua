@@ -323,8 +323,9 @@ UI.panel = panel
 if Settings and Settings.RegisterCanvasLayoutSubcategory and ns.OptionsCategory then
     Settings.RegisterCanvasLayoutSubcategory(ns.OptionsCategory, panel, TEXT.title)
 end
--- the Controller page after it (Options/Arrange.lua)
+-- the Controller page after it (Options/Arrange.lua), then Feedback (Options/Profiles.lua)
 if ns.ControllerUI then ns.ControllerUI.Register() end
+if ns.FeedbackUI then ns.FeedbackUI.Register() end
 
 -- /ff food and the like: the kind's macro on the cursor; anything else is the settings as before
 local open = SlashCmdList.FALLENSFLYOUTS

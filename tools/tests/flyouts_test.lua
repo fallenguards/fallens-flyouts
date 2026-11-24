@@ -5366,6 +5366,180 @@ do
     NS.Profiles.SetHints(true)
 end
 
+print("an update: once for the account, a line in chat with the addon's icon and name, and what changed")
+do
+    -- His words (2026-11-24): "please make sure when updates go out, the first time someone logs in with an
+    -- update (not the first time user ofc since they already get intro popup and whatnot) they get like
+    -- \"Thanks for updating to v#.#.#. [Here]'s what changed.\"", and "remember to always use the addon icon
+    -- in chat messages like usual. and the name."
+    -- each login loads the addon afresh: its parts are read from NS after each one
+    local version = NS.Welcome.Version()
+    check(version:match("^%d+%.%d+%.%d+$") ~= nil, "the version in use is the toc's: " .. version)
+    local function thanks()
+        local n, last = 0, nil
+        for _, line in ipairs(W.chat) do
+            if line:find("Thanks for updating", 1, true) then n, last = n + 1, line end
+        end
+        return n, last
+    end
+    -- what CHANGELOG.md says, read here as the window's words are written (tools/changes.py)
+    local function changelog()
+        local entries, entry, part = {}, nil, nil
+        for line in io.lines("CHANGELOG.md") do
+            line = line:gsub("\r$", "")
+            local v, d = line:match("^## %[([^%]]+)%] %- (%S+)")
+            if v then
+                entry = { version = v, date = d, parts = {} }
+                entries[#entries + 1] = entry
+                part = nil
+            elseif line:match("^### ") and entry then
+                part = { name = line:match("^### (.+)$"), items = {} }
+                entry.parts[#entry.parts + 1] = part
+            elseif line:match("^%- ") and part then
+                part.items[#part.items + 1] = (line:match("^%- (.+)$"):gsub("`", ""))
+            end
+        end
+        return entries
+    end
+    local same = true
+    local log, kept = changelog(), NS.Welcome.CHANGES or {}
+    if #log ~= #kept then same = false end
+    for i, entry in ipairs(log) do
+        local k = kept[i]
+        if not (k and k.version == entry.version and k.date == entry.date and #k.parts == #entry.parts) then
+            same = false
+        else
+            for j, part in ipairs(entry.parts) do
+                local kp = k.parts[j]
+                if not (kp and kp.name == part.name and #kp.items == #part.items) then
+                    same = false
+                else
+                    for n, item in ipairs(part.items) do
+                        if kp.items[n] ~= item then same = false end
+                    end
+                end
+            end
+        end
+    end
+    check(same and #kept > 0, ("what the window says of each version is CHANGELOG.md's, word for word (%d versions): "
+        .. "else python3 tools/changes.py"):format(#kept))
+
+    -- someone who has had the addon a while (its first window seen) logs in with this version, after 1.1.4
+    FallensFlyoutsDB.welcome = NS.Welcome.DONE
+    FallensFlyoutsDB.seenVersion = "1.1.4"
+    login("Player-1-0000000U")
+    local n, line = thanks()
+    check(n == 1 and line:find("|TInterface\\AddOns\\FallensFlyouts\\media\\icon:16:16|t Thanks for updating "
+        .. "Fallen's Flyouts to v" .. version .. ".", 1, true) == 1,
+        "the line in chat: the addon's icon, then thanks for updating Fallen's Flyouts to this version: " .. tostring(line))
+    check(line:find("|Haddon:FallensFlyouts:changes:1.1.4|h|cff71d5ff[Here]|r|h's what changed.", 1, true) ~= nil,
+        "and [Here]'s what changed, [Here] a link that knows the version seen last")
+    check(FallensFlyoutsDB.seenVersion == version, "the version is seen now")
+    login("Player-1-0000000V")
+    check(thanks() == 0, "the next login, on any character, says nothing: once for the account")
+    -- the link clicked: the window, with what changed after 1.1.4 up to this version
+    EventRegistry:TriggerEvent("SetItemRef", "addon:FallensFlyouts:changes:1.1.4", "[Here]", "LeftButton")
+    local Welcome = NS.Welcome
+    local news = Welcome.News()
+    local text = news and news.text and news.text.text or ""
+    local wanted = Welcome.Since("1.1.4")
+    local all = #wanted > 0
+    for _, entry in ipairs(wanted) do
+        if not text:find("v" .. entry.version, 1, true) or not text:find(entry.parts[1].items[1], 1, true) then all = false end
+    end
+    check(news ~= nil and news:IsShown() and all and not text:find("v1.1.4", 1, true),
+        ("the link opens a window of what changed after 1.1.4 up to this version (%d versions)"):format(#wanted))
+    for _, entry in ipairs(Welcome.CHANGES) do
+        if Welcome.Newer(entry.version, version) then
+            check(not text:find("v" .. entry.version .. "|", 1, true), "and nothing of a version still to come: " .. entry.version)
+        end
+    end
+    news.okay.scripts.OnClick(news.okay)
+    check(not news:IsShown(), "Okay closes it")
+    -- someone who had it before there was such a line: the version in use's changes
+    FallensFlyoutsDB.seenVersion = nil
+    login("Player-1-0000000U")
+    n, line = thanks()
+    check(n == 1 and line:find("|Haddon:FallensFlyouts:changes:|h", 1, true) ~= nil and FallensFlyoutsDB.seenVersion == version,
+        "one who had the addon before this line was there is thanked too")
+    check(#NS.Welcome.Since(nil) == 1 and NS.Welcome.Since(nil)[1].version == version, "and shown this version's changes")
+    -- someone new: their welcome, and no thanks
+    local saved = FallensFlyoutsDB
+    FallensFlyoutsDB = nil
+    login("Player-1-0000000N")
+    check(thanks() == 0 and FallensFlyoutsDB.welcome == NS.Welcome.OWED and FallensFlyoutsDB.seenVersion == version,
+        "someone new gets the welcome and no thanks, and this version is seen")
+    FallensFlyoutsDB = saved
+    login("Player-1-0000000U")
+end
+
+print("the Feedback page: a filled-in issue link, What's New, and the status report (/ff status)")
+do
+    -- His words (2026-11-24): "we need an extensive debug status that ppl can send to us, like the \"/fcui
+    -- status\"", "autofilled things from bug report in game are bis. make sure we add a \"Feedback\" tab to the
+    -- fallens flyout settings dropdowns", and "keep in mind these all need to be accessible via controller, at
+    -- least in gamepad mode to start."
+    local FB = NS.FeedbackUI
+    stack("ActionButton1", 501)
+    stack("ActionButton1", 502)
+    flushAll()
+    local at = {}
+    for i, sub in ipairs(W.subcategories or {}) do at[sub.frame] = i end
+    check(at[FB.panel] ~= nil and at[NS.ControllerUI.panel] ~= nil and at[NS.AutoUI.panel] ~= nil
+        and at[FB.panel] > at[NS.ControllerUI.panel] and at[NS.ControllerUI.panel] > at[NS.AutoUI.panel]
+        and FB.panel.name == "Feedback", "a page of its own named Feedback, listed after Automatic Flyouts and Controller")
+    FB.panel:Show()
+    FB.panel.scripts.OnShow(FB.panel)
+    flushAll()
+    local page = FB.panel
+    check(page.bug.template == "UIPanelButtonTemplate" and page.idea.template == "UIPanelButtonTemplate"
+        and page.news.template == "UIPanelButtonTemplate" and page.select.template == "UIPanelButtonTemplate",
+        "every part of it is a button of the game's own, which a controller's cursor reaches")
+    local status = page.status:GetText() or ""
+    local version = NS.Welcome.Version()
+    check(status:find("Fallen's Flyouts " .. version, 1, true) == 1 and status:find("Client: ", 1, true) ~= nil
+        and status:find("Input: ", 1, true) ~= nil and status:find("Settings changed: ", 1, true) ~= nil
+        and status:find("Other addons on (", 1, true) ~= nil,
+        "the status report: the version, the client, the input, the settings changed, the other addons")
+    check(status:find("    ActionButton1: led by spell 101; 3 icons (spell 3)", 1, true) ~= nil,
+        "and a line for each flyout: its button, what leads it, what it holds: " .. status)
+    local me = tostring(GetUnitName("player"))
+    check(not status:find(me, 1, true) and not status:find(NS.Profiles.Active(), 1, true)
+        and not status:find("Player-", 1, true), "with nothing of who the player is: no name, no profile's name, no id")
+    fire("ADDON_ACTION_BLOCKED", "FallensFlyouts", "PickupAction()")
+    fire("ADDON_ACTION_BLOCKED", "SomeoneElse", "CastSpellByName()")
+    FB.Refresh()
+    status = page.status:GetText()
+    check(status:find("blocked PickupAction()", 1, true) ~= nil and not status:find("CastSpellByName", 1, true),
+        "what the game kept this addon from doing this session, and nothing of another's")
+    page.bug.scripts.OnClick(page.bug)
+    local url = page.link:GetText() or ""
+    check(page.link:IsShown() and page.copy:IsShown() and url:find(
+        "https://github.com/fallenguards/fallens-flyouts/issues/new?template=bug_report.yml&details=", 1, true) == 1,
+        "Report a Bug: a link to a new bug report, in a box ready to copy: " .. url:sub(1, 120))
+    local details = url:match("&details=(.*)$"):gsub("+", " "):gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)
+    check(details:find("Fallen's Flyouts " .. version, 1, true) == 1 and details:find("Flyouts: ", 1, true) ~= nil
+        and not details:find("    ActionButton1:", 1, true) and not details:find(me, 1, true),
+        "its Details from the addon box filled with the short status, no line per flyout, nothing of who")
+    page.idea.scripts.OnClick(page.idea)
+    check(page.link:GetText():find("?template=feature_request.yml&details=", 1, true) ~= nil, "Suggest an Idea: the idea form")
+    page.news.scripts.OnClick(page.news)
+    check(NS.Welcome.News() ~= nil and NS.Welcome.News():IsShown(), "What's New opens what changed in this version")
+    NS.Welcome.News():Hide()
+    page.select.scripts.OnClick(page.select)
+    check(page.status:HasFocus() and page.status.highlighted == true, "Select All picks the whole report, to copy")
+    -- /ff status opens the page
+    W.opened = nil
+    SlashCmdList.FALLENSFLYOUTS("status")
+    check(W.opened ~= nil and W.opened == FB.category:GetID(), "/ff status opens the Feedback page")
+    W.combat = true
+    W.opened = nil
+    SlashCmdList.FALLENSFLYOUTS("status")
+    check(W.opened == nil and W.errors[#W.errors] == "The options open out of a fight.", "not in a fight, saying so")
+    W.combat = false
+    page:Hide()
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")
@@ -5373,6 +5547,13 @@ for _, file in ipairs(tocFiles()) do
         file .. " names nothing of the dev folder")
     -- Chat is not for telling what the player has just done and can see. No file that ships writes
     -- to it; a line for someone new or about an update is added here by name when one is wanted.
+    if file:find("Welcome%.lua$") then
+        -- the one line it writes: the thanks for an update (W.Announce)
+        local said
+        text, said = text:gsub("DEFAULT_CHAT_FRAME:AddMessage%(SAY%.thanks:format%(", "", 1)
+        text = text:gsub("%-%- luacheck: read globals DEFAULT_CHAT_FRAME", "", 1)
+        check(said == 1, file .. " writes one line to chat, the thanks for an update")
+    end
     check(not text:find("DEFAULT_CHAT_FRAME", 1, true) and not text:find("ChatFrame", 1, true) and not text:find("ns.Say(", 1, true)
         and not text:find("[^%w_.]print%("), file .. " writes nothing to chat")
 end

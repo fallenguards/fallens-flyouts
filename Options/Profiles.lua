@@ -4,6 +4,8 @@ local _, ns = ...
 -- luacheck: read globals CreateFrame Settings MenuUtil StaticPopup_Show InCombatLockdown C_Timer
 -- luacheck: read globals OKAY CANCEL YES NO GameTooltip SettingsPanel SmartNavigation
 -- luacheck: read globals SmartNavigation_MarkFrameIgnored SmartNavigation_ClearIgnoreStatus ScrollUtil
+-- luacheck: read globals GetBuildInfo GetLocale GetPhysicalScreenSize UnitClass UnitLevel C_GamePad C_AddOns
+-- luacheck: read globals date UIParent
 -- luacheck: read globals MinimalSliderWithSteppersMixin CreateMinimalSliderFormatter
 
 -- The Profiles page in the game's options; /ff and /flyouts open it.
@@ -469,4 +471,328 @@ function FallensFlyouts_OnAddonCompartmentClick() ns.OpenOptions() end
 
 SLASH_FALLENSFLYOUTS1 = "/ff"
 SLASH_FALLENSFLYOUTS2 = "/flyouts"
-SlashCmdList.FALLENSFLYOUTS = function() ns.OpenOptions() end
+-- /ff status (or feedback): the Feedback page; anything else, the settings
+SlashCmdList.FALLENSFLYOUTS = function(msg)
+    local word = type(msg) == "string" and msg:lower():match("^%s*(%a+)%s*$")
+    if (word == "status" or word == "feedback") and ns.FeedbackUI then return ns.FeedbackUI.Open() end
+    ns.OpenOptions()
+end
+
+-- The Feedback page, under the addon's own after Automatic Flyouts and Controller: a bug report or an idea
+-- sent to GitHub with the details of the game filled in, what changed in this version, and the status
+-- report (/ff status), all the addon knows of the setup, for a report. His words (2026-11-24): "we need an
+-- extensive debug status that ppl can send to us, like the \"/fcui status\"", "autofilled things from bug
+-- report in game are bis. make sure we add a \"Feedback\" tab to the fallens flyout settings dropdowns", and
+-- "keep in mind these all need to be accessible via controller, at least in gamepad mode to start." Every
+-- part of it is a button of the game's own, which a controller's cursor reaches. Issues are public: no
+-- character's name or realm, no profile's name (one is a character's), and no macro's name or text.
+do
+    local FB = {}
+    ns.FeedbackUI = FB
+    local ISSUES = "https://github.com/fallenguards/fallens-flyouts/issues/new"
+    -- the most letters of other addons' names a link carries: a browser takes a link of some length only
+    local MAX_ADDONS = 600
+    local SAY = {
+        title = "Feedback",
+        intro = "Something not working, or an idea? Tell us on GitHub. These buttons fill in the details of "
+            .. "your game for you: you only say what happened, or what you would like.",
+        bug = "Report a Bug",
+        bugTip = "A link to a new bug report on GitHub, the details of your game already in it.",
+        idea = "Suggest an Idea",
+        ideaTip = "A link to a new idea on GitHub, the details of your game already in it.",
+        news = "What's New",
+        newsTip = "What changed in this version of Fallen's Flyouts.",
+        copy = "Press Ctrl+C to copy this link, then open it in your browser.",
+        statusHead = "Status",
+        statusNote = "Everything the addon knows of your setup, with nothing of who you are. A report from the "
+            .. "buttons above carries the short form of it; to send all of it, select it and copy it into the "
+            .. "report. /ff status opens this page.",
+        select = "Select All",
+        fight = "The options open out of a fight.",
+    }
+    FB.TEXT = SAY
+    local NAME_OF = { own = "this character's own", class = "this class's", all = "every character's" }
+
+    -- what the game kept the addon from doing this session
+    local blocked = {}
+    local watch = CreateFrame("Frame")
+    watch:RegisterEvent("ADDON_ACTION_BLOCKED")
+    watch:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+    watch:SetScript("OnEvent", function(_, event, addon, func)
+        if addon ~= "FallensFlyouts" then return end
+        blocked[#blocked + 1] = ("%s %s %s%s"):format(date("%H:%M:%S"),
+            event == "ADDON_ACTION_FORBIDDEN" and "forbidden" or "blocked", tostring(func),
+            InCombatLockdown() and " (in combat)" or "")
+    end)
+
+    -- the other addons on, each with its version, by name; `limit`: the most letters
+    local function AddonsOn(limit)
+        local names = {}
+        local count = C_AddOns and C_AddOns.GetNumAddOns and C_AddOns.GetNumAddOns() or 0
+        for i = 1, count do
+            local name = C_AddOns.GetAddOnInfo(i)
+            if type(name) == "string" and name ~= "FallensFlyouts" and not name:find("^Blizzard_")
+                and C_AddOns.IsAddOnLoaded(i) then
+                local ok, version = pcall(C_AddOns.GetAddOnMetadata, i, "Version")
+                names[#names + 1] = (ok and type(version) == "string" and version ~= "") and (name .. " " .. version)
+                    or name
+            end
+        end
+        table.sort(names)
+        if not limit then return names end
+        local out, length = {}, 0
+        for _, name in ipairs(names) do
+            if length + #name > limit then
+                out[#out + 1] = "..."
+                break
+            end
+            out[#out + 1] = name
+            length = length + #name + 2
+        end
+        return out
+    end
+
+    -- the settings that are not as shipped
+    local function Changed()
+        local F = ns.Flyouts
+        local out = {}
+        local function Note(on, words) if on then out[#out + 1] = words end end
+        Note(F.Size() ~= 1, ("size %d%%"):format(math.floor(F.Size() * 100 + 0.5)))
+        Note(not F.Hiding(), "hide items I have none of: off")
+        Note(not F.Ranked(), "spell ranks in order: off")
+        Note(F.Twice(), "press a flyout's key again for the last one used: on")
+        Note(not F.Around(), "open around the button in gamepad mode: off")
+        Note(F.Faces(), "pick with the face buttons: on")
+        Note(not F.Plate(), "round background: off")
+        Note(not F.Back(), "flyout background: off")
+        Note(F.BackAlpha() < 1, ("background opacity %d%%"):format(math.floor(F.BackAlpha() * 100 + 0.5)))
+        Note(not P.Hints(), "hints in tooltips: off")
+        return out
+    end
+
+    -- a flyout in a line: its button, what leads it, what it holds, how it opens
+    local function FlyoutLine(flyout)
+        local F = ns.Flyouts
+        local counts, own, kinds = {}, 0, {}
+        for _, entry in ipairs(F.Full(flyout)) do
+            counts[entry.kind] = (counts[entry.kind] or 0) + 1
+            if entry.key or entry.pad then own = own + 1 end
+        end
+        for kind, n in pairs(counts) do kinds[#kinds + 1] = kind .. " " .. n end
+        table.sort(kinds)
+        local main = flyout.main
+        local lead = main and (main.kind == "macro" and "a macro" or (tostring(main.kind) .. " " .. tostring(main.id)))
+            or "nothing"
+        local unit = F.UnitOf(flyout)
+        local shape = unit and (unit.radial and "around its button" or ("opens " .. tostring(unit.side) .. ", runs "
+            .. tostring(unit.way))) or "not laid out"
+        return ("%s: led by %s; %d icons (%s); %s%s%s%s"):format(tostring(flyout.host ~= "" and flyout.host or "?"),
+            lead, #F.Full(flyout), table.concat(kinds, ", "), shape,
+            own > 0 and ("; " .. own .. " own keys") or "",
+            flyout.auto and ("; fills itself (" .. tostring(flyout.auto) .. ")") or "",
+            F.Sleeps(flyout) and "; on another page of its bar" or "")
+    end
+
+    -- Everything, line by line; `short`: for a link, which carries no line per flyout and fewer addons.
+    function FB.Text(short)
+        local F = ns.Flyouts
+        local lines = {}
+        local function Add(text) lines[#lines + 1] = text end
+        local version, build, _, toc = GetBuildInfo()
+        Add("Fallen's Flyouts " .. (ns.Welcome and ns.Welcome.Version() or "?"))
+        Add(("Client: %s (build %s, interface %s), %s"):format(tostring(version), tostring(build), tostring(toc),
+            GetLocale and GetLocale() or "?"))
+        local w, h = 0, 0
+        if GetPhysicalScreenSize then w, h = GetPhysicalScreenSize() end
+        Add(("Display: %sx%s, UI scale %.2f"):format(tostring(w), tostring(h), UIParent:GetEffectiveScale()))
+        local _, class = UnitClass("player")
+        Add(("Character: %s, level %s%s"):format(tostring(class), tostring(UnitLevel and UnitLevel("player") or "?"),
+            InCombatLockdown() and ", in combat" or ""))
+        local pad = C_GamePad and C_GamePad.IsEnabled and C_GamePad.IsEnabled()
+        Add(("Input: %s%s"):format(F.PadInUse() and "a controller" or "mouse and keyboard",
+            pad and ", controller support on" or ""))
+        Add(("Bars locked: %s"):format(F.BarsLocked() and "yes" or "no"))
+        local active = P.Active()
+        Add(("Profile: %s, of %d"):format(NAME_OF[P.Kind(active) or ""] or "one named by the player", #P.Names()))
+        local changed = Changed()
+        Add("Settings changed: " .. (#changed > 0 and table.concat(changed, "; ") or "none, all as shipped"))
+        local list = F.List() or {}
+        local _, used = F.Units()
+        Add(("Flyouts: %d in the profile, %d laid on a button"):format(#list, used or 0))
+        if not short then
+            for _, flyout in ipairs(list) do Add("    " .. FlyoutLine(flyout)) end
+        end
+        local hid = {}
+        for what, seen in pairs(F.hid or {}) do
+            if seen then hid[#hid + 1] = what end
+        end
+        table.sort(hid)
+        Add("Values the game kept secret this session: " .. (#hid > 0 and table.concat(hid, ", ") or "none"))
+        Add("Kept from the addon by the game this session: "
+            .. (#blocked > 0 and table.concat(blocked, "; ") or "nothing"))
+        local others = AddonsOn(short and MAX_ADDONS or nil)
+        Add(("Other addons on (%d): %s"):format(#AddonsOn(), #others > 0 and table.concat(others, ", ") or "none"))
+        return table.concat(lines, "\n")
+    end
+
+    local function Encode(s)
+        s = tostring(s):gsub("\r?\n", "\r\n")
+        s = s:gsub("([^%w%-%.%_%~ ])", function(c) return ("%%%02X"):format(c:byte()) end)
+        return (s:gsub(" ", "+"))
+    end
+
+    -- a new issue of that form on GitHub, the short status in its Details from the addon box
+    function FB.Link(template)
+        return ("%s?template=%s&details=%s"):format(ISSUES, template, Encode(FB.Text(true)))
+    end
+
+    local page = CreateFrame("Frame")
+    page:Hide()
+    page.name = SAY.title
+    FB.panel = page
+
+    -- the link, in a box ready to copy; typing in it puts the link back
+    local function ShowLink(template)
+        local url = FB.Link(template)
+        page.url = url
+        page.copy:Show()
+        page.link:Show()
+        page.link:SetText(url)
+        page.link:SetFocus()
+        page.link:SetCursorPosition(0)
+        page.link:HighlightText()
+        FB.Fit()
+    end
+
+    function FB.Build()
+        if page.built then return end
+        ns.Start()
+        local content = ns.OptionsScroller(page)
+        local head = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+        head:SetPoint("TOPLEFT", content, "TOPLEFT", EDGE, -EDGE)
+        head:SetText(SAY.title)
+        local intro = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        intro:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -GAP)
+        intro:SetPoint("RIGHT", content, "RIGHT", -EDGE, 0)
+        intro:SetJustifyH("LEFT")
+        intro:SetText(SAY.intro)
+        local last
+        for _, spec in ipairs({
+            { key = "bug", label = SAY.bug, tip = SAY.bugTip, run = function() ShowLink("bug_report.yml") end },
+            { key = "idea", label = SAY.idea, tip = SAY.ideaTip, run = function() ShowLink("feature_request.yml") end },
+            { key = "news", label = SAY.news, tip = SAY.newsTip, run = function()
+                if ns.Welcome then ns.Welcome.ShowChanges() end
+            end },
+        }) do
+            local button = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+            button:SetText(spec.label)
+            button:SetSize(math.max(BUTTON_FLOOR, (button:GetTextWidth() or 0) + CHROME / 2), LINE)
+            button.tip = spec.tip
+            button:SetScript("OnClick", spec.run)
+            button:SetScript("OnEnter", ShowTip)
+            button:SetScript("OnLeave", HideTip)
+            if last then
+                button:SetPoint("LEFT", last, "RIGHT", GAP / 2, 0)
+            else
+                button:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -GAP * 2)
+            end
+            page[spec.key] = button
+            last = button
+        end
+        page.copy = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        page.copy:SetPoint("TOPLEFT", page.bug, "BOTTOMLEFT", 0, -GAP * 2)
+        page.copy:SetText(SAY.copy)
+        page.copy:Hide()
+        page.link = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
+        page.link:SetPoint("TOPLEFT", page.copy, "BOTTOMLEFT", 6, -GAP)
+        page.link:SetPoint("RIGHT", content, "RIGHT", -EDGE, 0)
+        page.link:SetHeight(LINE)
+        page.link:SetAutoFocus(false)
+        -- uncapped: a capped box would cut the details off the end of the link
+        page.link:SetMaxLetters(0)
+        page.link:SetMaxBytes(0)
+        page.link:SetScript("OnTextChanged", function(self, typed)
+            if typed then
+                self:SetText(page.url or "")
+                self:HighlightText()
+            end
+        end)
+        page.link:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        page.link:Hide()
+        local statusHead = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+        statusHead:SetPoint("TOPLEFT", page.copy, "BOTTOMLEFT", 0, -GAP * 3 - LINE)
+        statusHead:SetText(SAY.statusHead)
+        local note = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        note:SetPoint("TOPLEFT", statusHead, "BOTTOMLEFT", 0, -GAP)
+        note:SetPoint("RIGHT", content, "RIGHT", -EDGE, 0)
+        note:SetJustifyH("LEFT")
+        note:SetText(SAY.statusNote)
+        page.select = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+        page.select:SetText(SAY.select)
+        page.select:SetSize(math.max(BUTTON_FLOOR, (page.select:GetTextWidth() or 0) + CHROME / 2), LINE)
+        page.select:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -GAP * 2)
+        page.select:SetScript("OnClick", function()
+            page.status:SetFocus()
+            page.status:HighlightText()
+        end)
+        -- the report: a box of the game's own to select from and copy, as long as its words
+        page.status = CreateFrame("EditBox", nil, content)
+        page.status:SetMultiLine(true)
+        page.status:SetAutoFocus(false)
+        page.status:SetFontObject("GameFontHighlightSmall")
+        page.status:SetPoint("TOPLEFT", page.select, "BOTTOMLEFT", 0, -GAP)
+        page.status:SetPoint("RIGHT", content, "RIGHT", -EDGE, 0)
+        page.status:SetScript("OnTextChanged", function(self, typed)
+            if typed then self:SetText(page.text or "") end
+        end)
+        page.status:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        page.measure = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        page.measure:SetPoint("TOPLEFT", page.status, "TOPLEFT")
+        page.measure:SetPoint("RIGHT", page.status, "RIGHT")
+        page.measure:SetJustifyH("LEFT")
+        page.measure:SetAlpha(0)
+        page.built = true
+    end
+
+    -- the page scrolls as far as its report
+    function FB.Fit()
+        if not page.built then return end
+        page.measure:SetText(page.text or "")
+        page.status:SetHeight(math.max(LINE, (page.measure:GetStringHeight() or 0) + GAP))
+        ns.OptionsFit(page, page.status)
+    end
+
+    -- read afresh each time the page is up
+    function FB.Refresh()
+        if not page.built then return end
+        page.text = FB.Text(false)
+        page.status:SetText(page.text)
+        FB.Fit()
+    end
+
+    page:SetScript("OnShow", function()
+        FB.Build()
+        FB.Refresh()
+        C_Timer.After(0, FB.Fit)
+        ns.OptionsPageShown(page)
+    end)
+    page:SetScript("OnHide", ns.OptionsPageHidden)
+
+    -- listed by Options/Auto.lua after its own page and the Controller page
+    function FB.Register()
+        if Settings and Settings.RegisterCanvasLayoutSubcategory and ns.OptionsCategory then
+            FB.category = Settings.RegisterCanvasLayoutSubcategory(ns.OptionsCategory, page, SAY.title)
+        end
+    end
+
+    -- /ff status, /ff feedback
+    function FB.Open()
+        if InCombatLockdown() then return ns.Warn(SAY.fight) end
+        local sub = FB.category
+        if sub and sub.GetID and Settings.OpenToCategory then
+            Settings.OpenToCategory(sub:GetID())
+        else
+            ns.OpenOptions()
+        end
+    end
+end

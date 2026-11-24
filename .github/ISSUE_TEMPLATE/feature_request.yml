@@ -13,3 +13,11 @@ body:
       description: What it should do and what it would be for. A screenshot of the part of the screen helps.
     validations:
       required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details from the addon
+      description: Filled in for you by Suggest an Idea on the Feedback page of the addon's settings (`/ff status`).
+      render: text
+    validations:
+      required: false

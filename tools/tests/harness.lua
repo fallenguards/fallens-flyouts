@@ -106,6 +106,11 @@ function Frame:Disable() self.off = true end
 function Frame:SetFontObject(v) self.font = v end
 function Frame:GetFontObject() return self.font end
 function Frame:SetMaxLetters(n) self.maxLetters = n end
+function Frame:SetMaxBytes(n) self.maxBytes = n end
+function Frame:SetMultiLine(v) self.multiLine = v end
+function Frame:SetSpacing(v) self.spacing = v end
+function Frame:HighlightText() self.highlighted = true end
+function Frame:SetCursorPosition(n) self.cursor = n end
 -- a window that can be dragged: whether it may be, whether it is being, and that it was
 function Frame:SetMovable(v) self.movable = v == true end
 function Frame:IsMovable() return self.movable == true end
@@ -905,6 +910,14 @@ function DeleteMacro(x)
     fire("UPDATE_MACROS")
 end
 function UnitLevel() return W.level or 10 end
+function GetLocale() return "enUS" end
+function GetPhysicalScreenSize() return 2560, 1440 end
+date = os.date
+function strsplit(sep, text)
+    local out = {}
+    for piece in (text .. sep):gmatch("(.-)" .. sep:gsub("%p", "%%%0")) do out[#out + 1] = piece end
+    return table.unpack(out)
+end
 -- W.bags: the items in the bags, one stack each; W.items: what the game knows of an item
 C_Container = {
     GetContainerNumSlots = function(bag) return bag == 0 and #(W.bags or {}) or 0 end,
@@ -1030,7 +1043,9 @@ Settings = {
     RegisterAddOnCategory = function(category) W.category = category end,
     RegisterCanvasLayoutSubcategory = function(parent, frame, name)
         W.subcategories = W.subcategories or {}
-        W.subcategories[#W.subcategories + 1] = { parent = parent, frame = frame, name = name }
+        local sub = { parent = parent, frame = frame, name = name, GetID = function() return "sub:" .. name end }
+        W.subcategories[#W.subcategories + 1] = sub
+        return sub
     end,
     OpenToCategory = function(id) W.opened = id end,
 }
@@ -1093,8 +1108,36 @@ C_SpellBook = {
         fire("ACTIONBAR_SHOWGRID")
     end,
 }
+-- the addons installed, by place in the list (this one first), as the game's addon list counts them
+local function addonList()
+    local out = { "FallensFlyouts" }
+    local rest = {}
+    for name in pairs(installed) do rest[#rest + 1] = name end
+    table.sort(rest)
+    for _, name in ipairs(rest) do out[#out + 1] = name end
+    return out
+end
+-- this addon's version, as its toc says
+local function tocVersion()
+    for line in io.lines("FallensFlyouts.toc") do
+        local v = line:match("^## Version:%s*(%S+)")
+        if v then return v end
+    end
+end
 C_AddOns = {
-    IsAddOnLoaded = function(name) return W.loaded[name] or false end,
+    GetNumAddOns = function() return #addonList() end,
+    GetAddOnInfo = function(i) return addonList()[i] end,
+    GetAddOnMetadata = function(which, field)
+        local name = type(which) == "number" and addonList()[which] or which
+        if field ~= "Version" then return nil end
+        if name == "FallensFlyouts" then return tocVersion() end
+        return name and "1.0" or nil
+    end,
+    IsAddOnLoaded = function(name)
+        if type(name) == "number" then name = addonList()[name] end
+        if name == "FallensFlyouts" then return true end
+        return W.loaded[name] or false
+    end,
     DoesAddOnExist = function(name) return installed[name] or false end,
     -- The client knows a character here by its GUID alone, as its own addon list passes it. Given
     -- a name it reads every installed addon as on and switches nothing (his client, 2026-11-21).
@@ -1181,6 +1224,15 @@ end
 local unplaced = false
 local function boot(alone)
     GameTooltip:Hide()
+    -- the game's event registry, of this session: an addon's link clicked in chat is handed on through it
+    EventRegistry = { callbacks = {} }
+    function EventRegistry:RegisterCallback(event, fn, owner)
+        self.callbacks[event] = self.callbacks[event] or {}
+        table.insert(self.callbacks[event], { fn, owner })
+    end
+    function EventRegistry:TriggerEvent(event, ...)
+        for _, one in ipairs(self.callbacks[event] or {}) do one[1](one[2], ...) end
+    end
     -- the last session's frames are gone
     for name in pairs(W and W.frames or {}) do _G[name] = nil end
     W = { frames = {}, all = {}, overrides = {}, queue = {}, casts = {}, chat = {}, errors = {}, keyDown = {}, held = {},
