@@ -1456,6 +1456,42 @@ function RunAttributeWrap(frame, wrapped, name, value)
     if not frame.protected then return end
     secureRun(frame, wrapped.before, "self, name, value, owner", frame, name, value, wrapped.header)
 end
+-- A frame's OnHide wrap (the client's Wrapped_ShowHide): once the frame is hidden, the body runs as secure
+-- code (for a frame protected itself, or out of a fight), then the frame's own handler.
+local hideFrame = Frame.Hide
+function Frame:Hide()
+    local wrapped = self.wraps and self.wraps.OnHide
+    if not (wrapped and wrapped.before and self.shown) then return hideFrame(self) end
+    self.shown = false
+    if self.protected or not W.combat then
+        secureRun(self, wrapped.before, "self, owner", self, wrapped.header)
+    end
+    if self.scripts.OnHide then self.scripts.OnHide(self) end
+end
+-- The game's auto-hide (RegisterAutoHide, for secure code): a frame hides once the mouse has been off it for
+-- its time; the mouse on it starts the time again. AutoHides() looks, as the client does every frame; the
+-- game's own hide is secure.
+function Frame:RegisterAutoHide(wait)
+    assert(type(wait) == "number" and wait > 0, "RegisterAutoHide wants a time")
+    W.autoHides = W.autoHides or {}
+    W.autoHides[self] = { wait = wait, since = W.clock }
+end
+function Frame:UnregisterAutoHide()
+    if W.autoHides then W.autoHides[self] = nil end
+end
+function AutoHides()
+    for frame, timing in pairs(W.autoHides or {}) do
+        if frame.over then
+            timing.since = W.clock
+        elseif W.clock - timing.since >= timing.wait then
+            W.autoHides[frame] = nil
+            local was = W.secure
+            W.secure = true
+            frame:Hide()
+            W.secure = was
+        end
+    end
+end
 -- a frame's own snippet, run by secure code (the client's RunAttribute)
 function Frame:RunAttribute(attribute)
     local body = self.attrs[attribute]

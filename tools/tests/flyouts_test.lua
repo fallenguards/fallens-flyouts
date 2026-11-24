@@ -492,6 +492,76 @@ before = #W.casts
 tap("1")
 check(#W.casts == before + 1 and W.casts[#W.casts] == "spell:101" and not menu:IsShown(),
     "pressed again it casts its own icon and shuts the flyout: " .. tostring(W.casts[#W.casts]))
+-- A player's ask (2026-11-24): "a timeout function that automatically closes the flyout if no spell is
+-- selected after a couple of seconds. Maybe a setting to customize how long it should stay open before
+-- closing itself?"
+do
+    local F = NS.Flyouts
+    local function closes(wait, what)
+        W.clock = W.clock + wait - 0.1
+        AutoHides()
+        local still = menu:IsShown()
+        W.clock = W.clock + 0.1
+        AutoHides()
+        check(still and not menu:IsShown() and root().attrs.open == nil and GetBindingAction("2", true) == "ACTIONBUTTON2"
+            and GetBindingAction("E", true):find("FallensFlyoutsOpener") ~= nil, what)
+    end
+    tap("E")
+    W.clock = W.clock + 60
+    AutoHides()
+    check(menu:IsShown() and F.CloseAfter() == nil, "as shipped a flyout left open stays open")
+    tap("E")
+    check(F.SetCloseAfter(true) == true and F.CloseAfter() == 3 and F.WAIT == 3, "turned on, the time is 3 seconds")
+    flushAll()
+    tap("E")
+    closes(3, "a flyout opened by its key and left alone closes at 3 seconds, and every key goes back as when it "
+        .. "is shut by hand")
+    tap("E")
+    tap("2")
+    check(W.casts[#W.casts] == "spell:501" and not menu:IsShown(), "a pick before then casts and shuts it as ever")
+    W.clock = W.clock + 10
+    AutoHides()
+    tap("E")
+    AutoHides()
+    check(menu:IsShown(), "no time left from before closes the next one opened")
+    menu.over = true
+    W.clock = W.clock + 10
+    AutoHides()
+    check(menu:IsShown(), "the mouse over the flyout keeps it open")
+    menu.over = nil
+    closes(3, "the mouse taken off, it closes 3 seconds on")
+    press("E")
+    W.clock = W.clock + 10
+    AutoHides()
+    check(menu:IsShown(), "its key held down keeps it open")
+    release("E")
+    closes(3, "let go with nothing picked, it closes 3 seconds on")
+    mouse(host)
+    closes(3, "opened by a click on its bar button, the same")
+    W.combat = true
+    tap("E")
+    closes(3, "in a fight too")
+    W.combat = false
+    check(F.SetCloseAfter(true, 5.2) == true and F.CloseAfter() == 5, "another time is kept to the half second: 5")
+    flushAll()
+    tap("E")
+    closes(5, "and a flyout closes at that time")
+    F.Show(one)
+    W.clock = W.clock + 10
+    AutoHides()
+    check(menu:IsShown(), "one the addon opens itself (to show where a drop goes) is not timed")
+    F.Shut()
+    check(F.SetCloseAfter(false) == true and F.CloseAfter() == nil and F.CloseWait() == 5,
+        "turned off, it is off and keeps the time set for when it is on again")
+    flushAll()
+    tap("E")
+    W.clock = W.clock + 60
+    AutoHides()
+    check(menu:IsShown(), "off, a flyout left open stays open again")
+    tap("E")
+    F.SetCloseAfter(false, F.WAIT)
+    flushAll()
+end
 -- in a fight too, where nothing can be bound from outside
 W.combat = true
 press("1"); tap("2"); tap("2")
@@ -6122,6 +6192,30 @@ do
     W.macros = macros
     W.gameFlyouts, W.knownSpells, W.side = nil, nil, nil
     flushAll()
+end
+
+print("the settings page: \"Close a flyout left open\" and the time under it")
+do
+    local F = NS.Flyouts
+    NS.ProfileUI.Build()
+    NS.Arrange.Refresh()
+    local w = NS.ProfileUI.panel.arrange
+    check(w.close ~= nil and not w.close:GetChecked() and w.wait ~= nil and not w.wait:IsSliderEnabled()
+        and w.wait:GetValue() == 3 and w.wait.RightText.text == "3 sec",
+        "off as shipped, the time under it grayed at 3 sec: " .. tostring(w.wait and w.wait.RightText.text))
+    w.close.checked = true
+    w.close.scripts.OnClick(w.close)
+    check(F.CloseAfter() == 3 and w.close:GetChecked() and w.wait:IsSliderEnabled(),
+        "ticked, a flyout left open closes after 3 seconds, and the time can be changed")
+    w.wait:SetValue(7.5)
+    check(F.CloseAfter() == 7.5 and w.wait.RightText.text == "7.5 sec", "the slider sets the time: "
+        .. tostring(w.wait.RightText.text))
+    w.close.checked = false
+    w.close.scripts.OnClick(w.close)
+    check(F.CloseAfter() == nil and F.CloseWait() == 7.5 and not w.wait:IsSliderEnabled() and w.wait:GetValue() == 7.5,
+        "unticked, it is off and the time is kept")
+    F.SetCloseAfter(false, F.WAIT)
+    NS.Arrange.Refresh()
 end
 
 -- what ships names nobody else's addon and nothing of the dev folder
