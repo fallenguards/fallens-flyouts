@@ -841,7 +841,7 @@ entry(one, 2).scripts.OnEnter(entry(one, 2))
 check(W.tip == nil, "a hover on another icon while one is moved shows no tooltip")
 local edgeX, edgeY = middle(2)
 local midX, midY = middle(3)
-W.mouseX, W.mouseY = edgeX + (midX - edgeX) * 0.6, edgeY + (midY - edgeY) * 0.6
+W.mouseX, W.mouseY = edgeX + (midX - edgeX) * 0.65, edgeY + (midY - edgeY) * 0.65
 Move.Tick(0.02)
 check(Move.Moving().target == 3 and entry(one, 3).lit, "lit, it stays lit with the cursor near its edge, still on it")
 W.mouseX, W.mouseY = midX, midY
@@ -1028,23 +1028,46 @@ do
     -- flyout is already open.."
     show()
     carry(506)
+    -- His recording (2026-11-24): brought onto an icon of the open flyout, every icon jumped a place away from
+    -- the button as the preview began, the one aimed at with them; moved off, the flyout he had opened shut.
+    W.mouseX, W.mouseY = point(1.5)
     entry(one, 2).scripts.OnEnter(entry(one, 2))
     p = Move.Preview()
-    check(p ~= nil and p.left == true and p.catcher:IsShown(),
-        "carried onto an icon of the open flyout, the same preview begins: no plus needed")
+    check(p ~= nil and p.left == true and p.catcher:IsShown() and p.gap == 6,
+        "carried onto an icon of the open flyout, the same preview begins, its free place at the far end")
     p.tab.over, p.catcher.over = false, true
-    W.mouseX, W.mouseY = point(2.02)
+    Move.Tick(0.02)
+    check(along(entry(one, 1)) == slot(1) and along(entry(one, 2)) == slot(2) and along(entry(one, 5)) == slot(5),
+        "no icon moves as it begins: the one under the cursor stays under it")
+    Move.Tick(0.12)
+    Move.Tick(0.12)
+    check(p.target == 2 and entry(one, 2).lit and along(entry(one, 2)) == slot(2),
+        "staying on it, that icon is lit, to be replaced, where it was")
+    W.mouseX, W.mouseY = point(1.02)
     Move.Tick(0.1)
     Move.Tick(0.1)
-    check(p.gap == 2, "the icons part where it is held, as from the plus")
+    check(p.gap == 2 and p.target == nil, "between the first icon and the second, they part there after a moment")
     p.catcher.scripts.OnReceiveDrag(p.catcher)
     flushAll()
-    check(order() == "505 506 101 503 504 502" and W.cursor == nil, "let go, it goes in there: " .. order())
-    if menu:IsShown() then tap("ESCAPE") end
+    check(order() == "505 506 101 503 504 502" and W.cursor == nil and menu:IsShown(), "let go, it goes in there: "
+        .. order())
     local _, openUnit = NS.Flyouts.At("ActionButton1")
     NS.Flyouts.TakeOff(openUnit, 2)
     flushAll()
-    check(order() == "505 101 503 504 502", "and taken off again for the checks that follow")
+    -- moved off it, the flyout he opened stays open, as it was
+    show()
+    carry(507)
+    W.mouseX, W.mouseY = point(1.5)
+    entry(one, 2).scripts.OnEnter(entry(one, 2))
+    p = Move.Preview()
+    p.tab.over, p.catcher.over = false, false
+    W.mouseX, W.mouseY = 5000, 5000
+    for _ = 1, 20 do Move.Tick(0.02) end
+    check(Move.Preview() == nil and menu:IsShown() and along(entry(one, 2)) == slot(2),
+        "taken off the flyout, the preview ends and the flyout he had opened stays open, as it was")
+    W.cursor = nil
+    if menu:IsShown() then tap("ESCAPE") end
+    check(order() == "505 101 503 504 502", "and the flyout as it was for the checks that follow")
     -- the cursor away from the plus and the flyout: it shuts as it was
     carry(506)
     p, tab = onPlus()

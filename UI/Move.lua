@@ -44,7 +44,10 @@ local NEAR = 0.25
 -- the cursor is anywhere on it. A let-go on an icon not lit yet puts it in on the nearer side of that icon.
 -- The outer quarter of each place parts the icons after REST, as before. A full flyout, which takes nothing
 -- in, lights an icon at once.
-local INNER, LIGHT, REST = 0.25, 0.2, 0.15
+-- Lit, an icon stays lit while the cursor stays within KEEP of a place either side of its middle: a hand
+-- that moves a little keeps it, and the outer tenth either side is still the way to the free place beside
+-- it (his recording, 2026-11-24: between two icons was out of reach once one was lit).
+local INNER, KEEP, LIGHT, REST = 0.25, 0.4, 0.2, 0.15
 
 local moving, landing
 -- something carried, its flyout open for it with a gap where it would go (further down)
@@ -174,8 +177,8 @@ local function AimMove(m, x, y, elapsed)
         m.target, m.between, m.near, m.hover, m.rest, m.dwell = nil, nil, nil, nil, 0, 0
         return
     end
-    -- lit, it stays lit while the cursor is anywhere on it
-    if m.target == icon then return end
+    -- lit, it stays lit while the cursor stays near its middle
+    if m.target == icon and math.abs(f - 0.5) < KEEP then return end
     m.target = nil
     -- the place it would take: before this icon, or after it, by the nearer side
     local to
@@ -531,8 +534,8 @@ local function Aim(p, x, y, elapsed)
         p.target, p.between, p.near, p.hover, p.rest = nil, nil, nil, nil, 0
         return
     end
-    -- lit, it stays lit while the cursor is anywhere on it
-    if p.target == icon then return end
+    -- lit, it stays lit while the cursor stays near its middle
+    if p.target == icon and math.abs(f - 0.5) < KEEP then return end
     p.target = nil
     -- a full flyout takes nothing in: the icon under the cursor is lit at once, to be replaced
     if p.full then
@@ -609,7 +612,8 @@ function M.PreviewEnd(keep)
     preview = nil
     if not InCombatLockdown() then
         Unpart(p)
-        if not keep then F.Shut() end
+        -- a flyout that was open before the preview stays open, as it was
+        if not keep and not p.wasOpen then F.Shut() end
     else
         if ghost then ghost:Hide() end
         if catcher then catcher:Hide() end
@@ -692,7 +696,8 @@ local function PreviewTick(elapsed)
 end
 
 -- the cursor came onto a plus: true where its flyout is shown so
-function M.PreviewStart(tab)
+-- `atEnd`: the free place at the far end, so that no icon moves as it begins (carried onto an open flyout)
+function M.PreviewStart(tab, atEnd)
     if preview or moving or carried or landing or InCombatLockdown() then return false end
     local flyout, unit = F.At(tab.host)
     if not (flyout and unit and unit.host and not unit.radial and not flyout.auto) then return false end
@@ -704,7 +709,8 @@ function M.PreviewStart(tab)
     local px, py = Centre(tab)
     if not px then px, py = GetCursorPosition() end
     local w, h = tab:GetSize()
-    local p = { unit = unit, flyout = flyout, button = tab.button, tab = tab, n = n, full = full, gap = 1,
+    local p = { unit = unit, flyout = flyout, button = tab.button, tab = tab, n = n, full = full,
+        gap = atEnd and n + 1 or 1,
         px = px, py = py, pr = math.max(w, h) / 2 * tab:GetEffectiveScale(), away = 0 }
     preview = p
     -- the strip one icon longer, for the gap
@@ -729,7 +735,7 @@ function M.PreviewStart(tab)
     catch:Show()
     Lay(p)
     Driver():Show()
-    ns.Log(("preview: %s open for %s, the gap nearest the button"):format(tostring(flyout.host), tostring(entry.kind)))
+    ns.Log(("preview: %s open for %s, the gap at %d"):format(tostring(flyout.host), tostring(entry.kind), p.gap))
     return true
 end
 
@@ -775,8 +781,11 @@ function M.EnterOpen(frame)
     local unit = frame and frame.flyoutUnit
     if not (unit and unit.flyout and GetCursorInfo()) or preview or moving or carried or landing then return false end
     local tab = ns.Drop and ns.Drop.Tab(unit.flyout.host)
-    if not (tab and M.PreviewStart(tab)) then return false end
-    preview.left = true
+    -- His recording (2026-11-24): begun with its free place by the button, every icon jumped a place away
+    -- the moment the spell came onto the flyout, the one aimed at with them, and moved off, the flyout he had
+    -- opened shut ("WHY"). The free place stands at the far end, and the flyout stays open as it was.
+    if not (tab and M.PreviewStart(tab, true)) then return false end
+    preview.left, preview.wasOpen = true, true
     ns.Log(("preview: %s begun on an icon of the open flyout"):format(tostring(unit.flyout.host)))
     return true
 end

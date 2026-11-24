@@ -351,12 +351,14 @@ W.CHANGES = {
             "After an update, the first time you play, the chat thanks you for updating, with the version you " ..
                 "now have, the addon's icon and name, and a link to what changed since the version you had.",
             "Adding to a flyout shows where it goes. With a spell, an item or anything else on the cursor, " ..
-                "point at the + of a button that has a flyout, or at an icon of a flyout already open: the flyout " ..
-                "opens with a gap nearest the button and what you carry faintly in it. Pause between two icons " ..
-                "and they part around the gap there; let go between two icons, parted or not, and it goes in " ..
-                "between. Stay on the middle of an icon for a moment and that icon lights up instead, and letting " ..
-                "go takes its place, as on a bar slot; let go before it lights and it goes in on the nearer side " ..
-                "of that icon. Letting go on the + itself puts it first, nearest the button.",
+                "point at the + of a button that has a flyout: the flyout opens with a gap nearest the button and " ..
+                "what you carry faintly in it. Onto a flyout already open, point at any of its icons: the gap " ..
+                "stands at its far end, so nothing moves, and the flyout stays open if you take it away again. " ..
+                "Pause between two icons and they part around the gap there; let go between two icons, parted or " ..
+                "not, and it goes in between. Stay on the middle of an icon for a moment and that icon lights up " ..
+                "instead, and letting go takes its place, as on a bar slot; let go before it lights and it goes " ..
+                "in on the nearer side of that icon. Letting go on the + itself puts it first, nearest the " ..
+                "button.",
             "A flyout's bar button can be given its icon and name with a controller too: RB in Edit Flyout " ..
                 "(from the game's Edit Action Bar) opens the same window a right-click opens with a mouse, and so " ..
                 "does the Icon and Name button on the Controller page of the settings. In Edit Flyout, Show or " ..
