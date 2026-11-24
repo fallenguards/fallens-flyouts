@@ -266,8 +266,9 @@ function Driver()
 end
 
 -- Something carried onto the plus of a button whose flyout runs as a strip: the flyout opens, the strip one
--- icon longer, and what is carried shows faintly in a gap where it would go, at the end to begin with, as a
--- drop on the plus has always put it there.
+-- icon longer, and what is carried shows faintly in a gap where it would go: to begin with, nearest the
+-- button, where the plus is. His words (2026-11-24), of the gap first standing at the far end: "why is it if
+-- i just quickly place at the \"+\" and let go, it goes to the far end instead of near?"
 -- His words (2026-11-24): "is there a reason when adding spells to an existing flyout we don't show the
 -- full preview so we can decide what order to put it in right away??", and of how a drop chooses between
 -- putting it in and taking an icon's place, over the middle of an icon replacing it and anywhere else
@@ -345,7 +346,7 @@ end
 -- be replaced; on the gap, it goes into the gap; between two icons (`between`, the place it would take) it
 -- goes in there, and after a rest there the gap moves there and the icons part.
 local function Aim(p, x, y, elapsed)
-    -- on the plus it came by, till it first leaves it: the end
+    -- on the plus it came by, till it first leaves it: nearest the button
     if not p.left then
         local dx, dy = x - p.px, y - p.py
         if dx * dx + dy * dy <= p.pr * p.pr then return end
@@ -530,7 +531,7 @@ function M.PreviewStart(tab)
     local px, py = Centre(tab)
     if not px then px, py = GetCursorPosition() end
     local w, h = tab:GetSize()
-    local p = { unit = unit, flyout = flyout, button = tab.button, tab = tab, n = n, full = full, gap = n + 1,
+    local p = { unit = unit, flyout = flyout, button = tab.button, tab = tab, n = n, full = full, gap = 1,
         px = px, py = py, pr = math.max(w, h) / 2 * tab:GetEffectiveScale(), away = 0 }
     preview = p
     -- the strip one icon longer, for the gap
@@ -555,7 +556,7 @@ function M.PreviewStart(tab)
     catch:Show()
     Lay(p)
     Driver():Show()
-    ns.Log(("preview: %s open for %s, the gap at place %d"):format(tostring(flyout.host), tostring(entry.kind), n + 1))
+    ns.Log(("preview: %s open for %s, the gap nearest the button"):format(tostring(flyout.host), tostring(entry.kind)))
     return true
 end
 

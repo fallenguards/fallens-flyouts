@@ -348,10 +348,11 @@ W.CHANGES = {
             "After an update, the first time you play, the chat thanks you for updating, with the version you " ..
                 "now have, the addon's icon and name, and a link to what changed since the version you had.",
             "Adding to a flyout shows where it goes. With a spell, an item or anything else on the cursor, " ..
-                "point at the + of a button that has a flyout: the flyout opens with a gap at its end and what " ..
-                "you carry faintly in it. Move along the flyout and the gap follows, the icons parting around it; " ..
-                "let go and it goes there. Over the middle of an icon, that icon lights up instead, and letting " ..
-                "go takes its place, as on a bar slot. Letting go on the + itself still adds it at the end.",
+                "point at the + of a button that has a flyout: the flyout opens with a gap nearest the button and " ..
+                "what you carry faintly in it. Move along the flyout and the gap follows, the icons parting " ..
+                "around it; let go and it goes there. Over the middle of an icon, that icon lights up instead, " ..
+                "and letting go takes its place, as on a bar slot. Letting go on the + itself puts it first, " ..
+                "nearest the button.",
             "A flyout's bar button can be given its icon and name with a controller too: RB in Edit Flyout " ..
                 "(from the game's Edit Action Bar) opens the same window a right-click opens with a mouse, and so " ..
                 "does the Icon and Name button on the Controller page of the settings. In Edit Flyout, Show or " ..

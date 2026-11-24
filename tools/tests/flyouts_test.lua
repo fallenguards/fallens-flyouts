@@ -875,33 +875,31 @@ do
     local function tick() for _ = 1, 40 do Move.Tick(0.02) end end
     carry(503)
     local p, tab = onPlus()
-    check(p ~= nil and menu:IsShown() and p.gap == 4 and p.ghost.shown ~= false and p.ghost.icon.texture == 503
-        and p.catcher:IsShown(), "pointed at the plus, the flyout opens, what is carried faintly in a gap at its end")
     tick()
-    check(p.gap == 4 and p.target == nil, "while the cursor stays on the plus the gap stays at the end")
+    check(p ~= nil and menu:IsShown() and p.gap == 1 and p.ghost.shown ~= false and p.ghost.icon.texture == 503
+        and p.catcher:IsShown() and along(entry(one, 1)) == slot(2),
+        "pointed at the plus, the flyout opens, what is carried faintly in a gap nearest the button, where the plus is")
+    check(p.gap == 1 and p.target == nil, "while the cursor stays on the plus the gap stays there")
     -- His words (2026-11-24): "when i try to replace, it just bounces out of my way". On the way to the
     -- first icon's middle the cursor crosses its edge: nothing moves, and its middle takes the drop.
     tab.over, p.catcher.over = false, true
-    W.mouseX, W.mouseY = point(0.05)
+    W.mouseX, W.mouseY = point(1.05)
     Move.Tick(0.02)
-    check(p.gap == 4 and along(entry(one, 1)) == slot(1), "passing an icon's edge moves nothing")
-    W.mouseX, W.mouseY = point(0.3)
+    check(p.gap == 1 and along(entry(one, 1)) == slot(2), "passing an icon's edge moves nothing")
+    W.mouseX, W.mouseY = point(1.3)
     Move.Tick(0.02)
-    check(p.target == 1 and entry(one, 1).lit and p.gap == 4 and along(entry(one, 1)) == slot(1),
+    check(p.target == 1 and entry(one, 1).lit and p.gap == 1 and along(entry(one, 1)) == slot(2),
         "most of an icon takes the drop as a replacement at once, and it stays where it is")
     -- resting between two icons: they part there after a moment
-    W.mouseX, W.mouseY = point(1.02)
+    W.mouseX, W.mouseY = point(2.02)
     Move.Tick(0.1)
     Move.Tick(0.2)
-    check(p.gap == 4 and p.between == 2, "between the first icon and the second, nothing moves for a moment")
+    check(p.gap == 1 and p.between == 2, "between the first icon and the second, nothing moves for a moment")
     Move.Tick(0.1)
     check(p.gap == 2 and p.between == nil, "after a rest of 0.35 s there, Android's first wait, the gap goes there")
-    -- off the plus, along the flyout
-    tab.over, p.catcher.over = false, true
-    W.mouseX, W.mouseY = point(1.02)
     tick()
     check(p.gap == 2 and p.target == nil and along(entry(one, 1)) == slot(1) and along(entry(one, 2)) == slot(3)
-        and along(entry(one, 3)) == slot(4), "between the first icon and the second, the gap goes there and the icons part")
+        and along(entry(one, 3)) == slot(4), "the gap between the first icon and the second, the icons parted round it")
     W.mouseX, W.mouseY = point(2.5)
     tick()
     check(p.target == 2 and entry(one, 2).lit and not entry(one, 1).lit and p.ghost.shown == false,
@@ -918,20 +916,20 @@ do
     carry(504)
     p, tab = onPlus()
     tab.over, p.catcher.over = false, true
-    W.mouseX, W.mouseY = point(2.5)
+    W.mouseX, W.mouseY = point(3.5)
     tick()
-    check(p.target == 3, "over the third icon's middle")
+    check(p.target == 3, "over the third icon's middle (the gap still nearest the button)")
     p.catcher.scripts.OnReceiveDrag(p.catcher)
     flushAll()
     check(order() == "101 503 504 502" and W.cursor ~= nil and W.cursor[4] == 501,
         "let go, it takes that icon's place, and the icon it took the place of is on the cursor")
     if menu:IsShown() then tap("ESCAPE") end
-    -- let go on the plus at once: at the end, as ever
+    -- let go on the plus at once: first, nearest the button
     carry(505)
     p, tab = onPlus()
     tab.scripts.OnReceiveDrag(tab)
     flushAll()
-    check(order() == "101 503 504 502 505" and W.cursor == nil, "let go on the plus itself, it goes in at the end, as ever")
+    check(order() == "505 101 503 504 502" and W.cursor == nil, "let go on the plus itself, it goes in first, nearest the button")
     if menu:IsShown() then tap("ESCAPE") end
     -- the cursor away from the plus and the flyout: it shuts as it was
     carry(506)
