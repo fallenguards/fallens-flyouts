@@ -5812,7 +5812,8 @@ do
     end
     -- His words (2026-11-24): "the whats new box needs to smart resize up to its current size and then have a
     -- scroll", and "make background for the whatsnew opaque."
-    Welcome.ShowChanges()
+    -- a version of a single line (1.1.2): a few lines whatever the version in use
+    Welcome.ShowChanges("1.1.1", "1.1.2")
     flushAll()
     local short, listed = news.h, news.page.content.h
     check(short ~= nil and short < Welcome.NEWS_H and listed == short - Welcome.NEWS_AROUND,
