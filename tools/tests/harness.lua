@@ -64,6 +64,9 @@ end
 Frame.RegisterUnitEvent = Frame.RegisterEvent
 function Frame:UnregisterEvent(event) if self.events then self.events[event] = nil end end
 function Frame:SetSize(w, h) self.w, self.h = w, h end
+-- a button lit as under the mouse, and let go of
+function Frame:LockHighlight() self.lit = true end
+function Frame:UnlockHighlight() self.lit = false end
 function Frame:SetWidth(w) self.w = w end
 function Frame:SetHeight(h) self.h = h end
 function Frame:GetSize() return self.w or 10, self.h or 10 end

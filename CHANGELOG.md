@@ -3,6 +3,7 @@
 ## [1.1.7] - 2026-11-24
 
 ### Added
+- Adding to a flyout shows where it goes. With a spell, an item or anything else on the cursor, point at the + of a button that has a flyout: the flyout opens with a gap at its end and what you carry faintly in it. Move along the flyout and the gap follows, the icons parting around it; let go and it goes there. Over the middle of an icon, that icon lights up instead, and letting go takes its place, as on a bar slot. Letting go on the + itself still adds it at the end.
 - A flyout's bar button can be given its icon and name with a controller too: RB in Edit Flyout (from the game's Edit Action Bar) opens the same window a right-click opens with a mouse, and so does the Icon and Name button on the Controller page of the settings. In Edit Flyout, Show or Hide Background moves to LB.
 - A gray hint at the foot of a flyout's bar button tooltip: right-click (or RB in Edit Flyout) to change what the button shows, its icon, tooltip and cooldown, and its name. Show hints in tooltips, under General in the settings, turns these hints off for the whole account, the one on a flyout's icons too.
 - Under Size and background in the settings (`/ff`): a Match Base Icon Size button, which makes a flyout's icons as large as the icon of the bar button it opens from; Show the flyout background, to draw the flyout without the background behind its icons; and Background opacity, how see-through that background is.

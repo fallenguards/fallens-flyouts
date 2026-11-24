@@ -840,6 +840,104 @@ Move.Drop()
 settle()
 check(order() == "101 501 502", "and back")
 
+print("carried onto the plus of a flyout's button, the flyout opens with a gap where it goes")
+do
+    -- His words (2026-11-24): "is there a reason when adding spells to an existing flyout we don't show the
+    -- full preview so we can decide what order to put it in right away??", and of how a drop chooses between
+    -- putting it in and taking an icon's place, over the middle of an icon replacing it and anywhere else
+    -- putting it in: "obviously yes the way you said it.."
+    if menu:IsShown() then tap("ESCAPE") end
+    local Art = NS.Art
+    -- a point that many places along the flyout (0.5: the first icon's middle)
+    local function point(r)
+        local d, s = r * (Art.ICON + Art.NEXT) + Art.FIRST - Art.NEXT / 2, menu:GetEffectiveScale()
+        local x, y = (menu.rect[1] + menu.rect[2]) / 2, (menu.rect[3] + menu.rect[4]) / 2
+        if unitOne.way == "UP" then y = menu.rect[4] + d end
+        if unitOne.way == "DOWN" then y = menu.rect[3] - d end
+        if unitOne.way == "RIGHT" then x = menu.rect[1] + d end
+        if unitOne.way == "LEFT" then x = menu.rect[2] - d end
+        return x * s, y * s
+    end
+    local function carry(id)
+        W.cursor = { "spell", 7, "spell", id, id }
+        fire("CURSOR_CHANGED")
+        flushAll()
+    end
+    local function onPlus()
+        local tab = plus()
+        local x, y = tab:GetCenter()
+        local s = tab:GetEffectiveScale()
+        W.mouseX, W.mouseY = x * s, y * s
+        tab.over = true
+        tab.scripts.OnEnter(tab)
+        return Move.Preview(), tab
+    end
+    local function tick() for _ = 1, 40 do Move.Tick(0.02) end end
+    carry(503)
+    local p, tab = onPlus()
+    check(p ~= nil and menu:IsShown() and p.gap == 4 and p.ghost.shown ~= false and p.ghost.icon.texture == 503
+        and p.catcher:IsShown(), "pointed at the plus, the flyout opens, what is carried faintly in a gap at its end")
+    tick()
+    check(p.gap == 4 and p.target == nil, "while the cursor stays on the plus the gap stays at the end")
+    -- off the plus, along the flyout
+    tab.over, p.catcher.over = false, true
+    W.mouseX, W.mouseY = point(1.02)
+    tick()
+    check(p.gap == 2 and p.target == nil and along(entry(one, 1)) == slot(1) and along(entry(one, 2)) == slot(3)
+        and along(entry(one, 3)) == slot(4), "between the first icon and the second, the gap goes there and the icons part")
+    W.mouseX, W.mouseY = point(2.5)
+    tick()
+    check(p.target == 2 and entry(one, 2).lit and not entry(one, 1).lit and p.ghost.shown == false,
+        "over the middle of an icon, that icon lights up instead: a drop there takes its place")
+    W.mouseX, W.mouseY = point(1.5)
+    tick()
+    check(p.gap == 2 and p.target == nil and not entry(one, 2).lit, "back over the gap, it goes in there again")
+    p.catcher.scripts.OnReceiveDrag(p.catcher)
+    flushAll()
+    check(order() == "101 503 501 502" and W.cursor == nil and Move.Preview() == nil and menu:IsShown(),
+        "let go, it goes in where the gap was, and the flyout stays open to show it")
+    tap("ESCAPE")
+    -- over the middle of an icon: it takes that icon's place, and the one it took the place of is carried
+    carry(504)
+    p, tab = onPlus()
+    tab.over, p.catcher.over = false, true
+    W.mouseX, W.mouseY = point(2.5)
+    tick()
+    check(p.target == 3, "over the third icon's middle")
+    p.catcher.scripts.OnReceiveDrag(p.catcher)
+    flushAll()
+    check(order() == "101 503 504 502" and W.cursor ~= nil and W.cursor[4] == 501,
+        "let go, it takes that icon's place, and the icon it took the place of is on the cursor")
+    if menu:IsShown() then tap("ESCAPE") end
+    -- let go on the plus at once: at the end, as ever
+    carry(505)
+    p, tab = onPlus()
+    tab.scripts.OnReceiveDrag(tab)
+    flushAll()
+    check(order() == "101 503 504 502 505" and W.cursor == nil, "let go on the plus itself, it goes in at the end, as ever")
+    if menu:IsShown() then tap("ESCAPE") end
+    -- the cursor away from the plus and the flyout: it shuts as it was
+    carry(506)
+    p, tab = onPlus()
+    tab.over = false
+    p.catcher.over = false
+    tick()
+    check(Move.Preview() == nil and not menu:IsShown() and along(entry(one, 2)) == slot(2) and not p.catcher:IsShown(),
+        "the cursor away from the plus and the flyout, it shuts, every icon in its own place")
+    W.cursor = nil
+    fire("CURSOR_CHANGED")
+    flushAll()
+    -- as it was, for what follows: 101 501 502
+    local record = NS.Flyouts.At("ActionButton1")
+    for i = #record.entries, 1, -1 do
+        local id = record.entries[i].id
+        if id ~= 101 and id ~= 502 then NS.Flyouts.Remove(record, i) end
+    end
+    NS.Flyouts.Stack(W.frames.ActionButton1, { kind = "spell", id = 501 })
+    NS.Flyouts.Move(record, 3, 2)
+    check(order() == "101 501 502", "the flyout as it was: " .. order())
+end
+
 print("dragged out of the flyout it comes off, as off a bar")
 show()
 drag(entry(one, 3))

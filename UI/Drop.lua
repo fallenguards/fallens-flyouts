@@ -18,7 +18,7 @@ local TEXT = {
     full = "Flyout is full",
     kind = "Only spells, items, toys, mounts and macros go in a flyout.",
 }
-D.GROW_FROM, D.BADGE_OUT, D.BADGE_PAST = GROW_FROM, BADGE_OUT, BADGE_PAST
+D.GROW_FROM, D.BADGE_OUT, D.BADGE_PAST, D.TEXT = GROW_FROM, BADGE_OUT, BADGE_PAST, TEXT
 -- While a spell is dragged the game lifts its bars to the top layer. The plus
 -- stands there too, at a level over every bar button and the frames on it.
 local LAYER, LEVEL = "TOOLTIP", 9000
@@ -52,6 +52,9 @@ local function TakeDrop(tab)
     -- an icon dragged out of this button's own flyout and let go on its plus: it stays in
     local own = F.At(tab.button:GetName())
     if own and ns.Move and ns.Move.PutBack(own) then return ClearCursor() end
+    -- its flyout open with a gap for it: into the gap, or in the place of the icon lit
+    local shown = ns.Move and ns.Move.Preview()
+    if shown and shown.tab == tab then return ns.Move.PreviewDrop() end
     local entry = D.Carried()
     if not entry then return ns.Warn(TEXT.kind) end
     local flyout, why = F.Stack(tab.button, entry)
@@ -141,8 +144,15 @@ local function LayPop(tab)
     pop.glow:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", Art.GLOW, -Art.GLOW)
 end
 
--- cursor on a tab: the slot grows, shows what goes in
+-- cursor on a tab: the slot grows, shows what goes in; on a button with a flyout, the flyout opens with a gap
+-- for it (UI/Move.lua)
 local function TabEnter(tab)
+    local preview = ns.Move and ns.Move.Preview()
+    if preview and preview.tab == tab then return end
+    if ns.Move and ns.Move.PreviewStart(tab) then
+        tab.badge:Hide()
+        return
+    end
     local entry = D.Carried()
     local flyout = F.At(tab.host)
     local full = flyout ~= nil and #F.Full(flyout) >= F.MAX
@@ -168,6 +178,9 @@ local function TabEnter(tab)
 end
 
 local function TabLeave(tab)
+    -- its flyout open for it: the gap follows the cursor on, and the flyout ends it (UI/Move.lua)
+    local preview = ns.Move and ns.Move.Preview()
+    if preview and preview.tab == tab and tab:IsShown() then return end
     if pop and pop.tab == tab then
         pop.tab = nil
         pop.pulse:Stop()
@@ -215,6 +228,7 @@ local function Place(tab, button)
 end
 
 function D.Hide()
+    if ns.Move and ns.Move.Preview() then ns.Move.PreviewEnd() end
     for _, tab in pairs(tabs) do
         TabLeave(tab)
         tab:Hide()
