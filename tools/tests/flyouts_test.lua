@@ -5630,8 +5630,8 @@ do
     NS.Arrange.Refresh()
     local w = NS.ProfileUI.panel.arrange
     local every = w.every
-    check(every ~= nil and every:IsShown() and every.text.text == "Every flyout" and every.points[1][2] == w.keysWait
-        and w.banners[1].points[1][2] == every, "an Every flyout bar stands first, above each flyout's own")
+    check(every ~= nil and every:IsShown() and every.text.text == "Default flyout binds" and every.points[1][2] == w.keysWait
+        and w.banners[1].points[1][2] == every, "a Default flyout binds bar stands first, above each flyout's own")
     every.scripts.OnClick(every)
     check(NS.Arrange.KeysOpen("every"), "a press opens it")
     local row = every.rows[1]

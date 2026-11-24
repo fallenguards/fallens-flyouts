@@ -32,11 +32,12 @@ local WAIT_H = 14
 local GROW = 1.25
 local TEXT = {
     keysHead = "Flyout keys",
-    keysNote = "Every flyout picks its icons with the keys of their spots: set those under Every flyout. A "
+    keysNote = "Every flyout picks its icons with the keys of their spots: set those under Default flyout binds. A "
         .. "flyout's own bar gives an icon a key of its own in that flyout. Click a key and press the new one; "
         .. "right-click gives the usual one back.",
-    -- the spots of every flyout, above each flyout's own
-    every = "Every flyout",
+    -- the spots of every flyout, above each flyout's own. His words (2026-11-24): "why call it every flyout.
+    -- why not \"Default flyout binds\""
+    every = "Default flyout binds",
     spot = "Spot %d",
     spotTip = "Click, then press the key that picks this spot of every open flyout. Right-click gives it its "
         .. "usual key, %s.",

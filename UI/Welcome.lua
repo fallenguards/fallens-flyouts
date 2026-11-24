@@ -334,12 +334,12 @@ end
 W.CHANGES = {
     { version = "1.1.7", date = "2026-11-24", parts = {
         { name = "Added", items = {
-            "Every flyout key in one place: under Flyout keys in the settings (/ff), an Every flyout bar " ..
-                "above each flyout's own sets the keys of the twelve spots of every flyout, the same keys as the " ..
-                "game's Keybindings options. Click a key and press the new one; right-click gives the usual one " ..
-                "back. A key that did something else is taken from it, as in the game's own options, and a red " ..
-                "line says what it did. The Fallen's Flyouts section of the game's Keybindings options now says " ..
-                "that every flyout key is in the addon's settings.",
+            "Every flyout key in one place: under Flyout keys in the settings (/ff), a Default flyout binds " ..
+                "bar above each flyout's own sets the keys of the twelve spots of every flyout, the same keys as " ..
+                "the game's Keybindings options. Click a key and press the new one; right-click gives the usual " ..
+                "one back. A key that did something else is taken from it, as in the game's own options, and a " ..
+                "red line says what it did. The Fallen's Flyouts section of the game's Keybindings options now " ..
+                "says that every flyout key is in the addon's settings.",
             "A Feedback page in the settings, beside Automatic Flyouts and Controller. Report a Bug and " ..
                 "Suggest an Idea make a link to a new issue on GitHub with the details of your game already " ..
                 "filled in, ready to copy into your browser; What's New shows what changed in this version. Under " ..
