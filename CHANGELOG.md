@@ -8,7 +8,7 @@
 - Default flyout binds in `/ff` set the keys every flyout picks with, above each flyout's own keys.
 - A Feedback page in the settings has Report a Bug, Suggest an Idea, and What's New. Reports come with your setup filled in, and `/ff status` opens the page.
 - Match Base Icon Size, Show the flyout background, and Background opacity settings.
-- A hint at the foot of a flyout button's tooltip on changing what it shows. Show hints in tooltips turns it off.
+- A hint at the foot of a flyout button's tooltip says how to change what it shows. You can turn hints off in `/ff`.
 - With a controller, RB in Edit Flyout changes a flyout button's icon and name, and LB shows or hides the background.
 
 ### Changed
