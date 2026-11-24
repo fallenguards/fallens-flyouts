@@ -5788,7 +5788,7 @@ do
     check(n == 1 and line:find("|TInterface\\AddOns\\FallensFlyouts\\media\\icon:16:16|t Thanks for updating "
         .. "Fallen's Flyouts to v" .. version .. ".", 1, true) == 1,
         "the line in chat: the addon's icon, then thanks for updating Fallen's Flyouts to this version: " .. tostring(line))
-    check(line:find("|Haddon:FallensFlyouts:changes:1.1.4|h|cff71d5ff[Here]|r|h's what changed.", 1, true) ~= nil,
+    check(line:find("|Haddon:FallensFlyouts:changes:1.1.4:|h|cff71d5ff[Here]|r|h's what changed.", 1, true) ~= nil,
         "and [Here]'s what changed, [Here] a link that knows the version seen last")
     check(FallensFlyoutsDB.seenVersion == version, "the version is seen now")
     login("Player-1-0000000V")
@@ -5832,13 +5832,26 @@ do
     check(news.h == Welcome.NEWS_H and news.page.content.h > news.h - Welcome.NEWS_AROUND,
         ("many lines, it stops at its height and they scroll (%s)"):format(tostring(news.h)))
     check(news.ground ~= nil, "its ground is opaque, under the game's panel art")
+    -- His words (2026-11-24): "i need via dev to see what the whatsnew message in chat will look like so i can
+    -- click and view it there too": a line can speak of a version the toc does not say yet
+    W.chat = {}
+    local newest, before = Welcome.CHANGES[1].version, Welcome.CHANGES[2].version
+    Welcome.Announce(before, newest)
+    local said = W.chat[#W.chat] or ""
+    check(said:find("updating Fallen's Flyouts to v" .. newest .. ".", 1, true) ~= nil
+        and said:find("changes:" .. before .. ":" .. newest .. "|h", 1, true) ~= nil,
+        "the dev preview's line names the newest version in the changelog: " .. said)
+    EventRegistry:TriggerEvent("SetItemRef", "addon:FallensFlyouts:changes:" .. before .. ":" .. newest, "[Here]", "LeftButton")
+    check(Welcome.NewsText():find(Welcome.CHANGES[1].parts[1].items[1], 1, true) ~= nil
+        and not Welcome.NewsText():find("v" .. before, 1, true),
+        "and its link opens what changed in that version, though the toc says " .. version)
     news.okay.scripts.OnClick(news.okay)
     check(not news:IsShown(), "Okay closes it")
     -- someone who had it before there was such a line: the version in use's changes
     FallensFlyoutsDB.seenVersion = nil
     login("Player-1-0000000U")
     n, line = thanks()
-    check(n == 1 and line:find("|Haddon:FallensFlyouts:changes:|h", 1, true) ~= nil and FallensFlyoutsDB.seenVersion == version,
+    check(n == 1 and line:find("|Haddon:FallensFlyouts:changes::|h", 1, true) ~= nil and FallensFlyoutsDB.seenVersion == version,
         "one who had the addon before this line was there is thanked too")
     check(#NS.Welcome.Since(nil) == 1 and NS.Welcome.Since(nil)[1].version == version, "and shown this version's changes")
     -- someone new: their welcome, and no thanks

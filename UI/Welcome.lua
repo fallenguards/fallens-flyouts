@@ -222,21 +222,24 @@ do
     end
     W.Newer = Newer
 
-    -- what changed after `from` up to the version in use, newest first; without `from`, this version's
-    function W.Since(from)
-        local now, out = W.Version(), {}
+    -- what changed after `from` up to the version in use (or `upTo`), newest first; without `from`, that
+    -- version's alone
+    function W.Since(from, upTo)
+        local now, out = upTo or W.Version(), {}
         for _, entry in ipairs(W.CHANGES or {}) do
-            local upTo = not Newer(entry.version, now)
+            local notLater = not Newer(entry.version, now)
             local after = from and Newer(entry.version, from) or (not from and entry.version == now)
-            if upTo and after then out[#out + 1] = entry end
+            if notLater and after then out[#out + 1] = entry end
         end
         return out
     end
 
-    -- the line in chat
-    function W.Announce(from)
-        local link = ("|H%s:%s|h%s[%s]|r|h"):format(LINK, from or "", LINK_COLOR, SAY.here)
-        DEFAULT_CHAT_FRAME:AddMessage(SAY.thanks:format(ICON, W.Version(), link))
+    -- The line in chat. `as`: the version it speaks of, where that is not the one in use: the dev preview of
+    -- a version before the toc says it (his words, 2026-11-24: "i need via dev to see what the whatsnew
+    -- message in chat will look like so i can click and view it there too").
+    function W.Announce(from, as)
+        local link = ("|H%s:%s:%s|h%s[%s]|r|h"):format(LINK, from or "", as or "", LINK_COLOR, SAY.here)
+        DEFAULT_CHAT_FRAME:AddMessage(SAY.thanks:format(ICON, as or W.Version(), link))
     end
 
     local news
@@ -368,9 +371,9 @@ do
     W.NEWS_H = NEWS_H
 
     -- the window, with what changed since `from`
-    function W.ShowChanges(from)
+    function W.ShowChanges(from, upTo)
         BuildNews()
-        local entries = W.Since(from)
+        local entries = W.Since(from, upTo)
         local rows = W.ChangesRows(entries)
         news.said = W.ChangesText(entries)
         if not news:IsShown() then
@@ -390,9 +393,9 @@ do
     -- the link clicked in chat (the game hands an addon's links on through its event registry)
     if EventRegistry and EventRegistry.RegisterCallback then
         EventRegistry:RegisterCallback("SetItemRef", function(_, link)
-            local kind, addon, what, from = strsplit(":", tostring(link))
+            local kind, addon, what, from, as = strsplit(":", tostring(link))
             if kind == "addon" and addon == "FallensFlyouts" and what == "changes" then
-                xpcall(W.ShowChanges, geterrorhandler(), from ~= "" and from or nil)
+                xpcall(W.ShowChanges, geterrorhandler(), from ~= "" and from or nil, as ~= "" and as or nil)
             end
         end, W)
     end
