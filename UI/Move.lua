@@ -277,9 +277,14 @@ end
 -- its place, as on a bar slot. Out of a fight, and not for icons around their button (no line to slide
 -- along) nor a flyout that fills itself.
 local catcher, ghost
--- the part of an icon, from its middle out, over which a drop takes its place; the rest of it and the room
--- between icons put it in
-local MIDDLE = 0.3
+-- As a phone's home screen does it, between dropping into an app and moving apps about. His words
+-- (2026-11-24), of the first tuning, where an edge of an icon moved the gap at once: "when i try to replace,
+-- it just bounces out of my way", then "honestly i feel like this is basically standard with app movement
+-- on phones, no? ... so maybe we just need to tune our sensitvity." The way to an icon's middle crosses its
+-- edge first, so nothing moves the moment the cursor passes: the icons part only after it rests between
+-- two of them for REST seconds, and most of an icon (all but RIM of it at each end) takes a drop as a
+-- replacement at once.
+local RIM, REST = 0.15, 0.3
 -- how long the cursor may be off the plus and the flyout before the flyout shuts again
 local AWAY = 0.25
 -- the catcher's reach past the strip, in the strip's measure
@@ -329,8 +334,10 @@ local function Parted(j, gap)
     return j + 1
 end
 
--- what a drop does with the cursor at that point: the gap goes there, or an icon there is to be replaced
-local function Aim(p, x, y)
+-- What a drop does with the cursor at that point, the layout as drawn: over an icon's body that icon is to
+-- be replaced; on the gap, it goes into the gap; between two icons (`between`, the place it would take) it
+-- goes in there, and after a rest there the gap moves there and the icons part.
+local function Aim(p, x, y, elapsed)
     -- on the plus it came by, till it first leaves it: the end
     if not p.left then
         local dx, dy = x - p.px, y - p.py
@@ -338,28 +345,46 @@ local function Aim(p, x, y)
         p.left = true
     end
     local r = Along(p.unit, x, y)
-    if not r then return end
+    if not r then
+        p.target, p.between = nil, nil
+        return
+    end
     local slots = p.n + (p.full and 0 or 1)
-    if r < 0 then r = 0 end
+    local s, f
     if r >= slots then
-        if not p.full then p.gap, p.target = slots, nil end
-        return
-    end
-    local s = math.floor(r) + 1
-    local f = r - math.floor(r)
-    if not p.full and s == p.gap then
-        p.target = nil
-        return
-    end
-    local i = s
-    if not p.full and s > p.gap then i = s - 1 end
-    if math.abs(f - 0.5) <= MIDDLE then
-        p.target = i
-    elseif not p.full then
-        p.gap, p.target = s, nil
+        s, f = slots, 1
     else
-        p.target = nil
+        r = math.max(0, r)
+        s = math.floor(r) + 1
+        f = r - (s - 1)
     end
+    -- the icon drawn at that place; none on the gap
+    local icon = s
+    if not p.full then
+        if s == p.gap then icon = nil elseif s > p.gap then icon = s - 1 end
+    end
+    if not icon then
+        p.target, p.between, p.rest = nil, nil, 0
+        return
+    end
+    if f > RIM and f < 1 - RIM then
+        p.target, p.between, p.rest = icon, nil, 0
+        return
+    end
+    p.target = nil
+    if p.full then
+        p.between = nil
+        return
+    end
+    -- before this icon, or after it
+    local at = f <= RIM and icon or icon + 1
+    if at == p.gap then
+        p.between, p.rest = nil, 0
+        return
+    end
+    if p.between ~= at then p.between, p.rest = at, 0 end
+    p.rest = p.rest + (elapsed or 0)
+    if p.rest >= REST then p.gap, p.between, p.rest = at, nil, 0 end
 end
 
 -- one frame of the icons parting round the gap, the gap's icon in it, and the icon to be replaced lit
@@ -435,7 +460,8 @@ function M.PreviewDrop()
         ns.Warn(p.full and F.TEXT.full or ns.Drop.TEXT.kind)
         return true
     end
-    local gap, button = p.gap, p.button
+    -- between two icons that have not parted yet: in there all the same
+    local gap, button = p.between or p.gap, p.button
     M.PreviewEnd(true)
     local flyout, why = F.Stack(button, entry)
     if not flyout then
@@ -479,7 +505,8 @@ local function PreviewTick(elapsed)
         p.away = p.away + elapsed
         if p.away > AWAY then return M.PreviewEnd() end
     end
-    Aim(p, GetCursorPosition())
+    local x, y = GetCursorPosition()
+    Aim(p, x, y, elapsed)
     Lay(p, elapsed)
 end
 

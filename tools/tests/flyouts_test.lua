@@ -879,6 +879,22 @@ do
         and p.catcher:IsShown(), "pointed at the plus, the flyout opens, what is carried faintly in a gap at its end")
     tick()
     check(p.gap == 4 and p.target == nil, "while the cursor stays on the plus the gap stays at the end")
+    -- His words (2026-11-24): "when i try to replace, it just bounces out of my way". On the way to the
+    -- first icon's middle the cursor crosses its edge: nothing moves, and its middle takes the drop.
+    tab.over, p.catcher.over = false, true
+    W.mouseX, W.mouseY = point(0.05)
+    Move.Tick(0.02)
+    check(p.gap == 4 and along(entry(one, 1)) == slot(1), "passing an icon's edge moves nothing")
+    W.mouseX, W.mouseY = point(0.3)
+    Move.Tick(0.02)
+    check(p.target == 1 and entry(one, 1).lit and p.gap == 4 and along(entry(one, 1)) == slot(1),
+        "most of an icon takes the drop as a replacement at once, and it stays where it is")
+    -- resting between two icons: they part there after a moment
+    W.mouseX, W.mouseY = point(1.02)
+    Move.Tick(0.1)
+    check(p.gap == 4 and p.between == 2, "between the first icon and the second, nothing moves at first")
+    Move.Tick(0.25)
+    check(p.gap == 2 and p.between == nil, "after a rest there, the gap goes there")
     -- off the plus, along the flyout
     tab.over, p.catcher.over = false, true
     W.mouseX, W.mouseY = point(1.02)
