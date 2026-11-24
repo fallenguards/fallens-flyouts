@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.7] - 2026-11-24
+
+### Changed
+- The settings are easier to find your way in. What only a controller needs has a page of its own, Controller, under Fallen's Flyouts in the game's options beside Automatic Flyouts, and says so at the top: Open around the button in gamepad mode, Pick with the face buttons, Round background behind it, and Arrange a flyout (moving icons without a drag). The settings for every flyout (Keep a spell's ranks in order, Hide items I have none of, Press a flyout's key again for the last one used) are under General on the addon's own page. Until now all of them stood together under Arrange a flyout.
+
 ## [1.1.6] - 2026-11-23
 
 ### Added

@@ -964,7 +964,20 @@ SmartNavigation = { UpdateParent = function(_, frame) W.cursorRead = frame end }
 function SmartNavigation_MarkFrameIgnored(frame) frame.smartNavigationIgnored = true end
 function SmartNavigation_ClearIgnoreStatus(frame) frame.smartNavigationIgnored = nil end
 -- picking up: the bars' lock, the pick up key, and what lands on the cursor
-Settings = { GetValue = function(name) return name == "lockActionBars" and W.locked == true end }
+-- The game's options: an addon's page in its list, and the pages under it, in the order they are listed
+-- (W.subcategories); a page opened by its category's id (W.opened).
+Settings = {
+    GetValue = function(name) return name == "lockActionBars" and W.locked == true end,
+    RegisterCanvasLayoutCategory = function(frame, name)
+        return { frame = frame, name = name, GetID = function() return name end }
+    end,
+    RegisterAddOnCategory = function(category) W.category = category end,
+    RegisterCanvasLayoutSubcategory = function(parent, frame, name)
+        W.subcategories = W.subcategories or {}
+        W.subcategories[#W.subcategories + 1] = { parent = parent, frame = frame, name = name }
+    end,
+    OpenToCategory = function(id) W.opened = id end,
+}
 -- the unit under the mouse, where a test puts one there
 function UnitExists(unit)
     return unit == "player" or (unit == "mouseover" and W.mouseover ~= nil) or (unit == "target" and W.target ~= nil)

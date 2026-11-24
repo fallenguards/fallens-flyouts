@@ -222,7 +222,7 @@ local function Fit(page, last)
     if page.scroll.UpdateScrollChildRect then page.scroll:UpdateScrollChildRect() end
 end
 ns.OptionsFit = Fit
-function UI.Fit() Fit(panel, panel.arrange and panel.arrange.plate) end
+function UI.Fit() Fit(panel, panel.arrange and panel.arrange.foot) end
 
 -- A page scrolls inside the game's window (this one, and any other of the addon's): what it holds can
 -- be taller than the window, and nothing of it is drawn outside. The game's own slim scroll bar, there
@@ -338,7 +338,7 @@ function UI.Build()
     local smaller, larger = Make(MORE[1]), Make(MORE[2])
     smaller:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -GAP * 2)
     larger:SetPoint("LEFT", smaller, "RIGHT", GAP / 2, 0)
-    -- under it: arranging a flyout without a drag (Options/Arrange.lua)
+    -- under it: General and Flyout keys (Options/Arrange.lua)
     ns.Arrange.Build(panel, smaller, content)
     panel.built = true
     P.OnChange(UI.Refresh)

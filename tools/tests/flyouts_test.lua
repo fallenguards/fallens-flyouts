@@ -546,15 +546,15 @@ do
             end
         end
     end
-    check(inside >= 20 and #outside == 0, ("all %d of the page's controls are inside it; outside: %s"):format(inside,
+    check(inside >= 12 and #outside == 0, ("all %d of the page's controls are inside it; outside: %s"):format(inside,
         table.concat(outside, ", ")))
-    -- it scrolls as far as its lowest control, the last check box
-    local last = page.arrange.plate
+    -- it scrolls as far as its lowest line, the foot of the list of flyout keys
+    local last = page.arrange.foot
     content.rect, last.rect = { 0, 500, 1000, 999 }, { 0, 20, 300, 280 }
     scroll.h = 500
     NS.ProfileUI.Fit()
     check(content.h == 1000 - 280 + 16 and scroll:GetVerticalScrollRange() == content.h - 500,
-        ("what scrolls is as tall as the page's content, down to its last check box: %s"):format(tostring(content.h)))
+        ("what scrolls is as tall as the page's content, down to its lowest line: %s"):format(tostring(content.h)))
     content.rect, last.rect = nil, nil
 end
 
@@ -1124,21 +1124,45 @@ do
     tap("E")
 end
 
-print("arranging a flyout without a drag, from the settings page")
+print("the settings: General on the addon's page, a Controller page of its own for what only a controller needs")
 do
-    local Arrange, w = NS.Arrange, page.arrange
+    -- His words (2026-11-24): "this is a very confusing section. if we have a section only relevant to
+    -- console players, then 1: it should be cleanly separated (aka like another tab in the dropdown like
+    -- automatic flyouts are) and 2, it should be clearly labelled as such... i have no idea what i'm
+    -- looking at there, and why things like keep a spell ranks in order button etc are under arrange a
+    -- flyout."
+    local main = page.arrange
+    check(main.ranks ~= nil and main.hide ~= nil and main.twice ~= nil and main.icons == nil and main.around == nil
+        and main.plate == nil and main.faces == nil,
+        "the addon's page has the three settings for every flyout, and nothing of a controller's")
+    local over = select(2, main.ranks:GetPoint())
+    check(over ~= nil and over.text == "General", "they stand under a heading of their own, General: "
+        .. tostring(over and over.text))
+    local pad = NS.ControllerUI.panel
+    local listed, auto
+    for i, sub in ipairs(W.subcategories or {}) do
+        if sub.frame == pad then listed = i end
+        if sub.frame == NS.AutoUI.panel then auto = i end
+    end
+    local sub = listed and W.subcategories[listed]
+    check(sub ~= nil and sub.name == "Controller" and sub.parent == W.category and auto ~= nil and listed > auto,
+        "the Controller page is a page of its own under the addon's, named Controller, listed after Automatic Flyouts")
+    NS.ControllerUI.Build()
+    local w = pad.arrange
+    check(w ~= nil and w.around ~= nil and w.faces ~= nil and w.plate ~= nil and w.ranks == nil and w.hide == nil,
+        "it holds the three settings of gamepad mode, and none of the rest")
+    local Arrange = NS.Arrange
     local function press(button) button.scripts.OnClick(button) end
-    check(w ~= nil and #w.icons == 12 and w.off ~= nil, "the page has the arrange row: twelve icon places, Previous, Next and Take Off")
+    check(w ~= nil and #w.icons == 12 and w.off ~= nil, "and the arrange row: twelve icon places, Previous, Next and Take Off")
     -- His words (2026-11-22): "ok leave it if needed for controllers. but put reminder there that you can
     -- simply drag spells onto each other where the \"+\" appears to create the flyouts so ppl dont think
     -- they HAVE to go through that ... for non controller users"
     local live = w.live and w.live.text or ""
-    check(live:find("With a mouse none of this is needed", 1, true) ~= nil and live:find("drag a spell, item or macro onto a bar button", 1, true) ~= nil
-        and live:find("where the + appears", 1, true) ~= nil and live:find("This section is for a controller.", 1, true) ~= nil,
-        "over it, a line for those with a mouse: a flyout is made by a drag onto the +, and this section is for a controller")
-    check(select(2, w.status:GetPoint()) == w.live, "the section's own line stands under that reminder")
+    check(live:find("Only for playing with a controller", 1, true) == 1 and live:find("none of this page is needed", 1, true) ~= nil
+        and live:find("onto a bar button, where the + appears", 1, true) ~= nil,
+        "its first words: only for a controller; with a mouse a flyout is made by a drag onto the +")
     -- the page up, as when it is being used: it follows what changes on the bars
-    page:Show()
+    pad:Show()
     flushAll()
     check(w.which.text == "1 of 1: Spell 101" and w.icons[3].shown and not w.icons[4].shown and not w.off:IsEnabled(),
         "it shows the flyout on the bars, an icon for each of its three")
@@ -1171,7 +1195,7 @@ do
     check(w.which.text == "1 of 2: Spell 101", "and round to the first again")
     NS.Flyouts.Remove(NS.Flyouts.At("ActionButton2"), 2)
     check(w.which.text == "1 of 1: Spell 101", "a flyout taken away elsewhere is gone from the page too")
-    page:Hide()
+    pad:Hide()
 end
 
 print("an upright bar whose other buttons are empty and hidden")
@@ -1501,7 +1525,7 @@ do
     check(ids(own) == "9101" and NS.Flyouts.At("ActionButton8") == own, "with none of the items it shows what is left: the spell")
     NS.Arrange.Refresh()
     local box = page.arrange.hide
-    check(box ~= nil and box:GetChecked(), "the settings page has a check box for it under Arrange, ticked")
+    check(box ~= nil and box:GetChecked(), "the settings page has a check box for it under General, ticked")
     -- what is saved is the whole
     fire("PLAYER_LOGOUT")
     check(own.all == nil and #own.entries == 12, "what is saved is the whole flyout")
@@ -1726,7 +1750,7 @@ do
     NS.Arrange.Refresh()
     local seen = {}
     for _ = 1, 16 do
-        page.arrange.turn.scripts.OnClick(page.arrange.turn)
+        NS.ControllerUI.panel.arrange.turn.scripts.OnClick(NS.ControllerUI.panel.arrange.turn)
         seen[unit.side .. ">" .. unit.way .. (unit.mid and " centered" or "")] = true
     end
     local kinds = 0
@@ -3716,10 +3740,11 @@ do
     stack("ActionButton1", 501)
     local _, plain = F2.At("ActionButton1")
     check(plain ~= nil and plain.radial == false, "a flyout on any other bar is a strip as ever")
-    local page = NS.Options and NS.Options.Page and NS.Options.Page()
-    if page and page.arrange and page.arrange.around then
-        check(page.arrange.around:GetChecked() == true and page.arrange.faces:GetChecked() == false, "the settings show both choices")
-    end
+    NS.ControllerUI.Build()
+    NS.Arrange.Refresh()
+    local padArrange = NS.ControllerUI.panel.arrange
+    check(padArrange.around:GetChecked() == true and padArrange.faces:GetChecked() == false,
+        "the Controller page shows both choices")
     -- His words (2026-11-21): "why would we not let users move an icon anywhere they want on the dial? why
     -- would they HAVE to swap with an existing one?" An icon stands on the spot it is put on, taken or
     -- empty, and the flyout itself, open in play, shows it there and picks it by the pad button of that side.

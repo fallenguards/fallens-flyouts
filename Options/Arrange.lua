@@ -1,8 +1,14 @@
 local _, ns = ...
 -- luacheck: read globals CreateFrame GameTooltip GetBindingText
 
--- The settings page's way to arrange a flyout without a drag: pick an icon,
--- then pick the place it goes. For a controller's cursor as much as a mouse.
+-- What the settings say of flyouts: on the addon's own page, General (the settings for every flyout) and
+-- Flyout keys; on the Controller page (Options/Controller.lua), what only a controller needs, the settings
+-- of gamepad mode and a way to arrange a flyout without a drag: pick an icon, then the place it goes.
+-- His words (2026-11-24), of the settings page's "Arrange a flyout": "this is a very confusing section. if
+-- we have a section only relevant to console players, then 1: it should be cleanly separated (aka like
+-- another tab in the dropdown like automatic flyouts are) and 2, it should be clearly labelled as such...
+-- i have no idea what i'm looking at there, and why things like keep a spell ranks in order button etc
+-- are under arrange a flyout."
 local A = {}
 ns.Arrange = A
 local F, Art = ns.Flyouts, ns.Art
@@ -34,10 +40,15 @@ local TEXT = {
         .. "its spot's key back.",
     keyOwn = "This is the icon's own key in this flyout.",
     keySpot = "This is the key of its spot, the same in every flyout.",
+    general = "General",
+    -- the Controller page: its name in the game's list, and its first words, for nobody to take it for the
+    -- way a flyout is made
+    pad = "Controller",
+    live = "Only for playing with a controller, in the game's gamepad mode. With a mouse and keyboard none of "
+        .. "this page is needed: drag a spell, item, toy, mount or macro onto a bar button, where the + appears, "
+        .. "and it becomes a flyout.",
+    padHead = "Gamepad mode",
     head = "Arrange a flyout",
-    -- for those with a mouse: nobody is to take this section for the way a flyout is made
-    live = "With a mouse none of this is needed: drag a spell, item or macro onto a bar button, where the + "
-        .. "appears, and it becomes a flyout. This section is for a controller.",
     note = "Pick an icon, then pick the place it goes. No drag needed.",
     none = "No flyout is on the bars.",
     which = "%d of %d: %s",
@@ -70,8 +81,8 @@ local TEXT = {
 }
 A.TEXT = TEXT
 
--- the page, and the part of it that scrolls: what is built here hangs on that
-local panel, holder
+-- the addon's page and the Controller page, and the part of each that scrolls: what is built hangs on that
+local panel, holder, padPage, padHolder
 local at, held = 1, nil
 
 -- the flyouts on the bars, in the order they are laid
@@ -184,34 +195,39 @@ end
 function A.KeysOpen(flyout) return opened[flyout] == true end
 
 function A.Refresh()
-    if not (panel and panel.arrange) then return end
-    local w = panel.arrange
-    local flyout, count = Current()
-    if flyout and held and not flyout.entries[held] then held = nil end
-    if not flyout then held = nil end
-    w.which:SetText(flyout and TEXT.which:format(at, count, F.Name(flyout.main)) or TEXT.none)
-    A.KeysRefresh()
-    w.prev:SetEnabled(count > 1)
-    w.next:SetEnabled(count > 1)
-    w.turn:SetEnabled(flyout ~= nil and F.UnitOf(flyout) ~= nil)
-    w.off:SetEnabled(held ~= nil)
-    w.ranks:SetChecked(F.Ranked())
-    w.hide:SetChecked(F.Hiding())
-    w.around:SetChecked(F.Around())
-    w.faces:SetChecked(F.Faces())
-    w.plate:SetChecked(F.Plate())
-    w.twice:SetChecked(F.Twice())
-    for i, button in ipairs(w.icons) do
-        local entry = flyout and flyout.entries[i]
-        button:SetShown(entry ~= nil)
-        if entry then button.icon:SetTexture(F.Icon(entry)) end
-        -- the picked one grows and keeps its ring
-        button:SetScale(held == i and GROW or 1)
-        button.ring:SetShown(held == i)
+    local w = panel and panel.arrange
+    if w then
+        A.KeysRefresh()
+        w.ranks:SetChecked(F.Ranked())
+        w.hide:SetChecked(F.Hiding())
+        w.twice:SetChecked(F.Twice())
     end
-    local picked = held and flyout and F.Name(flyout.entries[held])
-    w.status:SetText(picked and TEXT.held:format(picked) or TEXT.note)
-    if ns.ProfileUI and ns.ProfileUI.Fit then ns.ProfileUI.Fit() end
+    local p = padPage and padPage.arrange
+    if p then
+        local flyout, count = Current()
+        if flyout and held and not flyout.entries[held] then held = nil end
+        if not flyout then held = nil end
+        p.which:SetText(flyout and TEXT.which:format(at, count, F.Name(flyout.main)) or TEXT.none)
+        p.prev:SetEnabled(count > 1)
+        p.next:SetEnabled(count > 1)
+        p.turn:SetEnabled(flyout ~= nil and F.UnitOf(flyout) ~= nil)
+        p.off:SetEnabled(held ~= nil)
+        p.around:SetChecked(F.Around())
+        p.faces:SetChecked(F.Faces())
+        p.plate:SetChecked(F.Plate())
+        for i, button in ipairs(p.icons) do
+            local entry = flyout and flyout.entries[i]
+            button:SetShown(entry ~= nil)
+            if entry then button.icon:SetTexture(F.Icon(entry)) end
+            -- the picked one grows and keeps its ring
+            button:SetScale(held == i and GROW or 1)
+            button.ring:SetShown(held == i)
+        end
+        local picked = held and flyout and F.Name(flyout.entries[held])
+        p.status:SetText(picked and TEXT.held:format(picked) or TEXT.note)
+    end
+    if w and ns.ProfileUI and ns.ProfileUI.Fit then ns.ProfileUI.Fit() end
+    if p and ns.ControllerUI then ns.ControllerUI.Fit() end
 end
 
 -- A click on the key of icon i of a flyout: the left button waits for the key it is to have, or stops
@@ -276,8 +292,9 @@ local function ShowTip(self)
 end
 local function HideTip() GameTooltip:Hide() end
 
+-- the Controller page's buttons
 local function Button(label, tip, run)
-    local button = CreateFrame("Button", nil, holder, "UIPanelButtonTemplate")
+    local button = CreateFrame("Button", nil, padHolder, "UIPanelButtonTemplate")
     button:SetText(label)
     button:SetSize(math.max(BUTTON_FLOOR, (button:GetTextWidth() or 0) + CHROME), LINE)
     button.tip = tip
@@ -289,7 +306,7 @@ end
 
 -- an icon dressed as a flyout's own, pressed to pick it or its place
 local function Icon(i)
-    local button = CreateFrame("Button", nil, holder)
+    local button = CreateFrame("Button", nil, padHolder)
     button:SetSize(Art.ICON, Art.ICON)
     button.back = button:CreateTexture(nil, "BACKGROUND", nil, -1)
     button.back:SetAtlas(Art.NAMES.back)
@@ -416,14 +433,58 @@ function A.Plate(on)
     A.Refresh()
 end
 
+-- the game's own check box, after another on its line or under one, with its words and its tip
+local function Check(parent, text, tip, run, after, under)
+    local box = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    if under then
+        box:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -GAP / 2)
+    else
+        box:SetPoint("LEFT", after, "RIGHT", GAP * 2, 0)
+    end
+    local label = box.Text or box.text
+    if not label then
+        label = box:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        label:SetPoint("LEFT", box, "RIGHT", GAP / 2, 0)
+    end
+    label:SetText(text)
+    box.tip = tip
+    box:SetScript("OnClick", function(self) run(self:GetChecked() and true or false) end)
+    box:SetScript("OnEnter", ShowTip)
+    box:SetScript("OnLeave", HideTip)
+    return box, label
+end
+
+-- a heading as the page's others, `down` under what is above it
+local function Head(parent, text, above, down)
+    local head = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    head:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, down)
+    head:SetText(text)
+    return head
+end
+
+-- a flyout changed elsewhere shows here at once, on whichever page is up
+local watching = false
+local function Watch()
+    if watching then return end
+    watching = true
+    F.Watch(function(what)
+        if what == "laid" and ((panel and panel:IsVisible()) or (padPage and padPage:IsVisible())) then A.Refresh() end
+    end)
+end
+
+-- On the addon's page, under the size: General, the settings for every flyout, then the keys of each flyout.
 function A.Build(page, above, scrolled)
     if page.arrange then return end
     panel, holder = page, scrolled or page
     local w = {}
-    -- first the keys of each flyout: for everyone, where the section under it is for a controller
-    local keysHead = holder:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    keysHead:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -GAP * 3)
-    keysHead:SetText(TEXT.keysHead)
+    local general = Head(holder, TEXT.general, above, -GAP * 3)
+    local ranksLabel
+    w.ranks, ranksLabel = Check(holder, TEXT.ranks, TEXT.ranksTip, A.Ranks, nil, general)
+    w.ranks:ClearAllPoints()
+    w.ranks:SetPoint("TOPLEFT", general, "BOTTOMLEFT", 0, -GAP)
+    w.hide = Check(holder, TEXT.hide, TEXT.hideTip, A.Hide, ranksLabel)
+    w.twice = Check(holder, TEXT.twice, TEXT.twiceTip, A.Twice, nil, w.ranks)
+    local keysHead = Head(holder, TEXT.keysHead, w.twice, -GAP * 3)
     w.keysNote = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     w.keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)
     w.keysNote:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)
@@ -435,82 +496,66 @@ function A.Build(page, above, scrolled)
     w.keysWait:SetHeight(WAIT_H)
     w.keysWait:SetJustifyH("LEFT")
     w.keysWait:SetWordWrap(false)
-    -- a banner for each flyout, made as there are flyouts (A.KeysRefresh); what follows the list hangs
-    -- on this, set under its last line
+    -- a banner for each flyout, made as there are flyouts (A.KeysRefresh); the page ends under its last line
     w.banners = {}
     w.foot = CreateFrame("Frame", nil, holder)
     w.foot:SetSize(FOOT, FOOT)
     w.foot:SetPoint("TOPLEFT", w.keysWait, "BOTTOMLEFT")
     -- the page put away ends a wait for a key
     holder:HookScript("OnHide", function() if ns.Keys then ns.Keys.Stop() end end)
-    local head = holder:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    head:SetPoint("TOPLEFT", w.foot, "BOTTOMLEFT", 0, -GAP * 3)
-    head:SetText(TEXT.head)
+    panel.arrange = w
+    Watch()
+    A.Refresh()
+end
+
+-- The Controller page: what it is for, first; the settings of gamepad mode; then arranging a flyout
+-- without a drag.
+function A.BuildPad(page, scrolled)
+    if page.arrange then return end
+    padPage, padHolder = page, scrolled or page
+    local p = {}
+    local title = padHolder:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", padHolder, "TOPLEFT", EDGE, -EDGE)
+    title:SetText(TEXT.pad)
     -- as wide as the page, on as many lines as it takes
-    w.live = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    w.live:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -GAP)
-    w.live:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)
-    w.live:SetJustifyH("LEFT")
-    w.live:SetText(TEXT.live)
-    w.status = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    w.status:SetPoint("TOPLEFT", w.live, "BOTTOMLEFT", 0, -GAP)
-    w.status:SetJustifyH("LEFT")
-    w.prev = Button(TEXT.prev, TEXT.prevTip, function() A.Step(-1) end)
-    w.prev:SetPoint("TOPLEFT", w.status, "BOTTOMLEFT", 0, -GAP * 2)
-    w.next = Button(TEXT.next, TEXT.nextTip, function() A.Step(1) end)
-    w.next:SetPoint("LEFT", w.prev, "RIGHT", GAP / 2, 0)
+    p.live = padHolder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    p.live:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -GAP)
+    p.live:SetPoint("RIGHT", padHolder, "RIGHT", -EDGE, 0)
+    p.live:SetJustifyH("LEFT")
+    p.live:SetText(TEXT.live)
+    local padHead = Head(padHolder, TEXT.padHead, p.live, -GAP * 3)
+    local aroundLabel
+    p.around, aroundLabel = Check(padHolder, TEXT.around, TEXT.aroundTip, A.Around, nil, padHead)
+    p.around:ClearAllPoints()
+    p.around:SetPoint("TOPLEFT", padHead, "BOTTOMLEFT", 0, -GAP)
+    p.faces = Check(padHolder, TEXT.faces, TEXT.facesTip, A.Faces, aroundLabel)
+    p.plate = Check(padHolder, TEXT.plate, TEXT.plateTip, A.Plate, nil, p.around)
+    local head = Head(padHolder, TEXT.head, p.plate, -GAP * 3)
+    p.status = padHolder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    p.status:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -GAP)
+    p.status:SetJustifyH("LEFT")
+    p.prev = Button(TEXT.prev, TEXT.prevTip, function() A.Step(-1) end)
+    p.prev:SetPoint("TOPLEFT", p.status, "BOTTOMLEFT", 0, -GAP * 2)
+    p.next = Button(TEXT.next, TEXT.nextTip, function() A.Step(1) end)
+    p.next:SetPoint("LEFT", p.prev, "RIGHT", GAP / 2, 0)
     -- for those with no mouse to pull a flyout's grip
-    w.turn = Button(TEXT.turn, TEXT.turnTip, A.Turn)
-    w.turn:SetPoint("LEFT", w.next, "RIGHT", GAP / 2, 0)
-    w.which = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    w.which:SetPoint("LEFT", w.turn, "RIGHT", GAP, 0)
-    w.icons = {}
+    p.turn = Button(TEXT.turn, TEXT.turnTip, A.Turn)
+    p.turn:SetPoint("LEFT", p.next, "RIGHT", GAP / 2, 0)
+    p.which = padHolder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    p.which:SetPoint("LEFT", p.turn, "RIGHT", GAP, 0)
+    p.icons = {}
     for i = 1, F.MAX do
         local button = Icon(i)
         if i == 1 then
-            button:SetPoint("TOPLEFT", w.prev, "BOTTOMLEFT", GAP / 2, -GAP * 2)
+            button:SetPoint("TOPLEFT", p.prev, "BOTTOMLEFT", GAP / 2, -GAP * 2)
         else
-            button:SetPoint("LEFT", w.icons[i - 1], "RIGHT", Art.NEXT * 2, 0)
+            button:SetPoint("LEFT", p.icons[i - 1], "RIGHT", Art.NEXT * 2, 0)
         end
-        w.icons[i] = button
+        p.icons[i] = button
     end
-    w.off = Button(TEXT.off, TEXT.offTip, A.TakeOff)
-    w.off:SetPoint("TOPLEFT", w.icons[1], "BOTTOMLEFT", -GAP / 2, -GAP * 2)
-    -- the game's own check boxes, beside it: both for every flyout of the profile
-    local function Check(text, tip, run, after, under)
-        local box = CreateFrame("CheckButton", nil, holder, "UICheckButtonTemplate")
-        if under then
-            box:SetPoint("TOPLEFT", under, "BOTTOMLEFT", 0, -GAP / 2)
-        else
-            box:SetPoint("LEFT", after, "RIGHT", GAP * 2, 0)
-        end
-        local label = box.Text or box.text
-        if not label then
-            label = box:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-            label:SetPoint("LEFT", box, "RIGHT", GAP / 2, 0)
-        end
-        label:SetText(text)
-        box.tip = tip
-        box:SetScript("OnClick", function(self) run(self:GetChecked() and true or false) end)
-        box:SetScript("OnEnter", ShowTip)
-        box:SetScript("OnLeave", HideTip)
-        return box, label
-    end
-    local ranksLabel
-    w.ranks, ranksLabel = Check(TEXT.ranks, TEXT.ranksTip, A.Ranks, w.off)
-    w.hide = Check(TEXT.hide, TEXT.hideTip, A.Hide, ranksLabel)
-    -- a line lower, the two for a controller
-    local aroundLabel
-    w.around, aroundLabel = Check(TEXT.around, TEXT.aroundTip, A.Around, nil, w.ranks)
-    w.faces = Check(TEXT.faces, TEXT.facesTip, A.Faces, aroundLabel)
-    local plateLabel
-    w.plate, plateLabel = Check(TEXT.plate, TEXT.plateTip, A.Plate, nil, w.around)
-    -- for every flyout, beside it: a flyout's key pressed again casts the last one used
-    w.twice = Check(TEXT.twice, TEXT.twiceTip, A.Twice, plateLabel)
-    panel.arrange = w
-    -- a flyout changed elsewhere shows here at once
-    F.Watch(function(what)
-        if what == "laid" and panel:IsVisible() then A.Refresh() end
-    end)
+    p.off = Button(TEXT.off, TEXT.offTip, A.TakeOff)
+    p.off:SetPoint("TOPLEFT", p.icons[1], "BOTTOMLEFT", -GAP / 2, -GAP * 2)
+    padPage.arrange = p
+    Watch()
     A.Refresh()
 end
