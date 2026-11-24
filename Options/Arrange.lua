@@ -1,5 +1,7 @@
 local _, ns = ...
--- luacheck: read globals CreateFrame GameTooltip GetBindingText Settings C_Timer
+-- luacheck: read globals CreateFrame GameTooltip GetBindingText Settings C_Timer StaticPopup_Show InCombatLockdown
+-- luacheck: read globals CANCEL
+-- luacheck: globals StaticPopupDialogs
 
 -- What the settings say of flyouts: on the addon's own page, General (the settings for every flyout) and
 -- Flyout keys; on the Controller page (at the foot of this file), what only a controller needs, the settings
@@ -72,6 +74,11 @@ local TEXT = {
     twice = "Press a flyout's key again for the last one used",
     twiceTip = "With a flyout open, pressing its key again casts the icon you picked from it last, and shuts "
         .. "it. Off, a second press only shuts the flyout.",
+    -- what the setting costs, in red in its tooltip and in the question before it is turned on
+    twiceWarn = "Its key no longer shuts an open flyout: Escape (B on a controller) or a click on its bar "
+        .. "button does.",
+    twiceAsk = "%s\n\n|cffff2020%s|r",
+    twiceOn = "Turn On",
     plate = "Round background behind it",
     plateTip = "A flyout that opens around its button has a round plate behind it, so an open flyout is "
         .. "seen at a glance.",
@@ -284,10 +291,13 @@ end
 function A.Held() return held end
 function A.At() return at end
 
+-- the game's red for a warning
+local WARN_R, WARN_G, WARN_B = 1, 0.125, 0.125
 local function ShowTip(self)
     if not self.tip then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText(self.tip, 1, 1, 1, 1, true)
+    if self.warn then GameTooltip:AddLine(self.warn, WARN_R, WARN_G, WARN_B, true) end
     GameTooltip:Show()
 end
 local function HideTip() GameTooltip:Hide() end
@@ -416,6 +426,33 @@ function A.Twice(on)
     A.Refresh()
 end
 
+-- Ticked on, it asks first, saying in red what it costs: the key that opened a flyout no longer shuts it.
+-- His words (2026-11-24): "with the double click to cast last setting, i just realized that goes against
+-- the flow of the key toggling the flyout in the first place. so i think we need a popup warning in red
+-- text, and tooltip for it in red text, that lets the user know they will no longer be able to close the
+-- flyout with the same key immediately after opening it, and that they'll have to use esc or whatever
+-- instead."
+-- The game's own question, once per tick; turned off, it is off at once.
+StaticPopupDialogs.FALLENSFLYOUTS_TWICE = {
+    text = "%s",
+    button1 = TEXT.twiceOn,
+    button2 = CANCEL,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    preferredIndex = 3,
+    OnAccept = function() A.Twice(true) end,
+    -- the box shows it is still off
+    OnCancel = function() A.Refresh() end,
+}
+function A.AskTwice(on)
+    if on and not F.Twice() and not InCombatLockdown() then
+        A.Refresh()
+        return StaticPopup_Show("FALLENSFLYOUTS_TWICE", TEXT.twiceAsk:format(TEXT.twice, TEXT.twiceWarn))
+    end
+    A.Twice(on)
+end
+
 -- the controller's two: flyouts around the button in gamepad mode, and which of its crosses picks first
 function A.Around(on)
     local ok, why = F.SetAround(on)
@@ -483,7 +520,8 @@ function A.Build(page, above, scrolled)
     w.ranks:ClearAllPoints()
     w.ranks:SetPoint("TOPLEFT", general, "BOTTOMLEFT", 0, -GAP)
     w.hide = Check(holder, TEXT.hide, TEXT.hideTip, A.Hide, ranksLabel)
-    w.twice = Check(holder, TEXT.twice, TEXT.twiceTip, A.Twice, nil, w.ranks)
+    w.twice = Check(holder, TEXT.twice, TEXT.twiceTip, A.AskTwice, nil, w.ranks)
+    w.twice.warn = TEXT.twiceWarn
     local keysHead = Head(holder, TEXT.keysHead, w.twice, -GAP * 3)
     w.keysNote = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     w.keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)

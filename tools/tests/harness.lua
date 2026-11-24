@@ -466,7 +466,12 @@ GameTooltip = {
     Hide = function(self) self.owner, self.shown, self.action = nil, false, nil end,
     Show = function(self) self.shown = true end,
     SetAction = setAction,
-    SetText = noop, AddLine = noop,
+    -- its lines, each with the color it was given (W.tipLines)
+    SetText = function(_, text, r, g, b) W.tipLines = { { text, r, g, b } } end,
+    AddLine = function(_, text, r, g, b)
+        W.tipLines = W.tipLines or {}
+        W.tipLines[#W.tipLines + 1] = { text, r, g, b }
+    end,
     -- what the tooltip was asked to show, by which of the game's calls
     SetItemByID = function(_, id) W.tip = { item = id } end,
     SetToyByItemID = function(_, id) W.tip = { toy = id } end,

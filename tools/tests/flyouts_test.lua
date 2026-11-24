@@ -4778,6 +4778,42 @@ do
     tap("E")
     tap("E")
     check(#W.casts == casts and not unit.menu:IsShown(), "off: pressed again, the key only shuts it")
+    -- ticked in the settings: asked first, what it costs said in red, and off till yes is said to it.
+    -- His words (2026-11-24): "with the double click to cast last setting, i just realized that goes against
+    -- the flow of the key toggling the flyout in the first place. so i think we need a popup warning in red
+    -- text, and tooltip for it in red text, that lets the user know they will no longer be able to close the
+    -- flyout with the same key immediately after opening it, and that they'll have to use esc or whatever
+    -- instead."
+    NS.ProfileUI.Build()
+    NS.Arrange.Refresh()
+    local box = NS.ProfileUI.panel.arrange.twice
+    local red = "|cffff2020Its key no longer shuts an open flyout: Escape (B on a controller) or a click on its bar button does.|r"
+    box.checked = true
+    box.scripts.OnClick(box)
+    check(not F14.Twice() and not box:GetChecked() and W.popup ~= nil and W.popup.which == "FALLENSFLYOUTS_TWICE"
+        and W.popup.text:find(red, 1, true) ~= nil,
+        "ticked, it asks first, the cost in red, and stays off meanwhile: " .. tostring(W.popup and W.popup.text))
+    StaticPopupDialogs.FALLENSFLYOUTS_TWICE.OnCancel()
+    W.popup = nil
+    check(not F14.Twice() and not box:GetChecked(), "Cancel leaves it off")
+    box.checked = true
+    box.scripts.OnClick(box)
+    acceptPopup()
+    check(F14.Twice() and box:GetChecked(), "Turn On turns it on")
+    box.checked = false
+    box.scripts.OnClick(box)
+    check(not F14.Twice() and not box:GetChecked() and W.popup == nil, "unticked, it is off at once, with no question")
+    W.tipLines = nil
+    box.scripts.OnEnter(box)
+    local warn = W.tipLines and W.tipLines[#W.tipLines]
+    check(warn ~= nil and warn[1]:find("no longer shuts an open flyout", 1, true) ~= nil and warn[2] == 1 and warn[3] < 0.2
+        and warn[4] < 0.2, "its tooltip says the same, in red")
+    W.combat = true
+    box.checked = true
+    box.scripts.OnClick(box)
+    check(not F14.Twice() and W.popup == nil and W.errors[#W.errors] == "Flyouts change only out of a fight.",
+        "in a fight it is not turned on, and nothing asks")
+    W.combat = false
     F14.SetTwice(true)
     flushAll()
     tap("E")
@@ -4785,6 +4821,14 @@ do
     tap("E")
     check(#W.casts == casts + 1 and W.casts[#W.casts] == "spell:502" and not unit.menu:IsShown(),
         "on: pressed again, the key casts the icon picked last (the third, 502) and shuts it: " .. tostring(W.casts[#W.casts]))
+    -- what still shuts it, as its warning says: Escape, and a click on its bar button
+    tap("E")
+    casts = #W.casts
+    tap("ESCAPE")
+    check(not unit.menu:IsShown() and #W.casts == casts, "on: Escape shuts it, casting nothing")
+    tap("E")
+    mouse(unit.opener)
+    check(not unit.menu:IsShown() and #W.casts == casts, "on: a click on its bar button shuts it, casting nothing")
     -- the key that is one of its picks as well stays that pick
     tap("1")
     tap("1")
