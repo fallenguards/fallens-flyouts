@@ -58,7 +58,7 @@ local TEXT = {
     noPick = "That one cannot be picked up just now.",
     noLead = "That button's action cannot lead a flyout.",
     auto = "That flyout fills itself from your bags.",
-    mount = "Mounts and pets go in a flyout out of combat.",
+    mount = "Mounts, pets and gear sets go in a flyout out of combat.",
     how = "Drag",
     howHeld = "%s-drag",
     remove = "%s to move it, or off the flyout to take it off.",
@@ -598,7 +598,7 @@ local CARRIED = [[
         -- a toy of the player's own, used as the Toy Box uses it (told beforehand: those in the flyouts
         -- and on the bars)
         if owner:GetAttribute("toy" .. tostring(value)) then how, casts = "toy", value end
-    elseif kind == "mount" or kind == "battlepet" then
+    elseif kind == "mount" or kind == "battlepet" or kind == "equipmentset" then
         -- its name and its line to cast it are the addon's own code to look up, out of a fight
         owner:CallMethod("Refused", "mount")
         return

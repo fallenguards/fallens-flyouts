@@ -5500,7 +5500,7 @@ do
     C_MountJournal.Pickup(1)
     _, unit9 = F16.At("ActionButton9")
     DropOn(unit9.opener)
-    check(W.errors[#W.errors] == "Mounts and pets go in a flyout out of combat." and W.cursor ~= nil,
+    check(W.errors[#W.errors] == "Mounts, pets and gear sets go in a flyout out of combat." and W.cursor ~= nil,
         "in combat a mount dropped on the arrow is refused in red and stays on the cursor")
     W.cursor = nil
     W.combat = false
@@ -5576,6 +5576,38 @@ do
     drop("ActionButton11")
     check(shows("ActionButton11") == "item:280740 item:289439 battlepet:" .. PET, "and goes in as from the journal: "
         .. shows("ActionButton11"))
+    -- 6. gear sets. His words (2026-11-24): "we need to add ability for gear sets to be in flyouts too." As his
+    -- client gives them (/ffdev gear): the equipment manager puts a set on the cursor as "equipmentset" and its
+    -- name, and a bar slot keeps it so.
+    W.gearSets = { { id = 0, name = "Tank Set", icon = 134400 }, { id = 1, name = "Heal Set", icon = 132592, equipped = true } }
+    errors = #W.errors
+    C_EquipmentSet.PickupEquipmentSet(0)
+    check(W.cursor and W.cursor[1] == "equipmentset" and W.cursor[2] == "Tank Set", "a gear set picked up is carried by its name")
+    check(drop("ActionButton11") and W.cursor == nil, "a gear set: the plus stands for it and takes it")
+    check(shows("ActionButton11") == "item:280740 item:289439 battlepet:" .. PET .. " equipmentset:Tank Set"
+        and #W.errors == errors, "it shows in the flyout: " .. shows("ActionButton11"))
+    local gear = icon("ActionButton11", "equipmentset", "Tank Set")
+    W.tip = nil
+    gear.scripts.OnEnter(gear)
+    check(W.tip and W.tip.gear == "Tank Set" and gear.icon.texture == 134400,
+        "its tooltip is the set's, and its picture")
+    check(gear:GetAttribute("type") == "macro" and gear:GetAttribute("macrotext") == "/equipset Tank Set",
+        "a click puts it on, as /equipset does: " .. tostring(gear:GetAttribute("macrotext")))
+    C_EquipmentSet.PickupEquipmentSet(1)
+    PlaceAction(5)
+    check(GetActionInfo(5) == "equipmentset", "a gear set set on a bar is kept there as the game keeps it")
+    C_ToyBox.PickupToyBoxItem(289439)
+    drop("ActionButton5")
+    check(shows("ActionButton5") == "equipmentset:Heal Set item:289439" and #W.errors == errors,
+        "a gear set on a bar button leads a flyout: " .. shows("ActionButton5"))
+    local _, unit5 = F16.At("ActionButton5")
+    F16.CarryOff(unit5, 2)
+    PickupAction(5)
+    check(W.cursor and W.cursor[1] == "equipmentset" and W.cursor[2] == "Heal Set", "a gear set picked off a bar is carried as one")
+    drop("ActionButton10")
+    check(shows("ActionButton10"):find("equipmentset:Heal Set", 1, true) ~= nil and W.cursor == nil,
+        "and goes in as from the equipment manager: " .. shows("ActionButton10"))
+
     -- in combat: a toy lifted out comes onto the cursor as the item the game picks up from the Toy Box, and
     -- dropped on the arrow goes back in as a toy; a mount stays where it is
     W.combat = true
@@ -5595,6 +5627,11 @@ do
     horse = icon("ActionButton9", "mount", 3111)
     DragOff(horse)
     check(W.cursor == nil and horse:IsShown(), "a mount stays in its flyout in combat")
+    W.cursor = { "equipmentset", "Tank Set" }
+    DropOn(unit9.opener)
+    check(W.errors[#W.errors] == "Mounts, pets and gear sets go in a flyout out of combat." and W.cursor ~= nil,
+        "a gear set dropped on the arrow in a fight is refused in red, and stays on the cursor")
+    W.cursor = nil
     W.combat = false
     fire("PLAYER_REGEN_ENABLED")
     flushAll()

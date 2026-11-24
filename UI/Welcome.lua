@@ -334,6 +334,9 @@ end
 W.CHANGES = {
     { version = "1.1.7", date = "2026-11-24", parts = {
         { name = "Added", items = {
+            "Gear sets go in a flyout, from the equipment manager or off a bar, as mounts and pets do: the " ..
+                "set's picture and tooltip show, and a click puts the set on, as /equipset does. In a fight they " ..
+                "wait, as mounts and pets do.",
             "Every flyout key in one place: under Flyout keys in the settings (/ff), a Default flyout binds " ..
                 "bar above each flyout's own sets the keys of the twelve spots of every flyout, the same keys as " ..
                 "the game's Keybindings options. Click a key and press the new one; right-click gives the usual " ..

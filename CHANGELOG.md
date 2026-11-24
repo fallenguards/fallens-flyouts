@@ -3,6 +3,7 @@
 ## [1.1.7] - 2026-11-24
 
 ### Added
+- Gear sets go in a flyout, from the equipment manager or off a bar, as mounts and pets do: the set's picture and tooltip show, and a click puts the set on, as /equipset does. In a fight they wait, as mounts and pets do.
 - Every flyout key in one place: under Flyout keys in the settings (`/ff`), a Default flyout binds bar above each flyout's own sets the keys of the twelve spots of every flyout, the same keys as the game's Keybindings options. Click a key and press the new one; right-click gives the usual one back. A key that did something else is taken from it, as in the game's own options, and a red line says what it did. The Fallen's Flyouts section of the game's Keybindings options now says that every flyout key is in the addon's settings.
 - A Feedback page in the settings, beside Automatic Flyouts and Controller. Report a Bug and Suggest an Idea make a link to a new issue on GitHub with the addon's status already filled in, ready to copy into your browser; What's New shows what changed in this version. Under Status is that status in full: everything the addon knows of your setup, with nothing of who you are. `/ff status` opens the page.
 - After an update, the first time you play, the chat thanks you for updating, with the version you now have, the addon's icon and name, and a link to what changed since the version you had.

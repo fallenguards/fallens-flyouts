@@ -539,6 +539,7 @@ GameTooltip = {
     SetToyByItemID = function(_, id) W.tip = { toy = id } end,
     SetMountBySpellID = function(_, id) W.tip = { mount = id } end,
     SetCompanionPet = function(_, guid) W.tip = { pet = guid } end,
+    SetEquipmentSet = function(_, name) W.tip = { gear = name } end,
     -- the spell asked for, and whether its rank was asked for with it
     SetSpellByID = function(_, id, _, subtext) W.tip = { id = id, rank = subtext == true } end,
 }
@@ -766,19 +767,47 @@ do
             if petBy(guid) then W.cursor = { "battlepet", guid } end
         end,
     }
+    -- W.gearSets: the character's gear sets, each { id, name, icon }. The equipment manager puts one on the
+    -- cursor as "equipmentset" and its name; a bar slot keeps it the same way (seen on his client).
+    local function gearBy(field, value)
+        for _, g in ipairs(W.gearSets or {}) do
+            if g[field] == value then return g end
+        end
+    end
+    C_EquipmentSet = {
+        GetEquipmentSetIDs = function()
+            local out = {}
+            for _, g in ipairs(W.gearSets or {}) do out[#out + 1] = g.id end
+            return out
+        end,
+        GetEquipmentSetID = function(name)
+            local g = gearBy("name", name)
+            return g and g.id or nil
+        end,
+        GetEquipmentSetInfo = function(id)
+            local g = gearBy("id", id)
+            if g then return g.name, g.icon, g.id, g.equipped == true, 10, 10, 0, 0, 0 end
+        end,
+        PickupEquipmentSet = function(id)
+            local g = gearBy("id", id)
+            if g then W.cursor = { "equipmentset", g.name } end
+        end,
+    }
     -- what a slot held, on the cursor as picking it up puts it there
     local function lifted(kind, had, name, was)
         if kind == "macro" then return { "macro", name, own = type(was) == "table" and was.own or nil } end
         if kind == "item" then return { "item", had, "link" } end
         if kind == "summonmount" then return { "mount", had, select(2, mountBy("id", had)) } end
         if kind == "summonpet" then return { "battlepet", had } end
+        if kind == "equipmentset" then return { "equipmentset", had } end
         return had and { "spell", 7, "spell", had, had } or nil
     end
     -- what is carried goes onto the slot; what the slot held comes onto the cursor
     function PlaceAction(slot)
         local carried = W.cursor
         local what = carried and carried[1]
-        if not (what == "spell" or what == "macro" or what == "item" or what == "mount" or what == "battlepet") then
+        if not (what == "spell" or what == "macro" or what == "item" or what == "mount" or what == "battlepet"
+            or what == "equipmentset") then
             return
         end
         local kind, had = GetActionInfo(slot)
@@ -793,6 +822,8 @@ do
             W.placed[slot] = { "summonmount", carried[2] }
         elseif what == "battlepet" then
             W.placed[slot] = { "summonpet", carried[2] }
+        elseif what == "equipmentset" then
+            W.placed[slot] = { "equipmentset", carried[2] }
         else
             W.placed[slot] = carried[4]
         end
@@ -1379,7 +1410,7 @@ local function pickupAny(kind, value, more)
         C_Spell.PickupSpell(value)
     elseif kind == "item" then
         W.cursor = { "item", tonumber(value) or tonumber(tostring(value):match("^item:(%d+)")), "link" }
-    elseif kind == "toy" or kind == "mount" or kind == "battlepet" or kind == "macrotext" then
+    elseif kind == "toy" or kind == "mount" or kind == "battlepet" or kind == "equipmentset" or kind == "macrotext" then
         -- the client's PickupAny knows no such kind: nothing comes onto the cursor
         return
     elseif kind then

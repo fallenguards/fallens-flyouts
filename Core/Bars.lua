@@ -1,7 +1,7 @@
 local _, ns = ...
 -- luacheck: read globals UIParent GetTime GetBindingAction EnumerateFrames HasAction GetActionInfo GetActionText
 -- luacheck: read globals issecretvalue GetNumMacros GetMacroInfo GetMacroSpell C_Spell C_MountJournal PlayerHasToy
--- luacheck: read globals C_PetJournal C_ToyBox
+-- luacheck: read globals C_PetJournal C_ToyBox C_EquipmentSet
 
 -- Action buttons, whoever made them, found by what they are.
 local B = {}
@@ -408,7 +408,8 @@ function M.OnSlot(slot)
     return { kind = "macro", id = name, text = text }
 end
 
--- the kinds of their own a flyout holds besides spells, items and macros: mounts and battle pets (below)
+-- the kinds of their own a flyout holds besides spells, items and macros: mounts, battle pets and gear sets
+-- (below)
 local KINDS = {}
 B.Kinds = KINDS
 
@@ -509,6 +510,36 @@ KINDS.battlepet = {
     Macro = function(guid) return "/summonpet " .. guid end,
     Pickup = function(guid)
         if C_PetJournal and C_PetJournal.PickupPet then C_PetJournal.PickupPet(guid) end
+    end,
+}
+
+-- A gear set, the equipment manager's, by its name. His words (2026-11-24): "we need to add ability for gear
+-- sets to be in flyouts too." Seen on his account (/ffdev gear, 2026-11-24): the equipment manager puts a
+-- set on the cursor as "equipmentset" and its name, a bar slot keeps it the same way, and the tooltip has
+-- the game's own SetEquipmentSet. A click puts the set on as the game's /equipset does.
+local function GearInfo(name)
+    local ES = C_EquipmentSet
+    if type(name) ~= "string" or Secret(name) or name == "" then return nil end
+    if not (ES and ES.GetEquipmentSetID and ES.GetEquipmentSetInfo) then return nil end
+    local ok, id = pcall(ES.GetEquipmentSetID, name)
+    if not ok or type(id) ~= "number" or Secret(id) then return nil end
+    local got, _, icon = pcall(ES.GetEquipmentSetInfo, id)
+    if not got then return nil end
+    return id, icon
+end
+KINDS.equipmentset = {
+    Known = function(name) return GearInfo(name) ~= nil end,
+    Name = function(name) return GearInfo(name) and name or nil end,
+    Icon = function(name) return (select(2, GearInfo(name))) end,
+    Usable = function(name) return GearInfo(name) ~= nil end,
+    Tip = function(tip, name)
+        if tip.SetEquipmentSet then return tip:SetEquipmentSet(name) end
+        tip:SetText(name)
+    end,
+    Macro = function(name) return "/equipset " .. name end,
+    Pickup = function(name)
+        local id = GearInfo(name)
+        if id and C_EquipmentSet.PickupEquipmentSet then C_EquipmentSet.PickupEquipmentSet(id) end
     end,
 }
 
