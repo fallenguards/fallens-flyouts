@@ -1,8 +1,8 @@
 local _, ns = ...
--- luacheck: read globals CreateFrame GameTooltip GetBindingText
+-- luacheck: read globals CreateFrame GameTooltip GetBindingText Settings C_Timer
 
 -- What the settings say of flyouts: on the addon's own page, General (the settings for every flyout) and
--- Flyout keys; on the Controller page (Options/Controller.lua), what only a controller needs, the settings
+-- Flyout keys; on the Controller page (at the foot of this file), what only a controller needs, the settings
 -- of gamepad mode and a way to arrange a flyout without a drag: pick an icon, then the place it goes.
 -- His words (2026-11-24), of the settings page's "Arrange a flyout": "this is a very confusing section. if
 -- we have a section only relevant to console players, then 1: it should be cleanly separated (aka like
@@ -558,4 +558,45 @@ function A.BuildPad(page, scrolled)
     padPage.arrange = p
     Watch()
     A.Refresh()
+end
+
+-- The Controller page, under the addon's own in the game's options beside Automatic Flyouts: what only a
+-- controller needs, said so in its name and in its first words (A.BuildPad). Listed by Options/Auto.lua,
+-- right after its own page, so that it stands after Automatic Flyouts.
+do
+    local UI = {}
+    ns.ControllerUI = UI
+    local page = CreateFrame("Frame")
+    page:Hide()
+    page.name = TEXT.pad
+    UI.panel = page
+
+    function UI.Build()
+        if page.built then return end
+        ns.Start()
+        A.BuildPad(page, ns.OptionsScroller(page))
+        page.built = true
+    end
+
+    -- it scrolls as far as its lowest control
+    function UI.Fit()
+        if page.built then ns.OptionsFit(page, page.arrange and page.arrange.off) end
+    end
+
+    function UI.Register()
+        if Settings and Settings.RegisterCanvasLayoutSubcategory and ns.OptionsCategory then
+            Settings.RegisterCanvasLayoutSubcategory(ns.OptionsCategory, page, TEXT.pad)
+        end
+    end
+
+    page:SetScript("OnShow", function()
+        UI.Build()
+        A.Refresh()
+        -- measured once the game has placed the page in its window
+        C_Timer.After(0, UI.Fit)
+        if ns.OptionsPageShown then ns.OptionsPageShown(page) end
+    end)
+    page:SetScript("OnHide", function()
+        if ns.OptionsPageHidden then ns.OptionsPageHidden() end
+    end)
 end

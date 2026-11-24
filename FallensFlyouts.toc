@@ -26,5 +26,4 @@ UI\PadBind.lua
 Options\Profiles.lua
 Options\Arrange.lua
 Options\Auto.lua
-Options\Controller.lua
 UI\Welcome.lua
