@@ -3,7 +3,7 @@
 ## [1.1.7] - 2026-11-24
 
 ### Changed
-- Turning on Press a flyout's key again for the last one used now asks first, and its tooltip says the same in red: with it on, a flyout's key no longer shuts the open flyout; Escape (B on a controller) or a click on its bar button does.
+- Turning on Press a flyout's key again for the last one used now asks first, and its tooltip says the same: what it does, and in red what it costs. With it on, a flyout's key no longer shuts the open flyout; Escape (B on a controller) or a click on its bar button does. A flyout whose key is also one of its icon keys (a flyout on 1, say) is as before: 1 then 1 casts its first icon.
 - The settings are easier to find your way in. What only a controller needs has a page of its own, Controller, under Fallen's Flyouts in the game's options beside Automatic Flyouts, and says so at the top: Open around the button in gamepad mode, Pick with the face buttons, Round background behind it, and Arrange a flyout (moving icons without a drag). The settings for every flyout (Keep a spell's ranks in order, Hide items I have none of, Press a flyout's key again for the last one used) are under General on the addon's own page. Until now all of them stood together under Arrange a flyout.
 
 ## [1.1.6] - 2026-11-23

@@ -4791,8 +4791,9 @@ do
     box.checked = true
     box.scripts.OnClick(box)
     check(not F14.Twice() and not box:GetChecked() and W.popup ~= nil and W.popup.which == "FALLENSFLYOUTS_TWICE"
-        and W.popup.text:find(red, 1, true) ~= nil,
-        "ticked, it asks first, the cost in red, and stays off meanwhile: " .. tostring(W.popup and W.popup.text))
+        and W.popup.text:find(red, 1, true) ~= nil and W.popup.text:find("1 then 1 casts the first icon.", 1, true) ~= nil,
+        "ticked, it asks first, saying what it does (a key that is also an icon key stays that icon's) and the cost in "
+            .. "red, and stays off meanwhile: " .. tostring(W.popup and W.popup.text))
     StaticPopupDialogs.FALLENSFLYOUTS_TWICE.OnCancel()
     W.popup = nil
     check(not F14.Twice() and not box:GetChecked(), "Cancel leaves it off")
@@ -4807,7 +4808,8 @@ do
     box.scripts.OnEnter(box)
     local warn = W.tipLines and W.tipLines[#W.tipLines]
     check(warn ~= nil and warn[1]:find("no longer shuts an open flyout", 1, true) ~= nil and warn[2] == 1 and warn[3] < 0.2
-        and warn[4] < 0.2, "its tooltip says the same, in red")
+        and warn[4] < 0.2 and W.tipLines[1][1]:find("1 then 1 casts the first icon.", 1, true) ~= nil,
+        "its tooltip says the same: what it does, and in red what it costs")
     W.combat = true
     box.checked = true
     box.scripts.OnClick(box)

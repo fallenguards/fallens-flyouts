@@ -72,12 +72,15 @@ local TEXT = {
     aroundTip = "On the bars of gamepad mode a flyout opens around its button, each icon on the side its pad "
         .. "button is: up, right, down, left. Off, it opens as a strip.",
     twice = "Press a flyout's key again for the last one used",
+    -- His words (2026-11-24), of a flyout on 1: "the tooltip/warning doesn't say what that behavior will be at
+    -- all". A key that is one of the flyout's icon keys stays that icon's (BIND in Core/Flyouts.lua).
     twiceTip = "With a flyout open, pressing its key again casts the icon you picked from it last, and shuts "
-        .. "it. Off, a second press only shuts the flyout.",
+        .. "it. If its key is also one of its icon keys (a flyout on 1, say), that key still picks its own icon: "
+        .. "1 then 1 casts the first icon.",
     -- what the setting costs, in red in its tooltip and in the question before it is turned on
     twiceWarn = "Its key no longer shuts an open flyout: Escape (B on a controller) or a click on its bar "
         .. "button does.",
-    twiceAsk = "%s\n\n|cffff2020%s|r",
+    twiceAsk = "%s\n\n%s\n\n|cffff2020%s|r",
     twiceOn = "Turn On",
     plate = "Round background behind it",
     plateTip = "A flyout that opens around its button has a round plate behind it, so an open flyout is "
@@ -448,7 +451,8 @@ StaticPopupDialogs.FALLENSFLYOUTS_TWICE = {
 function A.AskTwice(on)
     if on and not F.Twice() and not InCombatLockdown() then
         A.Refresh()
-        return StaticPopup_Show("FALLENSFLYOUTS_TWICE", TEXT.twiceAsk:format(TEXT.twice, TEXT.twiceWarn))
+        return StaticPopup_Show("FALLENSFLYOUTS_TWICE", TEXT.twiceAsk:format(TEXT.twice, TEXT.twiceTip,
+            TEXT.twiceWarn))
     end
     A.Twice(on)
 end
