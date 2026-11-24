@@ -5593,9 +5593,35 @@ do
         "https://github.com/fallenguards/fallens-flyouts/issues/new?template=bug_report.yml&details=", 1, true) == 1,
         "Report a Bug: a link to a new bug report, in a box ready to copy: " .. url:sub(1, 120))
     local details = url:match("&details=(.*)$"):gsub("+", " "):gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)
-    check(details:find("Fallen's Flyouts " .. version, 1, true) == 1 and details:find("Flyouts: ", 1, true) ~= nil
-        and not details:find("    ActionButton1:", 1, true) and not details:find(me, 1, true),
-        "its Details from the addon box filled with the short status, no line per flyout, nothing of who")
+    -- His words (2026-11-24): "why doesnt the report a bug auto fill with the status info if it's already
+    -- auto filling some of it?"
+    check((details:gsub("\r\n", "\n")) == page.status:GetText()
+        and details:find("    ActionButton1: led by spell 101", 1, true) ~= nil
+        and not details:find("Left out", 1, true) and not details:find(me, 1, true) and #url <= 6000,
+        "its Details from the addon box filled with the whole status, word for word, nothing of who: " .. #url)
+    -- a very large setup: as much as a link GitHub opens holds, and what it left out said
+    local many = {}
+    for n = 1, 400 do
+        local name = ("SomeAddonWithAVeryLongName%03d"):format(n)
+        many[#many + 1] = name
+        installed[name], W.loaded[name] = true, true
+    end
+    page.bug.scripts.OnClick(page.bug)
+    url = page.link:GetText() or ""
+    details = url:match("&details=(.*)$"):gsub("+", " "):gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)
+    check(#url <= 6000 and details:find("    ActionButton1: led by spell 101", 1, true) ~= nil
+        and details:find("Other addons on (400): ", 1, true) ~= nil and details:find("Left out of this link for its length: "
+        .. "some of the other addons. The Status on the addon's Feedback page (/ff status) has all of it.", 1, true) ~= nil,
+        "with 400 addons on, the link stays short enough for GitHub to open, the flyouts' lines kept, and says "
+        .. "what it left out: " .. #url)
+    local least = NS.FeedbackUI.Text("flyouts")
+    check(not least:find("    ActionButton1:", 1, true) and least:find("the line of each flyout and some of the other "
+        .. "addons", 1, true) ~= nil, "and past that the flyouts' lines go too, and it says so")
+    FB.Refresh()
+    check(not page.status:GetText():find("Left out", 1, true) and page.status:GetText():find("SomeAddonWithAVeryLongName400", 1, true),
+        "the Status on the page itself always has all of it")
+    for _, name in ipairs(many) do installed[name], W.loaded[name] = nil, nil end
+    FB.Refresh()
     page.idea.scripts.OnClick(page.idea)
     check(page.link:GetText():find("?template=feature_request.yml&details=", 1, true) ~= nil, "Suggest an Idea: the idea form")
     page.news.scripts.OnClick(page.news)

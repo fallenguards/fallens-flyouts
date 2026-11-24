@@ -497,16 +497,16 @@ do
         intro = "Something not working, or an idea? Tell us on GitHub. These buttons fill in the details of "
             .. "your game for you: you only say what happened, or what you would like.",
         bug = "Report a Bug",
-        bugTip = "A link to a new bug report on GitHub, the details of your game already in it.",
+        bugTip = "A link to a new bug report on GitHub, the Status below already in it.",
         idea = "Suggest an Idea",
-        ideaTip = "A link to a new idea on GitHub, the details of your game already in it.",
+        ideaTip = "A link to a new idea on GitHub, the Status below already in it.",
         news = "What's New",
         newsTip = "What changed in this version of Fallen's Flyouts.",
         copy = "Press Ctrl+C to copy this link, then open it in your browser.",
         statusHead = "Status",
-        statusNote = "Everything the addon knows of your setup, with nothing of who you are. A report from the "
-            .. "buttons above carries the short form of it; to send all of it, select it and copy it into the "
-            .. "report. /ff status opens this page.",
+        statusNote = "Everything the addon knows of your setup, with nothing of who you are. Report a Bug and "
+            .. "Suggest an Idea put it in the report for you (on a very large setup, as much as a link holds). "
+            .. "/ff status opens this page.",
         select = "Select All",
         fight = "The options open out of a fight.",
     }
@@ -593,8 +593,9 @@ do
             F.Sleeps(flyout) and "; on another page of its bar" or "")
     end
 
-    -- Everything, line by line; `short`: for a link, which carries no line per flyout and fewer addons.
-    function FB.Text(short)
+    -- Everything, line by line. `cut`, for a link that would be too long (FB.Link): "addons", the other addons
+    -- past MAX_ADDONS letters left out; "flyouts", the line of each flyout too. What was left out is said.
+    function FB.Text(cut)
         local F = ns.Flyouts
         local lines = {}
         local function Add(text) lines[#lines + 1] = text end
@@ -619,7 +620,7 @@ do
         local list = F.List() or {}
         local _, used = F.Units()
         Add(("Flyouts: %d in the profile, %d laid on a button"):format(#list, used or 0))
-        if not short then
+        if cut ~= "flyouts" then
             for _, flyout in ipairs(list) do Add("    " .. FlyoutLine(flyout)) end
         end
         local hid = {}
@@ -630,8 +631,15 @@ do
         Add("Values the game kept secret this session: " .. (#hid > 0 and table.concat(hid, ", ") or "none"))
         Add("Kept from the addon by the game this session: "
             .. (#blocked > 0 and table.concat(blocked, "; ") or "nothing"))
-        local others = AddonsOn(short and MAX_ADDONS or nil)
+        local others = AddonsOn(cut and MAX_ADDONS or nil)
         Add(("Other addons on (%d): %s"):format(#AddonsOn(), #others > 0 and table.concat(others, ", ") or "none"))
+        local left = {}
+        if cut == "flyouts" and #list > 0 then left[#left + 1] = "the line of each flyout" end
+        if others[#others] == "..." then left[#left + 1] = "some of the other addons" end
+        if #left > 0 then
+            Add(("Left out of this link for its length: %s. The Status on the addon's Feedback page (/ff status) "
+                .. "has all of it."):format(table.concat(left, " and ")))
+        end
         return table.concat(lines, "\n")
     end
 
@@ -641,9 +649,20 @@ do
         return (s:gsub(" ", "+"))
     end
 
-    -- a new issue of that form on GitHub, the short status in its Details from the addon box
+    -- A new issue of that form on GitHub, the status in its Details from the addon box. His words
+    -- (2026-11-24): "why doesnt the report a bug auto fill with the status info if it's already auto filling
+    -- some of it?" All of it, while it fits: GitHub opens such a link with up to some 6,400 letters of
+    -- details (measured 2026-11-24, signed out, where its sign-in page carries the link along, and a longer
+    -- one fails there). Past LINK_MOST the other addons past MAX_ADDONS letters go first, then the line of
+    -- each flyout, and the link says what it left out.
+    local LINK_MOST = 6000
     function FB.Link(template)
-        return ("%s?template=%s&details=%s"):format(ISSUES, template, Encode(FB.Text(true)))
+        local url
+        for _, cut in ipairs({ false, "addons", "flyouts" }) do
+            url = ("%s?template=%s&details=%s"):format(ISSUES, template, Encode(FB.Text(cut or nil)))
+            if #url <= LINK_MOST then return url end
+        end
+        return url
     end
 
     local page = CreateFrame("Frame")

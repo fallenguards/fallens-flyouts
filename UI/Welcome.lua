@@ -341,10 +341,10 @@ W.CHANGES = {
                 "red line says what it did. The Fallen's Flyouts section of the game's Keybindings options now " ..
                 "says that every flyout key is in the addon's settings.",
             "A Feedback page in the settings, beside Automatic Flyouts and Controller. Report a Bug and " ..
-                "Suggest an Idea make a link to a new issue on GitHub with the details of your game already " ..
-                "filled in, ready to copy into your browser; What's New shows what changed in this version. Under " ..
-                "Status is everything the addon knows of your setup, with nothing of who you are, to copy into a " ..
-                "report. /ff status opens the page.",
+                "Suggest an Idea make a link to a new issue on GitHub with the addon's status already filled in, " ..
+                "ready to copy into your browser; What's New shows what changed in this version. Under Status is " ..
+                "that status in full: everything the addon knows of your setup, with nothing of who you are. /ff " ..
+                "status opens the page.",
             "After an update, the first time you play, the chat thanks you for updating, with the version you " ..
                 "now have, the addon's icon and name, and a link to what changed since the version you had.",
             "Adding to a flyout shows where it goes. With a spell, an item or anything else on the cursor, " ..
