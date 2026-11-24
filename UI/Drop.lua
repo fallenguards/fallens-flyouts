@@ -49,14 +49,15 @@ end
 
 local function TakeDrop(tab)
     if not GetCursorInfo() then return end
-    -- an icon dragged out of this button's own flyout and let go on its plus: it stays in
-    local own = F.At(tab.button:GetName())
-    if own and ns.Move and ns.Move.PutBack(own) then return ClearCursor() end
     -- its flyout open with a gap for it: into the gap, or in the place of the icon lit
     local shown = ns.Move and ns.Move.Preview()
     if shown and shown.tab == tab then return ns.Move.PreviewDrop() end
     local entry = D.Carried()
     if not entry then return ns.Warn(TEXT.kind) end
+    -- an icon carried off this button's own flyout is off it, as anything carried: its old place goes, and it
+    -- goes in again as anything dropped on the plus does (UI/Move.lua, M.Detach)
+    local own = F.At(tab.button:GetName())
+    if own and ns.Move then ns.Move.Detach(own) end
     local flyout, why = F.Stack(tab.button, entry)
     if not flyout then return ns.Warn(why) end
     ClearCursor()

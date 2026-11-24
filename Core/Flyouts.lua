@@ -3532,22 +3532,16 @@ function F.Dropped(frame)
     local flyout = unit and unit.flyout
     local old = flyout and flyout.entries[i]
     if not old then return end
-    -- An icon dragged out of this flyout and let go on another of its icons: the two trade places, as when
-    -- moved inside it; on its own place it stays. His words (2026-11-24): "and even then, when i drop onto
-    -- another item in the flyout, what should be a swap doesnt. it just puts it back in the flyout?"
-    local back, held
-    if ns.Move then back, held = ns.Move.PutBack(flyout) end
-    if back then
-        ClearCursor()
-        local from
-        for k, other in ipairs(flyout.entries) do
-            if other == held then from = k end
-        end
-        if from and from ~= i and F.Swap(flyout, from, i) then
-            ns.Log(("%s traded places with %s in the flyout on %s"):format(Name(held), Name(old),
-                tostring(flyout.host)))
-        end
-        return
+    -- An icon carried off this flyout is off it, as anything carried from elsewhere (UI/Move.lua, M.Detach):
+    -- its old place goes first, and then it takes this icon's place as anything carried in does. Let go on
+    -- its own old place, unseen, it is off.
+    local had = ns.Move and ns.Move.Detach(flyout)
+    if had then
+        if had == i then return end
+        if had > 0 and had < i then i = i - 1 end
+        if not F.UnitOf(flyout) then return end
+        old = flyout.entries[i]
+        if not old then return end
     end
     local entry = ns.Drop and ns.Drop.Carried()
     if not entry then return end

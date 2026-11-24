@@ -351,14 +351,13 @@ W.CHANGES = {
             "After an update, the first time you play, the chat thanks you for updating, with the version you " ..
                 "now have, the addon's icon and name, and a link to what changed since the version you had.",
             "Adding to a flyout shows where it goes. With a spell, an item or anything else on the cursor, " ..
-                "point at the + of a button that has a flyout: the flyout opens with a gap nearest the button and " ..
-                "what you carry faintly in it. Onto a flyout already open, point at any of its icons: the gap " ..
-                "stands at its far end, so nothing moves, and the flyout stays open if you take it away again. " ..
-                "Pause between two icons and they part around the gap there; let go between two icons, parted or " ..
-                "not, and it goes in between. Stay on the middle of an icon for a moment and that icon lights up " ..
-                "instead, and letting go takes its place, as on a bar slot; let go before it lights and it goes " ..
-                "in on the nearer side of that icon. Letting go on the + itself puts it first, nearest the " ..
-                "button.",
+                "point at the + of a button that has a flyout: the flyout opens with a gap nearest the button. " ..
+                "Onto a flyout already open, point at any of its icons: the gap stands at its far end, so nothing " ..
+                "moves, and the flyout stays open if you take it away again. Pause between two icons and they " ..
+                "part around the gap there; let go between two icons, parted or not, and it goes in between. Stay " ..
+                "on the middle of an icon for a moment and that icon lights up instead, and letting go takes its " ..
+                "place, as on a bar slot; let go before it lights and it goes in on the nearer side of that icon. " ..
+                "Letting go on the + itself puts it first, nearest the button.",
             "A flyout's bar button can be given its icon and name with a controller too: RB in Edit Flyout " ..
                 "(from the game's Edit Action Bar) opens the same window a right-click opens with a mouse, and so " ..
                 "does the Icon and Name button on the Controller page of the settings. In Edit Flyout, Show or " ..
@@ -380,15 +379,15 @@ W.CHANGES = {
                 "buttons on, new flyouts keep picking with the face buttons till you choose. Any flyout can still " ..
                 "be swapped as it is made, or in Edit Flyout.",
             "Moving an icon inside its flyout works as adding one does. Stay on the middle of another icon " ..
-                "for a moment and it lights up, as a bar slot does, and letting go trades their places; let go " ..
-                "before it lights and it goes in on the nearer side of that icon. Pause between two icons and " ..
-                "they part to make room; let go between two icons, parted or not, and it goes in between. No " ..
-                "tooltips pop up over the icons while you move one, and the icon you move is drawn a little " ..
-                "smaller, as the game's own dragged icons are. An icon dragged off its flyout leaves no hole: the " ..
-                "others close up and the flyout is a place shorter till you let go. Brought back onto it before " ..
-                "you let go, a place opens for it where you bring it, and it is moved inside it again, as before " ..
-                "it left; let go on another of its icons, it trades places with it, where before it went back to " ..
-                "its own place.",
+                "for a moment and it lights up, with a faint copy of it in the place it would trade into, and " ..
+                "letting go trades their places; let go before it lights and it goes in on the nearer side of " ..
+                "that icon. Pause between two icons and they part to make room; let go between two icons, parted " ..
+                "or not, and it goes in between. No tooltips pop up over the icons while you move one, and the " ..
+                "icon you move is drawn a little smaller, as the game's own dragged icons are. An icon dragged " ..
+                "off its flyout is off it, as anything carried from elsewhere: the others close up and the flyout " ..
+                "is a place shorter, and brought back onto it, it goes in again as anything carried onto a flyout " ..
+                "does, into a free place or in the place of an icon, that one onto the cursor. Let go anywhere " ..
+                "else and it is off, as before.",
             "A right-click on an icon in a flyout casts it, as on a bar button, so a macro that does one " ..
                 "thing on a left-click and another on a right-click ([button:2]) works in a flyout too. To take " ..
                 "an icon off a flyout, drag it off (Shift-drag where your bars are locked) and let go, as off a " ..

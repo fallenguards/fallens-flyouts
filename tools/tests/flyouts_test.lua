@@ -832,8 +832,9 @@ check(Move.Moving().target == 3 and Move.Moving().at == 1 and entry(one, 3).lit 
     "staying there a fifth of a second, that icon is lit")
 settle()
 local shade = Move.Shade()
-check(along(entry(one, 3)) == slot(3) and along(entry(one, 2)) == slot(2) and shade.shown == false,
-    "it stays where it is, lit, as a bar slot is, and nothing else shows")
+check(along(entry(one, 3)) == slot(3) and along(entry(one, 2)) == slot(2) and shade.shown ~= false
+    and shade.icon.texture == 501 and along(shade) == slot(1),
+    "it stays where it is, lit, and a faint copy of it shows in the free place it would trade into")
 -- no tooltip while an icon is moved: they covered the icons being aimed at
 W.tip = nil
 entry(one, 2).scripts.OnEnter(entry(one, 2))
@@ -849,7 +850,7 @@ Move.Tick(0.02)
 settle()
 check(order() == "501 101 502" and Move.Moving() == nil and Move.Landing() == nil and not entry(one, 3).lit
     and not entry(one, 1).lit, "let go, the two trade places: the lit one into the gap, the held one in its place")
-check(Move.Shade().shown == false, "no faint copy at any point of a trade")
+check(Move.Shade().shown == false, "after the let-go the faint copy is gone")
 check(entry(one, 1).alpha == 1 and entry(one, 3).alpha == 1 and along(entry(one, 1)) == slot(1)
     and along(entry(one, 3)) == slot(3), "and each is seen, in its place")
 -- between two icons: they part after a rest, and a let-go goes in there
@@ -959,9 +960,9 @@ do
     carry(503)
     local p, tab = onPlus()
     tick()
-    check(p ~= nil and menu:IsShown() and p.gap == 1 and p.ghost.shown ~= false and p.ghost.icon.texture == 503
-        and p.catcher:IsShown() and along(entry(one, 1)) == slot(2),
-        "pointed at the plus, the flyout opens, what is carried faintly in a gap nearest the button, where the plus is")
+    check(p ~= nil and menu:IsShown() and p.gap == 1 and p.ghost.shown == false and p.catcher:IsShown()
+        and along(entry(one, 1)) == slot(2),
+        "pointed at the plus, the flyout opens with a gap nearest the button, where the plus is; nothing faint in it")
     check(p.gap == 1 and p.target == nil, "while the cursor stays on the plus the gap stays there")
     -- His words (2026-11-24): "when i try to replace, it just bounces out of my way". On the way to the
     -- first icon's middle the cursor crosses its edge: nothing moves, and its middle takes the drop.
@@ -987,7 +988,7 @@ do
         "and the faint icon does not show back at the gap by the button: a drop here goes in between")
     Move.Tick(0.04)
     check(p.gap == 2 and p.between == nil, "after a rest of 0.15 s there, the gap goes there")
-    check(p.ghost.shown ~= false, "and the faint icon shows in it")
+    check(p.ghost.shown == false, "and nothing faint shows in it: the game shows none")
     tick()
     check(p.gap == 2 and p.target == nil and along(entry(one, 1)) == slot(1) and along(entry(one, 2)) == slot(3)
         and along(entry(one, 3)) == slot(4), "the gap between the first icon and the second, the icons parted round it")
@@ -1152,9 +1153,11 @@ do
     NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 3, 2)
     flushAll()
     check(order() == "101 501 502", "and the flyout is put back as it was for the checks that follow")
-    -- dragged out and let go on the plus of its own button: it stays where it was
+    -- His words (2026-11-24): "a fundamental principle that once an icon is outside of the flyout, it should
+    -- be treated exactly like any other icon that was dragged from outside the flyout originally."
+    -- let go on its own button's plus: in again as anything dropped on a plus is, its old place gone
     show()
-    drag(entry(one, 3))
+    drag(entry(one, 2))
     W.mouseDown = true
     W.mouseX, W.mouseY = 5000, 5000
     Move.Tick(0.02)
@@ -1163,62 +1166,30 @@ do
     Move.Tick(0.02)
     Move.Tick(0.02)
     flushAll()
-    check(count(one) == 3 and order() == "101 501 502" and W.cursor == nil and entry(one, 3).alpha == 1,
-        "let go on its own button's plus, it stays in its flyout, seen again")
-    -- His words (2026-11-24): "and even then, when i drop onto another item in the flyout, what should be a
-    -- swap doesnt. it just puts it back in the flyout?"
+    check(count(one) == 3 and order() == "101 502 501" and W.cursor == nil and Move.Carried() == nil,
+        "dragged off and let go on its own button's plus, it goes in as anything dropped there does, its old "
+        .. "place gone: " .. order())
+    NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 3, 2)
+    flushAll()
+    check(order() == "101 501 502", "and put back")
+    -- let go on another of its icons: that icon's place, that one onto the cursor, as for anything carried in
     show()
     drag(entry(one, 3))
     W.mouseDown = true
     W.mouseX, W.mouseY = 5000, 5000
     Move.Tick(0.02)
     check(Move.Carried() ~= nil and W.cursor ~= nil and W.cursor[4] == 502, "dragged out, it is on the cursor")
-    entry(one, 1).scripts.OnReceiveDrag(entry(one, 1))
+    entry(one, 2).scripts.OnReceiveDrag(entry(one, 2))
     W.mouseDown = false
     Move.Tick(0.02)
     Move.Tick(0.02)
     flushAll()
-    check(order() == "502 501 101" and W.cursor == nil and count(one) == 3 and entry(one, 1).alpha == 1
-        and entry(one, 3).alpha == 1 and menu:IsShown(),
-        "let go on another of its flyout's icons, the two trade places, the flyout still open: " .. order())
-    -- on its own place it stays
-    drag(entry(one, 1))
-    W.mouseDown = true
-    W.mouseX, W.mouseY = 5000, 5000
-    Move.Tick(0.02)
-    entry(one, 1).scripts.OnReceiveDrag(entry(one, 1))
-    W.mouseDown = false
-    Move.Tick(0.02)
-    Move.Tick(0.02)
-    flushAll()
-    check(order() == "502 501 101" and W.cursor == nil and count(one) == 3 and entry(one, 1).alpha == 1,
-        "let go on its own place, it stays there")
-    NS.Flyouts.Swap(NS.Flyouts.At("ActionButton1"), 1, 3)
-    flushAll()
-    check(order() == "101 501 502", "and the flyout is put back as it was for the checks that follow")
-    -- His report (2026-11-24): "as soon as i drag a flyout item outside of the flyout (but don't drop it) and
-    -- try to bring in back in, the swapping around just ceases to happen."
-    show()
-    drag(entry(one, 3))
-    W.mouseDown = true
-    W.mouseX, W.mouseY = 5000, 5000
-    Move.Tick(0.02)
-    check(Move.Carried() ~= nil and W.cursor ~= nil and Move.Moving() == nil, "dragged off, it is on the cursor")
-    W.mouseX, W.mouseY = middle(3)
-    Move.Tick(0.02)
-    check(Move.Carried() == nil and Move.Moving() ~= nil and Move.Moving().from == 3 and Move.Moving().at == 3
-        and W.cursor == nil and entry(one, 3).alpha == 0 and count(one) == 3,
-        "brought back onto the flyout with the mouse still held, it is moved inside it again, nothing on the cursor")
-    W.mouseX, W.mouseY = middle(1)
-    Move.Tick(0.12)
-    Move.Tick(0.12)
-    check(Move.Moving().target == 1 and entry(one, 1).lit, "an icon stayed on lights up, as before it left")
-    W.mouseDown = false
-    Move.Tick(0.02)
-    settle()
-    check(order() == "502 501 101" and count(one) == 3 and W.cursor == nil and Move.Moving() == nil
-        and Move.Carried() == nil, "let go, the two trade places: " .. order())
-    NS.Flyouts.Swap(NS.Flyouts.At("ActionButton1"), 1, 3)
+    check(order() == "101 502" and W.cursor ~= nil and W.cursor[4] == 501 and Move.Carried() == nil,
+        "let go on another of its icons, it takes that one's place and that one is on the cursor, as for any icon "
+        .. "carried in; its own old place is gone: " .. order())
+    W.cursor = nil
+    stack("ActionButton1", 501)
+    NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 3, 2)
     flushAll()
     check(order() == "101 501 502", "and put back as it was")
     -- His words (2026-11-24): "when an icon pulled fully out of the flyout, why dont the rest of the icons sink
@@ -1236,19 +1207,40 @@ do
         and entry(one, 2).shown ~= false and unitSink.menu[lengthKey] == fullLength - (NS.Art.ICON + NS.Art.NEXT),
         "dragged off, the icons after it close up over its place and the strip is a place shorter; its own frame "
         .. "stays, unseen")
+    -- His report (2026-11-24): "as soon as i drag a flyout item outside of the flyout (but don't drop it) and
+    -- try to bring in back in, the swapping around just ceases to happen." Brought back over the open flyout
+    -- it is as anything carried in: the preview, its own old place left out, nothing moving as it begins.
+    local placeSize = NS.Art.ICON + NS.Art.NEXT
     W.mouseX, W.mouseY = middle(1)
+    entry(one, 1).scripts.OnEnter(entry(one, 1))
+    local back = Move.Preview()
+    check(back ~= nil and back.skip == 2 and back.n == 2 and back.gap == 3 and Move.Moving() == nil
+        and unitSink.menu[lengthKey] == fullLength,
+        "brought back over the open flyout, the preview of anything carried in begins, its old place left out")
+    back.tab.over, back.catcher.over = false, true
     Move.Tick(0.02)
-    check(Move.Moving() ~= nil and Move.Moving().at == 1 and unitSink.menu[lengthKey] == fullLength,
-        "brought back, the strip is its length again and a place opens where it is brought back")
-    settle()
-    check(along(entry(one, 1)) == slot(2) and along(entry(one, 3)) == slot(3), "the icons there move aside for it")
+    check(along(entry(one, 1)) == slot(1) and along(entry(one, 3)) == slot(2) and back.ghost.shown == false,
+        "nothing moves as it begins, and nothing faint shows")
+    local bx, by = middle(2)
+    W.mouseX, W.mouseY = bx, by
+    Move.Tick(0.12)
+    Move.Tick(0.12)
+    check(back.target == 2 and entry(one, 3).lit and not entry(one, 1).lit,
+        "an icon stayed on lights up, to be replaced, as for anything carried in")
+    local ax, ay = middle(1)
+    W.mouseX, W.mouseY = (ax + bx) / 2, (ay + by) / 2
+    Move.Tick(0.1)
+    Move.Tick(0.1)
+    check(back.target == nil and back.gap == 2 and along(entry(one, 3)) ~= slot(2),
+        "between the first icon and the other, they part there")
+    back.catcher.scripts.OnReceiveDrag(back.catcher)
     W.mouseDown = false
     Move.Tick(0.02)
-    settle()
-    check(order() == "501 101 502" and count(one) == 3, "let go, it is in that place: " .. order())
-    NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 1, 2)
+    Move.Tick(0.02)
     flushAll()
-    check(order() == "101 501 502", "and put back")
+    check(order() == "101 501 502" and count(one) == 3 and W.cursor == nil and Move.Carried() == nil
+        and unitSink.menu[lengthKey] == fullLength and placeSize > 0,
+        "let go, it goes in there, its old place gone: " .. order())
     -- let go off the flyout, it comes off and the strip is laid for those left
     show()
     drag(entry(one, 2))
@@ -1265,28 +1257,6 @@ do
     NS.Flyouts.Move(NS.Flyouts.At("ActionButton1"), 3, 2)
     flushAll()
     check(order() == "101 501 502", "and put back as it was for the checks that follow")
-    -- near the edge but not on the strip, it stays on the cursor: back means on the flyout itself
-    show()
-    drag(entry(one, 3))
-    W.mouseDown = true
-    W.mouseX, W.mouseY = 5000, 5000
-    Move.Tick(0.02)
-    local nearX, nearY = middle(1)
-    local backScale = menu:GetEffectiveScale()
-    if upright then
-        nearX = (menu.rect[2] + NS.Art.ICON * 0.5) * backScale
-    else
-        nearY = (menu.rect[3] + NS.Art.ICON * 0.5) * backScale
-    end
-    W.mouseX, W.mouseY = nearX, nearY
-    Move.Tick(0.02)
-    check(Move.Carried() ~= nil and Move.Moving() == nil, "just past the flyout's edge it is still on the cursor")
-    W.mouseX, W.mouseY = middle(3)
-    Move.Tick(0.02)
-    W.mouseDown = false
-    Move.Tick(0.02)
-    settle()
-    check(order() == "101 501 502" and count(one) == 3 and W.cursor == nil, "back on its own place and let go: as it was")
     show()
 end
 W.shift, W.locked = false, false

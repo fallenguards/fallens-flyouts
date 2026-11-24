@@ -263,7 +263,7 @@ end
 -- the flyout will be once it is let go. Its own frame stays as it is, unseen: the game's drag lives only
 -- while that frame is shown. His words (2026-11-24): "when an icon pulled fully out of the flyout, why dont
 -- the rest of the icons sink down into a smaller flyout? they should". The strip's length is put back when
--- it comes back or is let go on its own flyout.
+-- it is let go.
 local function Shorten(c)
     local menu = c.unit.menu
     c.w, c.h = menu:GetSize()
@@ -312,16 +312,25 @@ local function EndCarry()
     if unit and at and not InCombatLockdown() then F.TakeOff(unit, at) end
 end
 
--- Dropped back on its own flyout while on its way out: on the plus it stays where it was; on another of its
--- icons the two trade places (F.Dropped). The second value: what it held.
-function M.PutBack(flyout)
+-- An icon carried off its flyout is off it from then on, as anything carried from elsewhere: let go on its
+-- own flyout, its old place goes first, and then it goes in as anything carried in does. His words
+-- (2026-11-24): "a fundamental principle that once an icon is outside of the flyout, it should be treated
+-- exactly like any other icon that was dragged from outside the flyout originally." Returns the place it
+-- had (0 if it was not found) where what is carried is from this flyout, else nil.
+function M.Detach(flyout)
     local was = carried
-    if not (was and was.flyout == flyout) then return false end
+    if not (was and was.flyout == flyout) then return nil end
     carried = nil
+    local at
+    for i, entry in ipairs(flyout.entries) do
+        if entry == was.entry then at = i end
+    end
     Lengthen(was)
     Still(was.unit)
-    ns.Log(("move: %s the icon dragged out was let go on its own flyout"):format(tostring(flyout.host)))
-    return true, was.entry
+    if at and not InCombatLockdown() then F.Remove(flyout, at) end
+    ns.Log(("move: %s the icon carried off it is let go on it: its old place %s goes first")
+        :format(tostring(flyout.host), tostring(at)))
+    return at or 0
 end
 
 -- let go: the icon lands in the gap, or in the place of the icon lit, that one going into the gap; the rest
@@ -411,19 +420,35 @@ end
 function M.Step(elapsed)
     if (moving or landing or carried) and InCombatLockdown() then return M.Cancel() end
     -- off its flyout: the others close up over its place
-    if carried and not moving then Slide(carried.unit, elapsed, carried.from, #carried.flyout.entries) end
+    if carried and not moving and not (preview and preview.unit == carried.unit) then
+        Slide(carried.unit, elapsed, carried.from, #carried.flyout.entries)
+    end
     if moving then
         moving.grown = math.min(1, moving.grown + elapsed / GROW_TIME)
         Slide(moving.unit, elapsed, moving.from, moving.at)
         for j, frame in ipairs(moving.unit.entries) do
             if j == moving.target then frame:LockHighlight() else frame:UnlockHighlight() end
         end
-        -- An icon lit for a trade only lights up, where it is, as a bar slot does: nothing slides, no faint
-        -- copy, no dimmed held icon. His words (2026-11-24), of the icon sliding over to show the trade:
-        -- "direct swaps within flyout no longer possible? things just auto move out of the way without a
-        -- chance lol.", then of the faint copy shown instead: "the flashing is extremely annoying. when did i
-        -- ask for that (hint, i didnt). the default game doesn't, why are we? ... wow players already know
-        -- what happens when you drag one icon onto another."
+        -- A trade of two icons inside the flyout: the icon lit stays where it is, and a faint copy of it shows
+        -- in the free place it would go to. The game's bars do no such trade, so it is shown: what will
+        -- happen, and why the flyout keeps its length. His words (2026-11-24): "the one ghost preview i AM
+        -- okay with is direct placement swaps between two icons in the flyout. but that's the only time",
+        -- and "since thats not default behavior so ppl won't know. and makes clear what will happen and why
+        -- the flyout isnt shrinking." No other: of the lit icon sliding over, "things just auto move out of
+        -- the way without a chance", and of faint icons and a dimmed held icon, "the flashing is extremely
+        -- annoying ... the default game doesn't".
+        local unit, lit = moving.unit, moving.target
+        local shade = Ghost()
+        if lit and unit.flyout.entries[lit] then
+            shade:SetParent(unit.menu)
+            shade:SetFrameLevel(unit.menu:GetFrameLevel() + 2)
+            shade:SetAlpha(0.6)
+            shade.icon:SetTexture(F.Icon(unit.flyout.entries[lit]))
+            F.Put(unit, shade, F.Slot(moving.at))
+            shade:Show()
+        else
+            shade:Hide()
+        end
         Hold(moving, moving.x, moving.y, 1 + (GROW - 1) * moving.grown)
     elseif landing then
         local l = landing
@@ -559,8 +584,10 @@ local function Lay(p, elapsed)
     local unit = p.unit
     local step = math.min(1, (elapsed or 1) * SLIDE)
     for j, frame in ipairs(unit.entries) do
-        if unit.flyout.entries[j] then
-            local want = F.Slot(Parted(j, not p.full and p.gap or nil))
+        -- an icon carried off this flyout is left out: off it, its place closed up (`skip`)
+        if unit.flyout.entries[j] and j ~= p.skip then
+            local r = (p.skip and j > p.skip) and j - 1 or j
+            local want = F.Slot(Parted(r, not p.full and p.gap or nil))
             local now = frame.slide or F.Slot(j)
             if now ~= want then
                 now = now + (want - now) * step
@@ -568,16 +595,13 @@ local function Lay(p, elapsed)
                 frame.slide = now
                 F.Put(unit, frame, now)
             end
-            if j == p.target then frame:LockHighlight() else frame:UnlockHighlight() end
+            if r == p.target then frame:LockHighlight() else frame:UnlockHighlight() end
         end
     end
-    -- The faint icon shows only where a drop goes in: not over an icon to be replaced, and not between two
-    -- icons that have yet to part, where a drop goes in between them and not into the gap. His words
-    -- (2026-11-24): "it keeps flashing to the 1st spot when im moving along the column to figure out where i
-    -- want to drop it?" Each space between two icons the cursor crossed showed it at the gap, by the button.
-    local shade = Ghost()
-    shade:SetShown(not p.full and p.target == nil and p.between == nil and p.near == nil)
-    if not p.full then F.Put(unit, shade, F.Slot(p.gap)) end
+    -- Nothing faint shows for something added: the game shows none. His words (2026-11-24): "the one ghost
+    -- preview i AM okay with is direct placement swaps between two icons in the flyout. but that's the only
+    -- time".
+    Ghost():Hide()
 end
 
 -- the flyout as it was: every icon in its place, the strip its length, the gap and its icon gone
@@ -623,10 +647,20 @@ function M.PreviewDrop()
         return true
     end
     local entry = ns.Drop.Carried()
+    local flyout = p.flyout
     if p.target then
-        local frame = p.unit.entries[p.target]
+        local target = p.target
         M.PreviewEnd(true)
-        F.Dropped(frame)
+        -- an icon carried off this flyout: its old place goes first, as for anything carried in (M.Detach)
+        if p.skip then M.Detach(flyout) end
+        local unit = F.UnitOf(flyout)
+        local frame = unit and unit.entries[target]
+        if frame then
+            F.Dropped(frame)
+        elseif entry then
+            local made, why = F.Stack(p.button, entry)
+            if made then ClearCursor() elseif why then ns.Warn(why) end
+        end
         return true
     end
     if p.full or not entry then
@@ -637,7 +671,9 @@ function M.PreviewDrop()
     -- between two icons that have not parted yet: in there all the same
     local gap, button = p.between or p.near or p.gap, p.button
     M.PreviewEnd(true)
-    local flyout, why = F.Stack(button, entry)
+    if p.skip then M.Detach(flyout) end
+    local why
+    flyout, why = F.Stack(button, entry)
     if not flyout then
         F.Shut()
         ns.Warn(why)
@@ -687,20 +723,31 @@ end
 -- the cursor came onto a plus: true where its flyout is shown so
 -- `atEnd`: the free place at the far end, so that no icon moves as it begins (carried onto an open flyout)
 function M.PreviewStart(tab, atEnd)
-    if preview or moving or carried or landing or InCombatLockdown() then return false end
+    if preview or moving or landing or InCombatLockdown() then return false end
     local flyout, unit = F.At(tab.host)
     if not (flyout and unit and unit.host and not unit.radial and not flyout.auto) then return false end
     local entry = ns.Drop.Carried()
     if not entry then return false end
-    local n = #flyout.entries
-    local full = #F.Full(flyout) >= F.MAX
+    -- an icon carried off this very flyout is not counted: it is off it, its place closed up already
+    local skip
+    if carried and carried.flyout == flyout then
+        for i, other in ipairs(flyout.entries) do
+            if other == carried.entry then skip = i end
+        end
+    end
+    local n = #flyout.entries - (skip and 1 or 0)
+    local full = #F.Full(flyout) - (skip and 1 or 0) >= F.MAX
+    -- open already (an icon carried off it, or opened by hand), it stays open when the preview ends: its
+    -- icon carried off it lives only while that frame is shown
+    local wasOpen = unit.menu:IsShown()
     F.Show(unit.index)
     local px, py = Centre(tab)
     if not px then px, py = GetCursorPosition() end
     local w, h = tab:GetSize()
     local p = { unit = unit, flyout = flyout, button = tab.button, tab = tab, n = n, full = full,
         gap = atEnd and n + 1 or 1,
-        px = px, py = py, pr = math.max(w, h) / 2 * tab:GetEffectiveScale(), away = 0 }
+        px = px, py = py, pr = math.max(w, h) / 2 * tab:GetEffectiveScale(), away = 0, skip = skip,
+        wasOpen = wasOpen or nil }
     preview = p
     -- the strip one icon longer, for the gap
     if not full then
@@ -709,12 +756,8 @@ function M.PreviewStart(tab, atEnd)
         local more = Art.ICON + Art.NEXT
         if unit.way == "UP" or unit.way == "DOWN" then menu:SetHeight(p.h + more) else menu:SetWidth(p.w + more) end
     end
-    local shade = Ghost()
-    p.ghost = shade
-    shade:SetParent(unit.menu)
-    shade:SetFrameLevel(unit.menu:GetFrameLevel() + 2)
-    shade:SetAlpha(0.6)
-    shade.icon:SetTexture(F.Icon(entry))
+    -- nothing faint shows for something added (Lay)
+    p.ghost = Ghost()
     local catch = Catcher()
     p.catcher = catch
     catch:ClearAllPoints()
@@ -728,47 +771,13 @@ function M.PreviewStart(tab, atEnd)
     return true
 end
 
--- An icon dragged off its flyout and brought back onto it, the mouse still held: it is moved inside the
--- flyout again, as before it left. His report (2026-11-24): "as soon as i drag a flyout item outside of the
--- flyout (but don't drop it) and try to bring in back in, the swapping around just ceases to happen." Back
--- means on the strip itself: it leaves REACH past the strip's edge and comes back at the edge, so the
--- border between the two is not crossed back and forth by a hand that holds still.
-local function Return(x, y)
-    local was = carried
-    if not (was and x and y) or InCombatLockdown() then return false end
-    local unit = was.unit
-    if unit.flyout ~= was.flyout or not Along(unit, x, y, 0) then return false end
-    local from
-    for i, entry in ipairs(was.flyout.entries) do
-        if entry == was.entry then from = i end
-    end
-    if not from then return false end
-    carried = nil
-    Lengthen(was)
-    -- what F.Pickup put on the cursor as it left goes, and the held picture is the icon again
-    if GetCursorInfo() then ClearCursor() end
-    -- the others closed up while it was off: a place opens where it is brought back
-    local at = Where(unit, x, y) or from
-    moving = { unit = unit, flyout = was.flyout, from = from, at = at, x = x, y = y, grown = 1, rest = 0,
-        dwell = 0, scale = unit.menu:GetEffectiveScale() / UIParent:GetEffectiveScale() }
-    unit.entries[from]:SetAlpha(0)
-    local held = Lift()
-    held.icon:SetTexture(F.Icon(was.flyout.entries[from]))
-    held:SetAlpha(1)
-    Hold(moving, x, y, GROW)
-    held:Show()
-    ns.Log(("move: %s place %d brought back onto its strip, the mouse still held: moved inside it again")
-        :format(tostring(was.flyout.host), from))
-    return true
-end
-
 -- Something carried onto an icon of a flyout that is open already: the same preview as onto its plus, the
 -- cursor on the flyout from the start. His words (2026-11-24): "why if flyout is already open and i drag an
 -- outsider spell to it, the rearranging stuff doesn't happen? i have to drag it to the \"+\" first which
 -- makes no sense bc the flyout is already open.."
 function M.EnterOpen(frame)
     local unit = frame and frame.flyoutUnit
-    if not (unit and unit.flyout and GetCursorInfo()) or preview or moving or carried or landing then return false end
+    if not (unit and unit.flyout and GetCursorInfo()) or preview or moving or landing then return false end
     local tab = ns.Drop and ns.Drop.Tab(unit.flyout.host)
     -- His recording (2026-11-24): begun with its free place by the button, every icon jumped a place away
     -- the moment the spell came onto the flyout, the one aimed at with them, and moved off, the flyout he had
@@ -796,9 +805,6 @@ function M.Tick(elapsed)
             EndCarry()
         elseif not IsMouseButtonDown("LeftButton") then
             carried.let = true
-        else
-            local x, y = GetCursorPosition()
-            Return(x, y)
         end
     end
     M.Step(elapsed)
