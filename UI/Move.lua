@@ -282,9 +282,13 @@ local catcher, ghost
 -- it just bounces out of my way", then "honestly i feel like this is basically standard with app movement
 -- on phones, no? ... so maybe we just need to tune our sensitvity." The way to an icon's middle crosses its
 -- edge first, so nothing moves the moment the cursor passes: the icons part only after it rests between
--- two of them for REST seconds, and most of an icon (all but RIM of it at each end) takes a drop as a
--- replacement at once.
-local RIM, REST = 0.15, 0.3
+-- two of them for REST seconds, and most of an icon (all but RIM of each place at each end) takes a drop as
+-- a replacement at once. Then: "yeah use standard phone-tuned values for this." Android's own home screen
+-- (Launcher3, Workspace.java) moves apps aside after a rest of 650 ms (REORDER_TIMEOUT), and makes a folder,
+-- at once, where the dragged icon's middle is within 0.55 of an icon's size of another's middle
+-- (mMaxDistanceForFolderCreation). On a phone an icon is about seven tenths of its cell, so that is the
+-- middle seven tenths of a place, and a rim of 0.15 of a place at each end moves things.
+local RIM, REST = 0.15, 0.65
 -- how long the cursor may be off the plus and the flyout before the flyout shuts again
 local AWAY = 0.25
 -- the catcher's reach past the strip, in the strip's measure
