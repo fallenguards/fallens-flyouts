@@ -4,7 +4,6 @@
 
 ### Added
 - Mages have "Portals" and "Teleports" preset flyouts, each holding the ones you know.
-- "Close a flyout left open" in `/ff` closes a flyout by itself when nothing is picked from it, after the time you set.
 
 ### Fixed
 - The + on a bar button no longer shows through windows over the bars.

@@ -89,11 +89,6 @@ local TEXT = {
         .. "button does.",
     twiceAsk = "%s\n\n%s\n\n|cffff2020%s|r",
     twiceOn = "Turn On",
-    close = "Close a flyout left open",
-    closeTip = "An open flyout closes by itself when nothing is picked from it for the time below. The mouse "
-        .. "over the flyout, or its key held down, keeps it open.",
-    wait = "Close after",
-    seconds = "%s sec",
     hints = "Show hints in tooltips",
     hintsTip = "A gray line at the foot of a flyout's tooltips says what a click or a button does there: a "
         .. "right-click on its bar button to change what the button shows and its name, a drag to move an "
@@ -284,11 +279,6 @@ function A.Refresh()
         w.hide:SetChecked(F.Hiding())
         w.twice:SetChecked(F.Twice())
         w.hints:SetChecked(ns.Profiles.Hints())
-        w.close:SetChecked(F.CloseAfter() ~= nil)
-        w.syncing = true
-        w.wait:SetValue(F.CloseWait())
-        w.syncing = nil
-        w.wait:SetEnabled(F.CloseAfter() ~= nil)
     end
     local p = padPage and padPage.arrange
     if p then
@@ -592,28 +582,6 @@ function A.Plate(on)
     A.Refresh()
 end
 
--- A flyout left open closes by itself, after the time on the slider under the box.
--- A player's ask (2026-11-24): "a timeout function that automatically closes the flyout if no spell is
--- selected after a couple of seconds. Maybe a setting to customize how long it should stay open before
--- closing itself?"
-function A.Close(on)
-    local ok, why = F.SetCloseAfter(on)
-    if not ok and why then ns.Warn(why) end
-    A.Refresh()
-end
-function A.Wait(seconds)
-    local w = panel and panel.arrange
-    if w and w.syncing then return end
-    local ok, why = F.SetCloseAfter(F.CloseAfter() ~= nil, seconds)
-    if not ok and why then ns.Warn(why) end
-    A.Refresh()
-end
--- a time as the slider shows it: whole seconds plain, a half with its decimal
-local function Seconds(value)
-    local n = tonumber(value) or 0
-    return TEXT.seconds:format(n == math.floor(n) and ("%d"):format(n) or ("%.1f"):format(n))
-end
-
 -- the game's own check box, after another on its line or under one, with its words and its tip
 local function Check(parent, text, tip, run, after, under)
     local box = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
@@ -668,14 +636,7 @@ function A.Build(page, above, scrolled)
     w.twice, twiceLabel = Check(holder, TEXT.twice, TEXT.twiceTip, A.AskTwice, nil, w.ranks)
     w.twice.warn = TEXT.twiceWarn
     w.hints = Check(holder, TEXT.hints, TEXT.hintsTip, A.Hints, twiceLabel)
-    -- a flyout left open closes by itself: the box, and under it the time, on the game's slider as the page's others
-    w.close = Check(holder, TEXT.close, TEXT.closeTip, A.Close, nil, w.twice)
-    local waitLabel
-    w.wait, waitLabel = ns.OptionsSlider(holder, TEXT.wait, F.WAIT_LOW, F.WAIT_HIGH, F.WAIT_STEP, A.Wait, Seconds)
-    waitLabel:SetPoint("TOPLEFT", w.close, "BOTTOMLEFT", 4, -GAP * 2)
-    local keysHead = Head(holder, TEXT.keysHead, waitLabel, -GAP * 3)
-    keysHead:ClearAllPoints()
-    keysHead:SetPoint("TOPLEFT", waitLabel, "BOTTOMLEFT", -4, -GAP * 3)
+    local keysHead = Head(holder, TEXT.keysHead, w.twice, -GAP * 3)
     w.keysNote = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     w.keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)
     w.keysNote:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)

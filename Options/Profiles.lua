@@ -300,9 +300,9 @@ function UI.SetBack(on)
     UI.Refresh()
 end
 
--- The game's slider with its steppers, its value at its right (in percent, or as `say` puts it); `run` is told
--- each value it is moved to. A row: its name, then the slider.
-local function Slider(content, name, low, high, step, run, say)
+-- The game's slider with its steppers, its value in percent at its right; `run` is told each value it is
+-- moved to. A row: its name, then the slider.
+local function Slider(content, name, low, high, step, run)
     local label = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     label:SetText(name)
     local slider = CreateFrame("Frame", nil, content, "MinimalSliderWithSteppersTemplate")
@@ -310,14 +310,13 @@ local function Slider(content, name, low, high, step, run, say)
     slider:SetPoint("LEFT", label, "LEFT", NAME_W, 0)
     local right = MinimalSliderWithSteppersMixin.Label.Right
     slider:Init(low, low, high, (high - low) / step, {
-        [right] = CreateMinimalSliderFormatter(right, say or function(value) return TEXT.percent:format(value) end),
+        [right] = CreateMinimalSliderFormatter(right, function(value) return TEXT.percent:format(value) end),
     })
     slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value) run(value) end,
         slider)
     slider.label = label
     return slider, label
 end
-ns.OptionsSlider = Slider
 
 function UI.Build()
     if panel.built then return end
@@ -562,7 +561,6 @@ do
         Note(not F.Hiding(), "hide items I have none of: off")
         Note(not F.Ranked(), "spell ranks in order: off")
         Note(F.Twice(), "press a flyout's key again for the last one used: on")
-        Note(F.CloseAfter() ~= nil, "close a flyout left open: after " .. tostring(F.CloseAfter()) .. " sec")
         Note(not F.Around(), "open around the button in gamepad mode: off")
         Note(F.Cross() ~= "opposite", "new flyouts pick with: " .. F.Cross())
         Note(F.Faces(), "flyouts made before 1.1.7 pick with the face buttons")

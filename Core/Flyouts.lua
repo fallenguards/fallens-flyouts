@@ -69,46 +69,19 @@ F.MAX, F.KEYS, F.PADS, F.CLOSE_KEYS, F.TEXT = MAX, KEYS, PADS, CLOSE_KEYS, TEXT
 -- how much further out than its own size the arrow takes a drop (the plus stands there in a fight)
 F.GRIP_REACH = 8
 
--- The open one hides; every key goes back to its opener. It is no longer open before its frame hides, so the
--- frame's own hide (F.AUTO_SHUT) leaves it to this; a time running on it (F.TIMER) is stopped.
+-- the open one hides; every key goes back to its opener
 local SHUT = [[
     do
         local open = owner:GetAttribute("open")
         if open then
+            owner:GetFrameRef("menu" .. open):Hide()
             owner:SetAttribute("open", nil)
-            local menu = owner:GetFrameRef("menu" .. open)
-            if owner:GetAttribute("timed") == open then
-                menu:UnregisterAutoHide()
-                owner:SetAttribute("timed", nil)
-            end
-            menu:Hide()
         end
     end
 ]]
 local SHOW = [[
     owner:SetAttribute("open", mine)
     owner:GetFrameRef("menu" .. mine):Show()
-]]
--- An open flyout left alone closes by itself, after the time the root holds ("autoclose", F.CloseAfter).
--- A player's ask (2026-11-24): "a timeout function that automatically closes the flyout if no spell is
--- selected after a couple of seconds. Maybe a setting to customize how long it should stay open before
--- closing itself?"
--- The game's own auto-hide on the flyout's frame keeps the time, in a fight too: it counts only while the
--- mouse is off the flyout, and starts again when the mouse has been on it. Not while the key that opened it is
--- held down: the time starts when it is let go. `timed`: the flyout whose frame has a time running.
-F.TIMER = [[
-    do
-        local open, wait = owner:GetAttribute("open"), owner:GetAttribute("autoclose")
-        local timed = owner:GetAttribute("timed")
-        if timed then
-            owner:GetFrameRef("menu" .. timed):UnregisterAutoHide()
-            owner:SetAttribute("timed", nil)
-        end
-        if open and wait and held ~= open then
-            owner:GetFrameRef("menu" .. open):RegisterAutoHide(wait)
-            owner:SetAttribute("timed", open)
-        end
-    end
 ]]
 -- openers, each key with the click name that says whether it may be held;
 -- then the open one's shut keys, then its picks (listed by Rebind)
@@ -170,15 +143,6 @@ local BIND = [[
         end
     end
 ]]
--- The open flyout's frame hidden by the game's auto-hide (F.TIMER): the flyout is shut as a key shuts it, and
--- every key goes back to its opener. A frame hidden by SHUT is no longer the open one: nothing to do.
-F.AUTO_SHUT = [[
-    local mine = self:GetAttribute("ffindex")
-    if not mine or owner:GetAttribute("open") ~= mine then return end
-    owner:SetAttribute("open", nil)
-    if owner:GetAttribute("timed") == mine then owner:SetAttribute("timed", nil) end
-    armed, held, picked, own = nil, nil, nil, nil
-]] .. BIND
 -- A press opens its flyout or shuts the open one. Held, it stays open
 -- through every pick and shuts on letting go; a "tap" click cannot be held.
 -- A key that is one of its flyout's own picks can be held too (it used to be a tap: "holding a key to
@@ -193,7 +157,6 @@ local OPENER_WRAP = [[
             held = nil
             local kept = own
             own = nil
-]] .. F.TIMER .. [[
             if picked then
                 picked = nil
 ]] .. SHUT .. BIND .. [[
@@ -211,7 +174,6 @@ local OPENER_WRAP = [[
         if button ~= "tap" then held = mine else held = nil end
         local at = strmatch(button, "^own(%d+)$")
         own = at and owner:GetAttribute("okey" .. mine .. "_" .. at) or nil
-]] .. F.TIMER .. [[
     else
         held, own = nil, nil
     end
@@ -244,7 +206,7 @@ local HOST_WRAP = [[
     local was = owner:GetAttribute("open")
 ]] .. SHUT .. [[
     if was ~= mine then
-]] .. SHOW .. F.TIMER .. [[
+]] .. SHOW .. [[
     end
 ]] .. BIND .. [[
     return false
@@ -1448,9 +1410,6 @@ local function Unit(f)
     unit.hub:SetPoint("CENTER", menu, "CENTER")
     unit.hub:Hide()
     root:SetFrameRef("menu" .. f, menu)
-    -- its number for the secure code; hidden by the game's auto-hide, the flyout is shut as by a key (F.TIMER)
-    menu:SetAttribute("ffindex", f)
-    root:WrapScript(menu, "OnHide", F.AUTO_SHUT)
     -- an open flyout asks its icons' range a few times a second; a frame in it runs only while it shows
     local tick, waited = CreateFrame("Frame", nil, menu), 0
     local function Pass() Ranges(unit) end
@@ -2624,8 +2583,6 @@ function F.Apply()
             end
         end
     end
-    -- the open one shut as a key shuts it, its time stopped; then every one hidden
-    root:Execute("local owner = self\n" .. SHUT)
     for _, unit in ipairs(units) do unit.menu:Hide() end
     root:SetAttribute("open", nil)
     -- no key counts as held or pressed across a layout
@@ -2719,7 +2676,6 @@ function F.Apply()
     end
     root:SetAttribute("paging", Bars.MainBar() ~= nil or nil)
     root:SetAttribute("twice", F.Twice() or nil)
-    root:SetAttribute("autoclose", F.CloseAfter())
     F.PageWrap()
     for lead in pairs(mains) do
         if not leads[lead] then root:SetAttribute("main-" .. lead, nil) end
@@ -3347,39 +3303,6 @@ function F.SetTwice(on)
     local data = P.Data()
     if not data then return false end
     data.twice = on and true or nil
-    F.Apply()
-    return true
-end
-
--- How long an open flyout left alone stays open (F.TIMER): the profile's, off as shipped. Once turned on, 3 s
--- unless another time is set: an icon is picked from a small menu in well under a second once it is known, and
--- the time runs only while the mouse is off the flyout and its key is up, so 3 s of nothing is a flyout not
--- wanted, while a first look over a dozen icons still fits. Set from 1 to 30 s, ten times the default, and it
--- can be turned off (WCAG 2.2.1, Timing Adjustable).
-F.WAIT, F.WAIT_LOW, F.WAIT_HIGH, F.WAIT_STEP = 3, 1, 30, 0.5
--- the time set, whether or not it is on
-function F.CloseWait()
-    local data = P.Data()
-    local wait = data and tonumber(data.closeWait) or F.WAIT
-    return math.max(F.WAIT_LOW, math.min(F.WAIT_HIGH, wait))
-end
--- the time, when it is on
-function F.CloseAfter()
-    local data = P.Data()
-    if not (data and data.closeOn) then return nil end
-    return F.CloseWait()
-end
--- on or off; `wait`, a time in seconds (to the slider's step), else the one set
-function F.SetCloseAfter(on, wait)
-    if InCombatLockdown() then return false, TEXT.fight end
-    local data = P.Data()
-    if not data then return false end
-    data.closeOn = on and true or nil
-    if tonumber(wait) then
-        wait = math.floor(tonumber(wait) / F.WAIT_STEP + 0.5) * F.WAIT_STEP
-        wait = math.max(F.WAIT_LOW, math.min(F.WAIT_HIGH, wait))
-        data.closeWait = wait ~= F.WAIT and wait or nil
-    end
     F.Apply()
     return true
 end
