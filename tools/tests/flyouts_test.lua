@@ -831,8 +831,10 @@ Move.Tick(0.12)
 check(Move.Moving().target == 3 and Move.Moving().at == 1 and entry(one, 3).lit and not entry(one, 2).lit,
     "staying there a fifth of a second, that icon is lit")
 settle()
-check(along(entry(one, 3)) == slot(1) and along(entry(one, 2)) == slot(2),
-    "and it slides into the free place, its own left open under the cursor: what a let-go does, shown")
+local shade = Move.Shade()
+check(along(entry(one, 3)) == slot(3) and along(entry(one, 2)) == slot(2) and shade.shown ~= false
+    and shade.icon.texture == 501 and along(shade) == slot(1),
+    "it stays where it is, lit, and a faint copy of it shows in the free place it would trade into")
 -- no tooltip while an icon is moved: they covered the icons being aimed at
 W.tip = nil
 entry(one, 2).scripts.OnEnter(entry(one, 2))
@@ -848,6 +850,7 @@ Move.Tick(0.02)
 settle()
 check(order() == "501 101 502" and Move.Moving() == nil and Move.Landing() == nil and not entry(one, 3).lit
     and not entry(one, 1).lit, "let go, the two trade places: the lit one into the gap, the held one in its place")
+check(Move.Shade().shown == false, "and the faint copy is gone")
 check(entry(one, 1).alpha == 1 and entry(one, 3).alpha == 1 and along(entry(one, 1)) == slot(1)
     and along(entry(one, 3)) == slot(3), "and each is seen, in its place")
 -- between two icons: they part after a rest, and a let-go goes in there
@@ -1020,6 +1023,28 @@ do
     flushAll()
     check(order() == "505 101 503 504 502" and W.cursor == nil, "let go on the plus itself, it goes in first, nearest the button")
     if menu:IsShown() then tap("ESCAPE") end
+    -- His words (2026-11-24): "why if flyout is already open and i drag an outsider spell to it, the
+    -- rearranging stuff doesn't happen? i have to drag it to the \"+\" first which makes no sense bc the
+    -- flyout is already open.."
+    show()
+    carry(506)
+    entry(one, 2).scripts.OnEnter(entry(one, 2))
+    p = Move.Preview()
+    check(p ~= nil and p.left == true and p.catcher:IsShown(),
+        "carried onto an icon of the open flyout, the same preview begins: no plus needed")
+    p.tab.over, p.catcher.over = false, true
+    W.mouseX, W.mouseY = point(2.02)
+    Move.Tick(0.1)
+    Move.Tick(0.1)
+    check(p.gap == 2, "the icons part where it is held, as from the plus")
+    p.catcher.scripts.OnReceiveDrag(p.catcher)
+    flushAll()
+    check(order() == "505 506 101 503 504 502" and W.cursor == nil, "let go, it goes in there: " .. order())
+    if menu:IsShown() then tap("ESCAPE") end
+    local _, openUnit = NS.Flyouts.At("ActionButton1")
+    NS.Flyouts.TakeOff(openUnit, 2)
+    flushAll()
+    check(order() == "505 101 503 504 502", "and taken off again for the checks that follow")
     -- the cursor away from the plus and the flyout: it shuts as it was
     carry(506)
     p, tab = onPlus()

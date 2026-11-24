@@ -904,9 +904,11 @@ end
 local function EntryTip(self)
     local entry = self.entry
     if not entry then return end
+    -- something carried onto an icon of the open flyout: the preview of adding it begins (UI/Move.lua)
+    local move = ns.Move
+    if move and GetCursorInfo() and move.EnterOpen(self) then return end
     -- none while an icon is moved, carried off its flyout or added: they covered the icons being aimed at
     -- (his recording, 2026-11-24)
-    local move = ns.Move
     if move and (move.Moving() or move.Carried() or move.Preview()) then return end
     -- while keys are being set, a hover says how instead
     if ns.Keys and ns.Keys.Enter(self) then return end

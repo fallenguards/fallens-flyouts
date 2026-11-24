@@ -10,7 +10,10 @@ ns.Move = M
 local F, Art = ns.Flyouts, ns.Art
 
 -- how much the held icon grows, and how fast things move
-local GROW, GROW_TIME, SLIDE, LAND_TIME = 1.25, 0.12, 16, 0.12
+-- The held icon shrinks a little, as the game's own dragged icons do. His words (2026-11-24): "why dont our
+-- icons in flyout go to normal icon size when icons are moved? they usually shrink." It grew by a quarter
+-- before, as a phone lifts an app.
+local GROW, GROW_TIME, SLIDE, LAND_TIME = 0.8, 0.12, 16, 0.12
 -- how far off the strip the cursor may stray before the icon is out of it
 local REACH = Art.ICON * 0.75
 -- a slide this close to its place is there
@@ -47,7 +50,7 @@ local moving, landing
 -- something carried, its flyout open for it with a gap where it would go (further down)
 local preview
 local lift, driver
-local Driver
+local Driver, Ghost
 -- An icon dragged out of its flyout: on the cursor at once, off the flyout when the mouse lets go.
 -- Till then its frame stays as it is, unseen. The game's drag lives only while the frame it began on is
 -- shown, and with it gone a let-go over a bar button placed nothing: the spot had to be clicked.
@@ -212,16 +215,13 @@ local function SayAim(m, x, y)
         or ("on the gap at %d"):format(m.at)))
 end
 
--- every icon a step nearer its place; true while any is still on its way. `lit`: the icon lit for a trade,
--- which goes into the free place (`at`), its own left open under the cursor: what a let-go does, shown. His
--- recording (2026-11-24): over the middle of an icon the flyout showed nothing happening, "many times get
--- stuck in this mode where things don't move when they clearly should".
-local function Slide(unit, elapsed, from, at, lit)
+-- every icon a step nearer its place; true while any is still on its way
+local function Slide(unit, elapsed, from, at)
     local busy = false
     local step = math.min(1, elapsed * SLIDE)
     for j, frame in ipairs(unit.entries) do
         if j ~= from and unit.flyout.entries[j] then
-            local want = F.Slot(from and (j == lit and at or Place(j, from, at)) or j)
+            local want = F.Slot(from and Place(j, from, at) or j)
             local now = frame.slide or F.Slot(j)
             if now ~= want then
                 now = now + (want - now) * step
@@ -276,6 +276,7 @@ function M.Cancel()
     moving = nil
     if was then
         if lift then lift:Hide() end
+        Ghost():Hide()
         Still(was.unit)
     end
     if carried then
@@ -331,6 +332,7 @@ function M.Drop()
     elseif was.near then
         was.at, was.near = was.near, nil
     end
+    Ghost():Hide()
     local unit, flyout, from, at, lit = was.unit, was.flyout, was.from, was.at, was.target
     -- where each icon is drawn just now, by the place it ends in
     local drawn = {}
@@ -409,10 +411,27 @@ function M.Step(elapsed)
     if carried and not moving then Slide(carried.unit, elapsed, carried.from, #carried.flyout.entries) end
     if moving then
         moving.grown = math.min(1, moving.grown + elapsed / GROW_TIME)
-        Slide(moving.unit, elapsed, moving.from, moving.at, moving.target)
+        Slide(moving.unit, elapsed, moving.from, moving.at)
         for j, frame in ipairs(moving.unit.entries) do
             if j == moving.target then frame:LockHighlight() else frame:UnlockHighlight() end
         end
+        -- An icon lit for a trade stays where it is, under the cursor: a faint copy of it shows in the free
+        -- place it would go to, and the held icon is half seen so the light shows through. His words
+        -- (2026-11-24), of the icon sliding over to show it: "direct swaps within flyout no longer possible?
+        -- things just auto move out of the way without a chance lol."
+        local unit, lit = moving.unit, moving.target
+        local shade = Ghost()
+        if lit and unit.flyout.entries[lit] then
+            shade:SetParent(unit.menu)
+            shade:SetFrameLevel(unit.menu:GetFrameLevel() + 2)
+            shade:SetAlpha(0.6)
+            shade.icon:SetTexture(F.Icon(unit.flyout.entries[lit]))
+            F.Put(unit, shade, F.Slot(moving.at))
+            shade:Show()
+        else
+            shade:Hide()
+        end
+        Lift():SetAlpha(lit and 0.5 or 1)
         Hold(moving, moving.x, moving.y, 1 + (GROW - 1) * moving.grown)
     elseif landing then
         local l = landing
@@ -454,7 +473,7 @@ local AWAY = 0.25
 -- the catcher's reach past the strip, in the strip's measure
 local CATCH = 12
 
-local function Ghost()
+function Ghost()
     if ghost then return ghost end
     ghost = CreateFrame("Frame", nil, UIParent)
     ghost:Hide()
@@ -599,6 +618,8 @@ function M.PreviewEnd(keep)
     ns.Log(("preview: %s ended"):format(tostring(p.flyout.host)))
 end
 function M.Preview() return preview end
+-- the faint icon: where something added would go, or where an icon lit for a trade would go
+function M.Shade() return Ghost() end
 
 -- A drop on the plus or on the open flyout: into the gap, or in the place of the icon lit.
 function M.PreviewDrop()
@@ -738,10 +759,25 @@ local function Return(x, y)
     unit.entries[from]:SetAlpha(0)
     local held = Lift()
     held.icon:SetTexture(F.Icon(was.flyout.entries[from]))
+    held:SetAlpha(1)
     Hold(moving, x, y, GROW)
     held:Show()
     ns.Log(("move: %s place %d brought back onto its strip, the mouse still held: moved inside it again")
         :format(tostring(was.flyout.host), from))
+    return true
+end
+
+-- Something carried onto an icon of a flyout that is open already: the same preview as onto its plus, the
+-- cursor on the flyout from the start. His words (2026-11-24): "why if flyout is already open and i drag an
+-- outsider spell to it, the rearranging stuff doesn't happen? i have to drag it to the \"+\" first which
+-- makes no sense bc the flyout is already open.."
+function M.EnterOpen(frame)
+    local unit = frame and frame.flyoutUnit
+    if not (unit and unit.flyout and GetCursorInfo()) or preview or moving or carried or landing then return false end
+    local tab = ns.Drop and ns.Drop.Tab(unit.flyout.host)
+    if not (tab and M.PreviewStart(tab)) then return false end
+    preview.left = true
+    ns.Log(("preview: %s begun on an icon of the open flyout"):format(tostring(unit.flyout.host)))
     return true
 end
 
@@ -793,6 +829,7 @@ function M.Start(frame, driven)
     frame:SetAlpha(0)
     local held = Lift()
     held.icon:SetTexture(F.Icon(flyout.entries[i]))
+    held:SetAlpha(1)
     Hold(moving, x, y, 1)
     held:Show()
     Driver():Show()
