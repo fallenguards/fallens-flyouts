@@ -32,14 +32,19 @@ local TEXT = {
     -- His words (2026-11-23): "why does our initial user popout not mention the right click to change
     -- flyout icon? ppl literally won't even know."
     icon = "Right-click a flyout's bar button to give it an icon and a name of its own.",
-    auto = "You can also use these preset flyouts. Each one keeps itself filled with what you have of that kind. "
-        .. "Drag one onto an action bar, or click it and then a bar button.",
+    auto = "Each one keeps itself filled with what you have of that kind. Drag one onto an action bar, or click it "
+        .. "and then a bar button.",
     -- His words (2026-11-25): "i feel like we should have a dropdown for the presets, and the setting about rotating
     -- the cd icon. like \"Optional setup\" dropdown. cus i want ppl to understand they really can just go waithout
     -- any setup and its super easy. but also allow users to see there are options if they want them. dont put all
     -- options in the optional setup part tho, just the presets and the otyher i just mentioned, and at the bbottom
     -- letr ppl know they can change those and more in the settings at any time (and tell them how to get there)"
     setup = "Optional setup",
+    -- His words and snip (2026-11-25): "the \"you can change these and more...\" should be in the expand ... not
+    -- shown immediately. also, this look for some reason makes it seem like the show hlast used one toggle is
+    -- related to the flyouts. they almost need like diff headers."
+    presets = "Preset flyouts",
+    buttons = "Flyout buttons",
     last = "Show the last one used on its button",
     lastTip = "A flyout's bar button shows the icon you picked from it last, with its cooldown and tooltip, until "
         .. "you pick another.",
@@ -131,8 +136,12 @@ local function Build()
     optional:SetSize(row, 1)
     optional:Hide()
     frame.optional = optional
+    -- each part under a heading of its own: the presets, then the flyouts' bar buttons
+    frame.presetsHead = optional:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    frame.presetsHead:SetPoint("TOPLEFT", optional, "TOPLEFT")
+    frame.presetsHead:SetText(TEXT.presets)
     frame.auto = optional:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    frame.auto:SetPoint("TOPLEFT", optional, "TOPLEFT")
+    frame.auto:SetPoint("TOPLEFT", frame.presetsHead, "BOTTOMLEFT", 0, -GAP / 2)
     frame.auto:SetWidth(row)
     frame.auto:SetJustifyH("LEFT")
     frame.auto:SetText(TEXT.auto)
@@ -147,9 +156,12 @@ local function Build()
         end
         frame.icons[i] = button
     end
+    frame.buttonsHead = optional:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    frame.buttonsHead:SetPoint("TOPLEFT", frame.icons[1], "BOTTOMLEFT", -GAP, -(NAME_H + GAP))
+    frame.buttonsHead:SetText(TEXT.buttons)
     -- the setting the settings page has under General, the same box: the game's own, with its tip
     local last = CreateFrame("CheckButton", nil, optional, "UICheckButtonTemplate")
-    last:SetPoint("TOPLEFT", frame.icons[1], "BOTTOMLEFT", -GAP - 4, -(NAME_H + GAP / 2))
+    last:SetPoint("TOPLEFT", frame.buttonsHead, "BOTTOMLEFT", -4, -GAP / 4)
     local lastText = last.Text or last.text
     if not lastText then
         lastText = last:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -174,10 +186,11 @@ local function Build()
     frame.okay:SetText(OKAY)
     frame.okay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -EDGE, FOOT)
     frame.okay:SetScript("OnClick", Dismiss)
-    -- at the foot: these and more can be changed any time, and the way to the settings, in the game's own words
-    frame.more = frame:CreateFontString(nil, "ARTWORK", "GameFontDisable")
-    frame.more:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", EDGE, FOOT + OKAY_H + GAP)
-    frame.more:SetWidth(wide)
+    -- at the end of what it opens: these and more can be changed any time, and the way to the settings, in the
+    -- game's own words
+    frame.more = optional:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    frame.more:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 4, -GAP)
+    frame.more:SetWidth(row)
     frame.more:SetJustifyH("LEFT")
     frame.more:SetText(TEXT.more:format(GAMEMENU_OPTIONS or "Options", ADDONS or "AddOns"))
     return frame
@@ -185,13 +198,13 @@ end
 
 -- as high as its words run to at this client's size of text, with "Optional setup" shut or open
 local function Fit()
-    local height = TITLE + (frame.make:GetStringHeight() or 0) + GAP + (frame.icon:GetStringHeight() or 0) + GAP
-        + TOGGLE
+    local function Tall(line) return line:GetStringHeight() or 0 end
+    local height = TITLE + Tall(frame.make) + GAP + Tall(frame.icon) + GAP + TOGGLE
     if frame.setupOpen then
-        height = height + GAP + (frame.auto:GetStringHeight() or 0) + GAP + Art.ICON + NAME_H + GAP / 2
-            + (frame.last:GetHeight() or 0)
+        height = height + GAP + Tall(frame.presetsHead) + GAP / 2 + Tall(frame.auto) + GAP + Art.ICON + NAME_H + GAP
+            + Tall(frame.buttonsHead) + GAP / 4 + (frame.last:GetHeight() or 0) + GAP + Tall(frame.more)
     end
-    height = height + GAP + (frame.more:GetStringHeight() or 0) + GAP + OKAY_H + FOOT
+    height = height + GAP + OKAY_H + FOOT
     frame:SetSize(frame.wide + EDGE * 2, height)
 end
 
