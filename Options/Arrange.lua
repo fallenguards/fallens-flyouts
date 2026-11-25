@@ -639,17 +639,32 @@ function A.Build(page, above, scrolled)
     panel, holder = page, scrolled or page
     local w = {}
     local general = Head(holder, TEXT.general, above, -GAP * 3)
-    local ranksLabel
-    w.ranks, ranksLabel = Check(holder, TEXT.ranks, TEXT.ranksTip, A.Ranks, nil, general)
-    w.ranks:ClearAllPoints()
-    w.ranks:SetPoint("TOPLEFT", general, "BOTTOMLEFT", 0, -GAP)
-    w.hide = Check(holder, TEXT.hide, TEXT.hideTip, A.Hide, ranksLabel)
-    local twiceLabel
-    w.twice, twiceLabel = Check(holder, TEXT.twice, TEXT.twiceTip, A.AskTwice, nil, w.ranks)
+    -- Two columns at fixed places, each row a pair on one subject: the second column starts past the widest
+    -- box and words of the first, measured at this client's size of text, so every row lines up.
+    -- His snip (2026-11-25): "ugly. pls have fixed columns, not this mess where one option appears direcrtly asfter
+    -- another causing misalignment"
+    local rows = {
+        { { "ranks", TEXT.ranks, TEXT.ranksTip, A.Ranks }, { "hide", TEXT.hide, TEXT.hideTip, A.Hide } },
+        { { "twice", TEXT.twice, TEXT.twiceTip, A.AskTwice }, { "last", TEXT.last, TEXT.lastTip, A.Last } },
+        { { "hints", TEXT.hints, TEXT.hintsTip, A.Hints } },
+    }
+    local cells, widest = {}, 0
+    for r, row in ipairs(rows) do
+        for c, spec in ipairs(row) do
+            local box, label = Check(holder, spec[2], spec[3], spec[4], nil, general)
+            w[spec[1]] = box
+            cells[#cells + 1] = { box = box, row = r, column = c }
+            if c == 1 then widest = math.max(widest, (box:GetWidth() or 0) + (label:GetStringWidth() or 0)) end
+        end
+    end
+    local second, step = widest + GAP * 4, (w.ranks:GetHeight() or 0) + GAP / 2
+    for _, cell in ipairs(cells) do
+        cell.box:ClearAllPoints()
+        cell.box:SetPoint("TOPLEFT", general, "BOTTOMLEFT", cell.column == 1 and 0 or second,
+            -GAP - (cell.row - 1) * step)
+    end
     w.twice.warn = TEXT.twiceWarn
-    w.hints = Check(holder, TEXT.hints, TEXT.hintsTip, A.Hints, twiceLabel)
-    w.last = Check(holder, TEXT.last, TEXT.lastTip, A.Last, nil, w.twice)
-    local keysHead = Head(holder, TEXT.keysHead, w.last, -GAP * 3)
+    local keysHead = Head(holder, TEXT.keysHead, w.hints, -GAP * 3)
     w.keysNote = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     w.keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)
     w.keysNote:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)

@@ -6168,6 +6168,22 @@ do
     flushAll()
 end
 
+print("General's boxes stand in two fixed columns")
+do
+    -- His snip (2026-11-25): "ugly. pls have fixed columns, not this mess where one option appears direcrtly asfter
+    -- another causing misalignment"
+    NS.ProfileUI.Build()
+    local w = NS.ProfileUI.panel.arrange
+    local function x(box) return box.point[4] end
+    local function y(box) return box.point[5] end
+    local longest = w.twice:GetWidth() + #"Press a flyout's key again for the last one used" * 7
+    check(x(w.ranks) == 0 and x(w.twice) == 0 and x(w.hints) == 0, "the first column starts at the heading's edge")
+    check(x(w.hide) == x(w.last) and x(w.hide) > longest,
+        "the second column starts at one place on every row, past the widest of the first: " .. tostring(x(w.hide)))
+    check(y(w.ranks) == y(w.hide) and y(w.twice) == y(w.last) and y(w.hints) < y(w.twice) and y(w.twice) < y(w.ranks),
+        "each row a pair: ranks and items, then the two of the last one used, then hints")
+end
+
 -- what ships names nobody else's addon and nothing of the dev folder
 for _, file in ipairs(tocFiles()) do
     local text = io.open(file):read("a")
