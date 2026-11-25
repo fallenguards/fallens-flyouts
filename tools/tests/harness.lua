@@ -250,6 +250,8 @@ for _, kind in ipairs({ "Normal", "Pushed", "Highlight" }) do
     end
     Frame["Get" .. kind .. "Texture"] = Art
     Frame["Set" .. kind .. "Atlas"] = function(self, atlas) Art(self).atlas = atlas end
+    -- a file or, as the client takes it too, an atlas by its name
+    Frame["Set" .. kind .. "Texture"] = function(self, asset, mode) Art(self).texture, Art(self).mode = asset, mode end
 end
 -- as the client: the scripts run only when the frame's own state changes
 function Frame:Hide()

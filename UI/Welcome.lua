@@ -1,7 +1,8 @@
 local _, ns = ...
 -- luacheck: globals FallensFlyoutsDB
 -- luacheck: read globals CreateFrame UIParent InCombatLockdown C_Timer OKAY GamepadMainActionBarFrame
--- luacheck: read globals DEFAULT_CHAT_FRAME C_AddOns EventRegistry strsplit geterrorhandler
+-- luacheck: read globals DEFAULT_CHAT_FRAME C_AddOns EventRegistry strsplit geterrorhandler GameTooltip
+-- luacheck: read globals GAMEMENU_OPTIONS ADDONS
 
 -- What someone sees who has just installed the addon, once: a small window of the game's own kind (the
 -- flat panel its Loot Rolls window is made of, so it wears this client's art and is dragged like it)
@@ -17,6 +18,8 @@ local NAME = "FallensFlyoutsWelcome"
 -- room for a name under an icon, its Okay button, and how far down the screen it first stands.
 local EDGE, TITLE, FOOT, GAP, APART, NAME_H = 18, 34, 14, 12, 1.9, 16
 local OKAY_W, OKAY_H, FROM_TOP = 96, 22, 140
+-- the heading's toggle, as the game's settings list has it, and how far in what it opens stands
+local TOGGLE, SET_IN = 22, 26
 -- how long after the login it comes up: the bars are placed by then
 local WAIT = 4
 -- kept with the saved data: still to be shown, or closed by the player
@@ -31,7 +34,17 @@ local TEXT = {
     icon = "Right-click a flyout's bar button to give it an icon and a name of its own.",
     auto = "You can also use these preset flyouts. Each one keeps itself filled with what you have of that kind. "
         .. "Drag one onto an action bar, or click it and then a bar button.",
-    more = "More in the settings: /ff",
+    -- His words (2026-11-25): "i feel like we should have a dropdown for the presets, and the setting about rotating
+    -- the cd icon. like \"Optional setup\" dropdown. cus i want ppl to understand they really can just go waithout
+    -- any setup and its super easy. but also allow users to see there are options if they want them. dont put all
+    -- options in the optional setup part tho, just the presets and the otyher i just mentioned, and at the bbottom
+    -- letr ppl know they can change those and more in the settings at any time (and tell them how to get there)"
+    setup = "Optional setup",
+    last = "Show the last one used on its button",
+    lastTip = "A flyout's bar button shows the icon you picked from it last, with its cooldown and tooltip, until "
+        .. "you pick another.",
+    more = "You can change these and more at any time. Press Escape, then choose %s, %s, and Fallen's Flyouts, "
+        .. "or type /ff.",
 }
 W.TEXT, W.OWED, W.DONE = TEXT, OWED, DONE
 
@@ -79,28 +92,54 @@ local function Build()
 
     local step = Art.ICON * APART
     local shown = Auto.Shown()
-    local wide = step * (#shown - 1) + Art.ICON + GAP * 2
+    -- the row of presets sets the width; what the heading opens stands in from the rest by SET_IN
+    local row = step * (#shown - 1) + Art.ICON + GAP * 2
+    local wide = row + SET_IN
     frame.wide = wide
-    local function Line(font, above, gap)
+    local function Line(font, above, gap, width)
         local line = frame:CreateFontString(nil, "ARTWORK", font)
         if above then
             line:SetPoint("TOPLEFT", above, "BOTTOMLEFT", 0, -gap)
         else
             line:SetPoint("TOPLEFT", frame, "TOPLEFT", EDGE, -TITLE)
         end
-        line:SetWidth(wide)
+        line:SetWidth(width or wide)
         line:SetJustifyH("LEFT")
         return line
     end
     frame.make = Line("GameFontHighlight")
     frame.icon = Line("GameFontHighlight", frame.make, GAP)
     frame.icon:SetText(TEXT.icon)
-    frame.auto = Line("GameFontHighlight", frame.icon, GAP)
+    -- "Optional setup": a heading with the toggle the game's settings list opens its groups with, shut at
+    -- first, so that what comes before it reads as all there is to do; opened, the presets and the one setting
+    local setup = CreateFrame("Button", nil, frame)
+    setup:SetPoint("TOPLEFT", frame.icon, "BOTTOMLEFT", 0, -GAP)
+    setup:SetSize(wide, TOGGLE)
+    setup.toggle = CreateFrame("Button", nil, setup)
+    setup.toggle:SetSize(TOGGLE, TOGGLE)
+    setup.toggle:SetPoint("LEFT")
+    setup.toggle:SetHighlightTexture("Interface\\Buttons\\UI-PlusButton-Hilight", "ADD")
+    setup.label = setup:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    setup.label:SetPoint("LEFT", setup.toggle, "RIGHT", 4, 0)
+    setup.label:SetText(TEXT.setup)
+    local function Flip() W.Setup(not frame.setupOpen) end
+    setup:SetScript("OnClick", Flip)
+    setup.toggle:SetScript("OnClick", Flip)
+    frame.setup = setup
+    local optional = CreateFrame("Frame", nil, frame)
+    optional:SetPoint("TOPLEFT", setup, "BOTTOMLEFT", SET_IN, -GAP)
+    optional:SetSize(row, 1)
+    optional:Hide()
+    frame.optional = optional
+    frame.auto = optional:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    frame.auto:SetPoint("TOPLEFT", optional, "TOPLEFT")
+    frame.auto:SetWidth(row)
+    frame.auto:SetJustifyH("LEFT")
     frame.auto:SetText(TEXT.auto)
     -- the flyouts that fill themselves, as on their settings page: picked up by a drag or a click
     frame.icons = {}
     for i, kind in ipairs(shown) do
-        local button = ns.AutoUI.Icon(kind, frame)
+        local button = ns.AutoUI.Icon(kind, optional)
         if i == 1 then
             button:SetPoint("TOPLEFT", frame.auto, "BOTTOMLEFT", GAP, -GAP)
         else
@@ -108,22 +147,63 @@ local function Build()
         end
         frame.icons[i] = button
     end
+    -- the setting the settings page has under General, the same box: the game's own, with its tip
+    local last = CreateFrame("CheckButton", nil, optional, "UICheckButtonTemplate")
+    last:SetPoint("TOPLEFT", frame.icons[1], "BOTTOMLEFT", -GAP - 4, -(NAME_H + GAP / 2))
+    local lastText = last.Text or last.text
+    if not lastText then
+        lastText = last:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        lastText:SetPoint("LEFT", last, "RIGHT", GAP / 2, 0)
+    end
+    lastText:SetText(TEXT.last)
+    last:SetScript("OnClick", function(self)
+        local ok, why = ns.Flyouts.SetShowLast(self:GetChecked() and true or false)
+        if not ok and why then ns.Warn(why) end
+        self:SetChecked(ns.Flyouts.ShowLast())
+    end)
+    last:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(TEXT.last)
+        GameTooltip:AddLine(TEXT.lastTip, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    last:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    frame.last = last
     frame.okay = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.okay:SetSize(OKAY_W, OKAY_H)
     frame.okay:SetText(OKAY)
     frame.okay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -EDGE, FOOT)
     frame.okay:SetScript("OnClick", Dismiss)
+    -- at the foot: these and more can be changed any time, and the way to the settings, in the game's own words
     frame.more = frame:CreateFontString(nil, "ARTWORK", "GameFontDisable")
-    frame.more:SetPoint("LEFT", frame, "BOTTOMLEFT", EDGE, FOOT + OKAY_H / 2)
-    frame.more:SetText(TEXT.more)
+    frame.more:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", EDGE, FOOT + OKAY_H + GAP)
+    frame.more:SetWidth(wide)
+    frame.more:SetJustifyH("LEFT")
+    frame.more:SetText(TEXT.more:format(GAMEMENU_OPTIONS or "Options", ADDONS or "AddOns"))
     return frame
 end
 
--- as high as its words run to at this client's size of text
+-- as high as its words run to at this client's size of text, with "Optional setup" shut or open
 local function Fit()
-    local words = (frame.make:GetStringHeight() or 0) + GAP + (frame.icon:GetStringHeight() or 0) + GAP
-        + (frame.auto:GetStringHeight() or 0)
-    frame:SetSize(frame.wide + EDGE * 2, TITLE + words + GAP + Art.ICON + NAME_H + GAP + OKAY_H + FOOT)
+    local height = TITLE + (frame.make:GetStringHeight() or 0) + GAP + (frame.icon:GetStringHeight() or 0) + GAP
+        + TOGGLE
+    if frame.setupOpen then
+        height = height + GAP + (frame.auto:GetStringHeight() or 0) + GAP + Art.ICON + NAME_H + GAP / 2
+            + (frame.last:GetHeight() or 0)
+    end
+    height = height + GAP + (frame.more:GetStringHeight() or 0) + GAP + OKAY_H + FOOT
+    frame:SetSize(frame.wide + EDGE * 2, height)
+end
+
+-- "Optional setup" opened or shut: its toggle as the game's settings list draws its own, and the window refit
+function W.Setup(open)
+    if not frame then return end
+    frame.setupOpen = open and true or false
+    local toggle = frame.setup.toggle
+    toggle:SetNormalTexture(open and "common-button-dropdown-open" or "common-button-dropdown-closed")
+    toggle:SetPushedTexture(open and "common-button-dropdown-openpressed" or "common-button-dropdown-closedpressed")
+    frame.optional:SetShown(frame.setupOpen)
+    Fit()
 end
 
 function W.Owed() return FallensFlyoutsDB ~= nil and FallensFlyoutsDB.welcome == OWED end
@@ -134,11 +214,14 @@ function W.Show()
     if InCombatLockdown() then return false end
     Build()
     frame.make:SetText(PadMode() and TEXT.makePad or TEXT.make)
-    Fit()
-    -- where it first stands; dragged, it stays where it was put until it is closed
+    frame.last:SetChecked(ns.Flyouts.ShowLast())
+    -- where it first stands, with "Optional setup" shut; dragged or opened, it stays so until it is closed
     if not frame:IsShown() then
         frame:ClearAllPoints()
         frame:SetPoint("TOP", UIParent, "TOP", 0, -FROM_TOP)
+        W.Setup(false)
+    else
+        Fit()
     end
     frame:Show()
     return true

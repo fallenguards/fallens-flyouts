@@ -4986,18 +4986,44 @@ do
     -- His words (2026-11-23): "why does our initial user popout not mention the right click to change flyout
     -- icon? ppl literally won't even know."
     check(up.icon.text == "Right-click a flyout's bar button to give it an icon and a name of its own."
-        and up.icon.point[2] == up.make and up.auto.point[2] == up.icon,
+        and up.icon.point[2] == up.make and up.setup.point[2] == up.icon,
         "under it, a line on the right-click that gives a flyout an icon and a name: " .. tostring(up.icon.text))
     check(up.auto.text:find("You can also use these preset flyouts.", 1, true) == 1
         and up.auto.text:find("keeps itself filled with what you have of that kind", 1, true) ~= nil
         and up.auto.text:find("These fill themselves", 1, true) == nil,
         "and then, in words that cannot be read as part of that line, what the preset flyouts are: " .. tostring(up.auto.text))
+    -- His words (2026-11-25): "i feel like we should have a dropdown for the presets, and the setting about rotating
+    -- the cd icon. like \"Optional setup\" dropdown. cus i want ppl to understand they really can just go waithout
+    -- any setup and its super easy. but also allow users to see there are options if they want them. dont put all
+    -- options in the optional setup part tho, just the presets and the otyher i just mentioned, and at the bbottom
+    -- letr ppl know they can change those and more in the settings at any time (and tell them how to get there)"
+    local closed = up.h
+    check(up.setup.label.text == "Optional setup" and not up.optional:IsShown()
+        and up.setup.toggle:GetNormalTexture().texture == "common-button-dropdown-closed"
+        and up.auto.point[2] == up.optional and up.last:GetParent() == up.optional,
+        "under them \"Optional setup\", shut at first, with the toggle the game's settings list has; the presets and "
+            .. "the one setting are in it")
+    check(up.more.text == "You can change these and more at any time. Press Escape, then choose Options, AddOns, and "
+        .. "Fallen's Flyouts, or type /ff.", "at the foot, that these and more can be changed any time, and how to get "
+            .. "there: " .. tostring(up.more.text))
+    check(up.h == 34 + up.make:GetStringHeight() + 12 + up.icon:GetStringHeight() + 12 + 22 + 12
+        + up.more:GetStringHeight() + 12 + 22 + 14, "shut, it is as high as its words need: " .. tostring(up.h))
+    up.setup.scripts.OnClick(up.setup)
+    check(up.optional:IsShown() and up.setup.toggle:GetNormalTexture().texture == "common-button-dropdown-open"
+        and up.h == closed + 12 + up.auto:GetStringHeight() + 12 + NS.Art.ICON + 16 + 6 + up.last:GetHeight(),
+        "a click on the heading opens it, and the window grows by what it holds: " .. tostring(up.h))
     local names = {}
     for i, icon in ipairs(up.icons) do names[i] = icon.kind.name end
     -- the tests' character is a mage, offered a mage's two as well
     check(table.concat(names, " ") == "Food Drink Potions Elixirs Flasks Scrolls Bandages Portals Teleports"
-        and up.icons[1].parent == up
-        and up.more.text == "More in the settings: /ff", "under them the preset flyouts, in a row: " .. table.concat(names, " "))
+        and up.icons[1].parent == up.optional, "in it the preset flyouts, in a row: " .. table.concat(names, " "))
+    check(not up.last:GetChecked() and not NS.Flyouts.ShowLast(), "and its box, off as shipped")
+    up.last.checked = true
+    up.last.scripts.OnClick(up.last)
+    check(NS.Flyouts.ShowLast() and up.last:GetChecked(), "ticked there, the setting is on, as on the settings page")
+    up.last.checked = false
+    up.last.scripts.OnClick(up.last)
+    check(not NS.Flyouts.ShowLast(), "and off again")
     -- it can be dragged, and stays where it is put
     check(up.movable == true and up.clamped == true and up.scripts.OnDragStart ~= nil and up.scripts.OnDragStop ~= nil,
         "the window may be moved, and is kept on the screen")
@@ -5008,10 +5034,7 @@ do
     local where = up.point
     Welcome.Show()
     check(up.point == where, "shown again while it is up, it is not put back where it first stood")
-    -- as high as its words run to
-    check(up.h == 34 + up.make:GetStringHeight() + 12 + up.icon:GetStringHeight() + 12 + up.auto:GetStringHeight() + 12
-        + NS.Art.ICON + 16 + 12 + 22 + 14,
-        "it is as high as its words and its row need: " .. tostring(up.h))
+    check(up.optional:IsShown(), "shown again while it is up, \"Optional setup\" stays as it was")
     -- dragged out of it onto a bar: the flyout is there, and the window is still up for the next one
     local food = up.icons[1]
     food.scripts.OnDragStart(food)
