@@ -1262,6 +1262,9 @@ local function actionButton(name, slot, parent)
     b.Name.font = "GameFontHighlightSmallOutline"
     -- its icon: the game dims it short of power or unusable, and leaves it alone out of range
     b.icon = b:CreateTexture()
+    -- its sweep and its number, as the game's bar button has them
+    b.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
+    b.Count = b:CreateFontString()
     -- a hover shows the tooltip of what it holds, as the game's bar button does (ActionButton.lua:
     -- SetTooltip, which a refresh of the tooltip runs again); the mouse off it puts the tooltip away
     function b:SetTooltip()

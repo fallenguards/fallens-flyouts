@@ -901,6 +901,35 @@ local function Remark(unit)
     if not unit.dots.shown then Arrow(unit) end
 end
 
+-- An entry's own tooltip in `tip`, as a bar button holding it shows it; for its icon in a flyout, and for the
+-- bar button that shows it as the last one used (F.ShowLast)
+function F.FillTip(tip, entry)
+    if entry.kind == "spell" then
+        -- with its rank, as the spellbook and the bars show it
+        tip:SetSpellByID(entry.id, false, true)
+    elseif entry.kind == "item" and Bars.OwnToy(entry.id) and tip.SetToyByItemID then
+        -- as the Toy Box and a bar button show a toy: what it does, not the item that teaches it
+        tip:SetToyByItemID(entry.id)
+    elseif entry.kind == "item" then
+        tip:SetItemByID(entry.id)
+    elseif Bars.Kinds[entry.kind] then
+        Bars.Kinds[entry.kind].Tip(tip, entry.id)
+    else
+        -- as a bar button shows a macro: the spell or the item it stands for just now, else its name
+        local ref = Macros.Ref(entry)
+        local spell = GetMacroSpell and GetMacroSpell(ref)
+        local link
+        if not spell and GetMacroItem then link = select(2, GetMacroItem(ref)) end
+        if spell and not (issecretvalue and issecretvalue(spell)) then
+            tip:SetSpellByID(spell, false, true)
+        elseif type(link) == "string" and not (issecretvalue and issecretvalue(link)) then
+            tip:SetHyperlink(link)
+        else
+            tip:SetText(Macros.Name(entry) or tostring(entry.id))
+        end
+    end
+end
+
 local function EntryTip(self)
     local entry = self.entry
     if not entry then return end
@@ -913,30 +942,7 @@ local function EntryTip(self)
     -- while keys are being set, a hover says how instead
     if ns.Keys and ns.Keys.Enter(self) then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    if entry.kind == "spell" then
-        -- with its rank, as the spellbook and the bars show it
-        GameTooltip:SetSpellByID(entry.id, false, true)
-    elseif entry.kind == "item" and Bars.OwnToy(entry.id) and GameTooltip.SetToyByItemID then
-        -- as the Toy Box and a bar button show a toy: what it does, not the item that teaches it
-        GameTooltip:SetToyByItemID(entry.id)
-    elseif entry.kind == "item" then
-        GameTooltip:SetItemByID(entry.id)
-    elseif Bars.Kinds[entry.kind] then
-        Bars.Kinds[entry.kind].Tip(GameTooltip, entry.id)
-    else
-        -- as a bar button shows a macro: the spell or the item it stands for just now, else its name
-        local ref = Macros.Ref(entry)
-        local spell = GetMacroSpell and GetMacroSpell(ref)
-        local link
-        if not spell and GetMacroItem then link = select(2, GetMacroItem(ref)) end
-        if spell and not (issecretvalue and issecretvalue(spell)) then
-            GameTooltip:SetSpellByID(spell, false, true)
-        elseif type(link) == "string" and not (issecretvalue and issecretvalue(link)) then
-            GameTooltip:SetHyperlink(link)
-        else
-            GameTooltip:SetText(Macros.Name(entry) or tostring(entry.id))
-        end
-    end
+    F.FillTip(GameTooltip, entry)
     -- says so beforehand when the flyout would go with it; a hint, so not where hints are turned off
     if not InCombatLockdown() and P.Hints() then
         local flyout = self.flyout
@@ -1333,6 +1339,7 @@ local function EntryButton(unit, i)
     -- by the place it stands in now: in a fight the secure code may have moved it
     entry:SetScript("PostClick", function(self, button, down)
         Tell("pick", unit, self.entryIndex, button, down)
+        F.NoteLast(unit)
         if button == "LeftButton" and not down and GetCursorInfo() then xpcall(F.Dropped, geterrorhandler(), self) end
     end)
     -- never a field called unit: the client takes that for a unit name
@@ -1442,6 +1449,12 @@ local function Unit(f)
     -- a chosen icon, drawn over the bar button's own
     unit.face = opener:CreateTexture(nil, "BACKGROUND")
     unit.face:Hide()
+    -- with "Show the last one used on its button": that one's sweep and number over the button's own (F.LastLook)
+    unit.lastCool = CreateFrame("Cooldown", nil, opener, "CooldownFrameTemplate")
+    unit.lastCool:Hide()
+    unit.lastCount = opener:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    unit.lastCount:SetJustifyH("RIGHT")
+    unit.lastCount:Hide()
     -- a name given to the flyout, written on the bar button where the game writes a macro's
     unit.label = opener:CreateFontString(nil, "OVERLAY", NAME_FONT)
     unit.label:Hide()
@@ -1831,16 +1844,19 @@ function Labels(unit)
 end
 
 -- the flyout's chosen icon on its bar button: over the button's own icon,
--- under its key text and its cooldown; none chosen shows the button's own
+-- under its key text and its cooldown; none chosen shows the button's own.
+-- With "Show the last one used on its button" (F.ShowLast), the icon picked from it last, once there is one.
 local function Face(unit)
     local host, face = unit.host, unit.face
-    local icon = host and unit.flyout and unit.flyout.icon
+    local last = host and F.LastEntry(unit)
+    local icon = host and ((last and F.Icon(last)) or (unit.flyout and unit.flyout.icon))
     if unit.mask then
         face:RemoveMaskTexture(unit.mask)
         unit.mask = nil
     end
     if not icon then
         face:Hide()
+        F.LastLook(unit)
         return
     end
     local own = host.icon or host.Icon
@@ -1859,6 +1875,7 @@ local function Face(unit)
         unit.mask = mask
     end
     face:Show()
+    F.LastLook(unit)
 end
 
 -- The flyout's name on its bar button: where the game writes a macro's name, and in its lettering. A
@@ -3328,6 +3345,107 @@ function F.LastIcon(unit)
     end
 end
 
+-- A player's ask, passed on by him (2026-11-25): "someone requested the flyout icon to change to be whatever
+-- the last-casted spell from the flyout is."
+-- With this on, a flyout's bar button shows the icon picked from it last, as a bar button holding that one shows
+-- it: its icon, cooldown, dimming, number and tooltip. The profile's, off as shipped. What was picked last is
+-- kept with the flyout (F.KeepLast, F.NoteLast), so it shows from the first moment it is turned on.
+function F.ShowLast()
+    local data = P.Data()
+    return data ~= nil and data.showLast == true
+end
+function F.SetShowLast(on)
+    if InCombatLockdown() then return false, TEXT.fight end
+    local data = P.Data()
+    if not data then return false end
+    data.showLast = on and true or nil
+    F.Apply()
+    return true
+end
+-- the entry a flyout's bar button shows as the last one used, while that is on and the flyout still holds it
+function F.LastEntry(unit)
+    local flyout = unit and unit.flyout
+    local last = flyout and flyout.last
+    if not (type(last) == "table" and F.ShowLast()) then return nil end
+    for _, entry in ipairs(flyout.entries or {}) do
+        if Same(entry, last) then return entry end
+    end
+end
+-- A pick from a flyout, in a fight too: the one the secure code says was picked last is kept with the flyout,
+-- and its bar button shows it at once where that is on.
+function F.NoteLast(unit)
+    if not (root and unit and unit.flyout) then return end
+    local name = root:GetAttribute("last" .. unit.index)
+    local frame = name and _G[name]
+    local entry = frame and frame.entry
+    if not entry then return end
+    local was = unit.flyout.last
+    if type(was) == "table" and Same(was, entry) then return end
+    unit.flyout.last = Copy(entry)
+    if F.ShowLast() then Face(unit) end
+end
+-- The bar button showing the last one used looks as a button holding it: that one's sweep, dimming and number,
+-- drawn over the button's own; those of the button (what its slot holds) are put out of sight meanwhile, and
+-- given back as they were. Drawings only: in a fight too.
+do
+    local OWN = { "cooldown", "chargeCooldown", "Count" }
+    local function GiveBack(unit)
+        local on, was = unit.hushedOn, unit.hushed
+        for part, alpha in pairs(on and was or {}) do
+            local region = on[part]
+            if type(region) == "table" and region.SetAlpha then region:SetAlpha(alpha) end
+        end
+        unit.hushedOn, unit.hushed = nil, nil
+    end
+    function F.LastLook(unit)
+        local host, entry = unit.host, F.LastEntry(unit)
+        local cool, count = unit.lastCool, unit.lastCount
+        if not (host and entry and unit.face:IsShown()) then
+            GiveBack(unit)
+            cool:Clear()
+            cool:Hide()
+            count:Hide()
+            unit.face:SetVertexColor(1, 1, 1)
+            return
+        end
+        if unit.hushedOn ~= host then
+            GiveBack(unit)
+            unit.hushedOn, unit.hushed = host, {}
+            for _, part in ipairs(OWN) do
+                local region = host[part]
+                if type(region) == "table" and region.GetAlpha and region.SetAlpha then
+                    unit.hushed[part] = region:GetAlpha()
+                    region:SetAlpha(0)
+                end
+            end
+        end
+        -- the sweep where the button's own is, at its level; the number where the button writes its own
+        local own, mark = host.cooldown, host.Count
+        cool:ClearAllPoints()
+        cool:SetAllPoints(unit.face)
+        if type(own) == "table" and own.GetFrameLevel then cool:SetFrameLevel(own:GetFrameLevel()) end
+        local kind, id = Casts(entry)
+        cool:SetHideCountdownNumbers(C_CVar.GetCVar("countdownForCooldowns") ~= "1")
+        Sweep(cool, kind, id)
+        cool:Show()
+        Dim(unit.face, kind, id)
+        count:ClearAllPoints()
+        if type(mark) == "table" and mark.GetPoint then
+            count:SetAllPoints(mark)
+        else
+            count:SetPoint("BOTTOMRIGHT", unit.face, "BOTTOMRIGHT", -2, 2)
+        end
+        Count(count, kind, id)
+        count:Show()
+    end
+    -- every button showing the last one used, after a cooldown, a cast or the bags changed
+    function F.LastLooks()
+        for f = 1, used do
+            if units[f].hushedOn then F.LastLook(units[f]) end
+        end
+    end
+end
+
 -- whether the ranks of one spell are kept in rank order: the profile's, on unless turned off
 function F.Ranked()
     local data = P.Data()
@@ -3936,8 +4054,9 @@ events:SetScript("OnEvent", function(_, event, on)
         sought = nil
         if open then Labels(open) end
     elseif STATE_EVENTS[event] then
-        -- only the open one can be seen
+        -- only the open one can be seen; and the bar buttons showing the last one used
         if open then State(open) end
+        F.LastLooks()
     else
         -- the pad became the input in use, or stopped being it
         if event == "GAME_PAD_ACTIVE_CHANGED" then padMode = on == true end

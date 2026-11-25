@@ -489,10 +489,18 @@ do
     I.HINT = HINT
     local GRAY = 0.6
     local function Hint(tip)
-        if InCombatLockdown() or not (ns.Profiles and ns.Profiles.Hints()) then return end
         local owner = tip:GetOwner()
         local name = owner and owner.GetName and owner:GetName()
-        if type(name) ~= "string" or not F.At(name) then return end
+        if type(name) ~= "string" then return end
+        local flyout, unit = F.At(name)
+        if not flyout then return end
+        -- a button showing the last one used (F.ShowLast) has that one's tooltip, in a fight too
+        local last = unit and F.LastEntry(unit)
+        if last then F.FillTip(tip, last) end
+        if InCombatLockdown() or not (ns.Profiles and ns.Profiles.Hints()) then
+            if last then tip:Show() end
+            return
+        end
         tip:AddLine(F.PadInUse() and HINT.pad or HINT.mouse, GRAY, GRAY, GRAY, true)
         tip:AddLine(HINT.off, GRAY, GRAY, GRAY, true)
         tip:Show()

@@ -171,6 +171,50 @@ do
     flushAll()
 end
 
+print("the last one used on the flyout's bar button")
+do
+    -- A player's ask, passed on by him (2026-11-25): "someone requested the flyout icon to change to be whatever
+    -- the last-casted spell from the flyout is."
+    local F = NS.Flyouts
+    local unit = F.Units()[one]
+    check(not F.ShowLast(), "off as shipped")
+    tap("1"); tap("3")
+    check(W.casts[#W.casts] == "spell:502" and not face():IsShown(), "off, a pick leaves the bar button as it was")
+    check(F.SetShowLast(true) == true, "turned on")
+    flushAll()
+    check(face():IsShown() and face().texture == 502 and face().parent == host,
+        "on, the bar button shows the icon picked last, one picked before it was turned on too")
+    W.combat = true
+    tap("1"); tap("2")
+    check(W.casts[#W.casts] == "spell:501" and face().texture == 501, "in a fight a pick changes it at once")
+    W.combat = false
+    W.cooling[501] = { startTime = W.clock, duration = 8, isEnabled = true, modRate = 1 }
+    fire("SPELL_UPDATE_COOLDOWN")
+    check(unit.lastCool:IsShown() and unit.lastCool.sweep ~= nil and host.cooldown:GetAlpha() == 0
+        and host.Count:GetAlpha() == 0, "the cooldown of the one shown sweeps over it; the button's own sweep and "
+        .. "number, which are of what its slot holds, are out of sight")
+    W.cooling[501] = nil
+    fire("SPELL_UPDATE_COOLDOWN")
+    check(unit.lastCool.sweep == nil, "and the sweep ends with that cooldown")
+    W.tip = nil
+    GameTooltip:SetOwner(host, "ANCHOR_RIGHT")
+    GameTooltip:SetAction(1)
+    check(W.tip ~= nil and W.tip.id == 501, "its tooltip is the tooltip of the one shown")
+    GameTooltip:Hide()
+    F.Apply()
+    flushAll()
+    check(face().texture == 501, "and the one shown lasts through a laying out")
+    check(F.SetShowLast(false) == true, "turned off")
+    flushAll()
+    check(not face():IsShown() and not unit.lastCool:IsShown() and host.cooldown:GetAlpha() == 1
+        and host.Count:GetAlpha() == 1, "off, the button is its own again, its sweep and number given back")
+    W.tip = nil
+    GameTooltip:SetOwner(host, "ANCHOR_RIGHT")
+    GameTooltip:SetAction(1)
+    check(W.tip == nil, "and so is its tooltip")
+    GameTooltip:Hide()
+end
+
 print("an icon's frame hugs the icon, as on the game's own flyout")
 do
     local Art = NS.Art

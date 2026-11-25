@@ -561,6 +561,7 @@ do
         Note(not F.Hiding(), "hide items I have none of: off")
         Note(not F.Ranked(), "spell ranks in order: off")
         Note(F.Twice(), "press a flyout's key again for the last one used: on")
+        Note(F.ShowLast(), "show the last one used on its button: on")
         Note(not F.Around(), "open around the button in gamepad mode: off")
         Note(F.Cross() ~= "opposite", "new flyouts pick with: " .. F.Cross())
         Note(F.Faces(), "flyouts made before 1.1.7 pick with the face buttons")

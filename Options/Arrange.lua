@@ -89,6 +89,9 @@ local TEXT = {
         .. "button does.",
     twiceAsk = "%s\n\n%s\n\n|cffff2020%s|r",
     twiceOn = "Turn On",
+    last = "Show the last one used on its button",
+    lastTip = "A flyout's bar button shows the icon you picked from it last, with its cooldown and tooltip, until "
+        .. "you pick another.",
     hints = "Show hints in tooltips",
     hintsTip = "A gray line at the foot of a flyout's tooltips says what a click or a button does there: a "
         .. "right-click on its bar button to change what the button shows and its name, a drag to move an "
@@ -278,6 +281,7 @@ function A.Refresh()
         w.ranks:SetChecked(F.Ranked())
         w.hide:SetChecked(F.Hiding())
         w.twice:SetChecked(F.Twice())
+        w.last:SetChecked(F.ShowLast())
         w.hints:SetChecked(ns.Profiles.Hints())
     end
     local p = padPage and padPage.arrange
@@ -582,6 +586,14 @@ function A.Plate(on)
     A.Refresh()
 end
 
+-- A player's ask, passed on by him (2026-11-25): "someone requested the flyout icon to change to be whatever
+-- the last-casted spell from the flyout is."
+function A.Last(on)
+    local ok, why = F.SetShowLast(on)
+    if not ok and why then ns.Warn(why) end
+    A.Refresh()
+end
+
 -- the game's own check box, after another on its line or under one, with its words and its tip
 local function Check(parent, text, tip, run, after, under)
     local box = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
@@ -636,7 +648,8 @@ function A.Build(page, above, scrolled)
     w.twice, twiceLabel = Check(holder, TEXT.twice, TEXT.twiceTip, A.AskTwice, nil, w.ranks)
     w.twice.warn = TEXT.twiceWarn
     w.hints = Check(holder, TEXT.hints, TEXT.hintsTip, A.Hints, twiceLabel)
-    local keysHead = Head(holder, TEXT.keysHead, w.twice, -GAP * 3)
+    w.last = Check(holder, TEXT.last, TEXT.lastTip, A.Last, nil, w.twice)
+    local keysHead = Head(holder, TEXT.keysHead, w.last, -GAP * 3)
     w.keysNote = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     w.keysNote:SetPoint("TOPLEFT", keysHead, "BOTTOMLEFT", 0, -GAP)
     w.keysNote:SetPoint("RIGHT", holder, "RIGHT", -EDGE, 0)
