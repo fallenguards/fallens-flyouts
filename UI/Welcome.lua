@@ -32,6 +32,10 @@ local TEXT = {
         .. "spot on your action bars.",
     -- in the game's gamepad mode nothing is dragged
     makePad = "To make a flyout, bind an ability onto a button that already holds one and choose Add to Flyout.",
+    -- His words (2026-11-26): "we need 1 concise sentence about how to change oreintation of a flyout too."
+    -- With the mouse: the grip at an open flyout's far end (UI/Turn.lua); in gamepad mode, the Controller page.
+    turn = "To turn a flyout, open it and drag the arrows at its far end.",
+    turnPad = "To turn a flyout, press \"Turn\" under \"Arrange a flyout\" on the Controller page of the settings.",
     -- His words (2026-11-23): "why does our initial user popout not mention the right click to change
     -- flyout icon? ppl literally won't even know."
     icon = "Right-click a flyout's bar button to give it an icon and a name of its own.",
@@ -47,6 +51,9 @@ local TEXT = {
     -- shown immediately. also, this look for some reason makes it seem like the show hlast used one toggle is
     -- related to the flyouts. they almost need like diff headers."
     presets = "Preset flyouts",
+    -- His words (2026-11-26): "at bottom of preset flyouts of optional setup, before flyout buttons header, should
+    -- also say that people can make custom auto-populated flyouts in the settings."
+    own = "You can also make your own from any mix of kinds on the \"Automatic Flyouts\" page of the settings.",
     buttons = "Flyout buttons",
     last = "Show the last one used on its button",
     lastTip = "A flyout's bar button shows the icon you picked from it last, with its cooldown and tooltip, until "
@@ -116,7 +123,8 @@ local function Build()
         return line
     end
     frame.make = Line("GameFontHighlight")
-    frame.icon = Line("GameFontHighlight", frame.make, GAP)
+    frame.turn = Line("GameFontHighlight", frame.make, GAP)
+    frame.icon = Line("GameFontHighlight", frame.turn, GAP)
     frame.icon:SetText(TEXT.icon)
     -- "Optional setup": a heading with the toggle the game's settings list opens its groups with, shut at
     -- first, so that what comes before it reads as all there is to do; opened, the presets and the one setting
@@ -159,8 +167,14 @@ local function Build()
         end
         frame.icons[i] = button
     end
+    -- under the row, that one's own can be made in the settings (the Automatic Flyouts page, Make Your Own)
+    frame.own = optional:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    frame.own:SetPoint("TOPLEFT", frame.icons[1], "BOTTOMLEFT", -GAP, -(NAME_H + GAP / 2))
+    frame.own:SetWidth(row)
+    frame.own:SetJustifyH("LEFT")
+    frame.own:SetText(TEXT.own)
     frame.buttonsHead = optional:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    frame.buttonsHead:SetPoint("TOPLEFT", frame.icons[1], "BOTTOMLEFT", -GAP, -(NAME_H + GAP))
+    frame.buttonsHead:SetPoint("TOPLEFT", frame.own, "BOTTOMLEFT", 0, -GAP)
     frame.buttonsHead:SetText(TEXT.buttons)
     -- the setting the settings page has under General, the same box: the game's own, with its tip
     local last = CreateFrame("CheckButton", nil, optional, "UICheckButtonTemplate")
@@ -203,10 +217,12 @@ end
 -- as high as its words run to at this client's size of text, with "Optional setup" shut or open
 local function Fit()
     local function Tall(line) return line:GetStringHeight() or 0 end
-    local height = TITLE + Tall(frame.make) + GAP + Tall(frame.icon) + GAP + TOGGLE
+    local height = TITLE + Tall(frame.make) + GAP + Tall(frame.turn) + GAP + Tall(frame.icon) + GAP
+        + TOGGLE
     if frame.setupOpen then
-        height = height + GAP + Tall(frame.presetsHead) + GAP / 2 + Tall(frame.auto) + GAP + Art.ICON + NAME_H + GAP
-            + Tall(frame.buttonsHead) + GAP / 4 + (frame.last:GetHeight() or 0) + GAP + Tall(frame.more)
+        height = height + GAP + Tall(frame.presetsHead) + GAP / 2 + Tall(frame.auto) + GAP + Art.ICON + NAME_H
+            + GAP / 2 + Tall(frame.own) + GAP + Tall(frame.buttonsHead) + GAP / 4 + (frame.last:GetHeight() or 0)
+            + GAP + Tall(frame.more)
     end
     height = height + GAP + OKAY_H + FOOT
     frame:SetSize(frame.wide + EDGE * 2, height)
@@ -231,6 +247,7 @@ function W.Show()
     if InCombatLockdown() then return false end
     Build()
     frame.make:SetText(PadMode() and TEXT.makePad or TEXT.make)
+    frame.turn:SetText(PadMode() and TEXT.turnPad or TEXT.turn)
     frame.last:SetChecked(ns.Flyouts.ShowLast())
     -- where it first stands, with "Optional setup" shut; dragged or opened, it stays so until it is closed
     if not frame:IsShown() then

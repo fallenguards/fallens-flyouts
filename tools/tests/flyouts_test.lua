@@ -4987,10 +4987,13 @@ do
     -- \"spell, item, macro, gear set, pet, mount, and more onto the \"+\" of another spot on your action bars.\""
     check(up.okay.point[1] == "BOTTOM" and up.okay.point[3] == "BOTTOM" and up.okay.point[4] == 0,
         "its Okay stands in the middle of its row")
+    -- His words (2026-11-26): "we need 1 concise sentence about how to change oreintation of a flyout too."
+    check(up.turn.text == "To turn a flyout, open it and drag the arrows at its far end." and up.turn.point[2] == up.make,
+        "under that line, one on how a flyout is turned: " .. tostring(up.turn.text))
     -- His words (2026-11-23): "why does our initial user popout not mention the right click to change flyout
     -- icon? ppl literally won't even know."
     check(up.icon.text == "Right-click a flyout's bar button to give it an icon and a name of its own."
-        and up.icon.point[2] == up.make and up.setup.point[2] == up.icon,
+        and up.icon.point[2] == up.turn and up.setup.point[2] == up.icon,
         "under it, a line on the right-click that gives a flyout an icon and a name: " .. tostring(up.icon.text))
     check(up.auto.text:find("Each one keeps itself filled with what you have of that kind", 1, true) == 1
         and up.auto.text:find("These fill themselves", 1, true) == nil,
@@ -5010,17 +5013,23 @@ do
     -- shown immediately. also, this look for some reason makes it seem like the show hlast used one toggle is
     -- related to the flyouts. they almost need like diff headers."
     check(up.presetsHead.text == "Preset flyouts" and up.auto.point[2] == up.presetsHead
-        and up.buttonsHead.text == "Flyout buttons" and up.last.point[2] == up.buttonsHead,
+        and up.buttonsHead.text == "Flyout buttons" and up.last.point[2] == up.buttonsHead
+        and up.buttonsHead.point[2] == up.own,
         "in it a heading for each part: the presets, then the flyouts' bar buttons with the box under its own")
+    -- His words (2026-11-26): "at bottom of preset flyouts of optional setup, before flyout buttons header, should
+    -- also say that people can make custom auto-populated flyouts in the settings."
+    check(up.own.text == 'You can also make your own from any mix of kinds on the "Automatic Flyouts" page of the settings.' and up.own.point[2] == up.icons[1],
+        "under the presets, that one's own can be made in the settings: " .. tostring(up.own.text))
     check(up.more.text == "You can change these and more at any time. Press Escape, then choose Options, AddOns, and "
         .. "Fallen's Flyouts, or type /ff." and up.more.point[2] == up.last,
         "at its end, that these and more can be changed any time, and how to get there: " .. tostring(up.more.text))
-    check(up.h == 34 + up.make:GetStringHeight() + 12 + up.icon:GetStringHeight() + 12 + 22 + 12 + 22 + 14,
-        "shut, the window holds only the two lines and the heading: " .. tostring(up.h))
+    check(up.h == 34 + up.make:GetStringHeight() + 12 + up.turn:GetStringHeight() + 12 + up.icon:GetStringHeight() + 12
+        + 22 + 12 + 22 + 14, "shut, the window holds only its three lines and the heading: " .. tostring(up.h))
     up.setup.scripts.OnClick(up.setup)
     check(up.optional:IsShown() and up.setup.toggle:GetNormalTexture().texture == "common-button-dropdown-open"
         and up.h == closed + 12 + up.presetsHead:GetStringHeight() + 6 + up.auto:GetStringHeight() + 12 + NS.Art.ICON
-            + 16 + 12 + up.buttonsHead:GetStringHeight() + 3 + up.last:GetHeight() + 12 + up.more:GetStringHeight(),
+            + 16 + 6 + up.own:GetStringHeight() + 12 + up.buttonsHead:GetStringHeight() + 3 + up.last:GetHeight() + 12
+            + up.more:GetStringHeight(),
         "a click on the heading opens it, and the window grows by what it holds: " .. tostring(up.h))
     local names = {}
     for i, icon in ipairs(up.icons) do names[i] = icon.kind.name end
@@ -5095,9 +5104,12 @@ do
     NS.Welcome.Show()
     check(up.make.text == "To make a flyout, bind an ability onto a button that already holds one and choose Add to Flyout.",
         "in gamepad mode the line names Add to Flyout, not a drag: " .. tostring(up.make.text))
+    check(up.turn.text == 'To turn a flyout, press "Turn" under "Arrange a flyout" on the Controller page of the settings.',
+        "and how a flyout is turned there, with no drag: " .. tostring(up.turn.text))
     padBar.shown = false
     NS.Welcome.Show()
     check(up.make.text:find('onto the "+"', 1, true) ~= nil, "out of that mode it names the drag")
+    check(up.turn.text == "To turn a flyout, open it and drag the arrows at its far end.", "and the grip that turns a flyout")
     up.okay.scripts.OnClick(up.okay)
     -- saved data from before this version, with a flyout in it: nobody new, never shown
     FallensFlyoutsDB = { profiles = { ["Tester W - Realm"] = { flyouts = { { host = "ActionButton1",
