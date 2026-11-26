@@ -4981,8 +4981,12 @@ do
     check(up.template == "DefaultPanelFlatTemplate" and up.title.text == "Fallen's Flyouts" and up.close ~= nil
         and up.close.template == "UIPanelCloseButtonDefaultAnchors" and up.okay.template == "UIPanelButtonTemplate",
         "it is made of the game's own flat panel, the one its Loot Rolls window is made of, with that panel's title, x and button")
-    check(up.make.text == "To make a flyout, drag a spell, item or macro onto a bar button and drop it on the +.",
-        "it says in a line how a flyout is made: " .. tostring(up.make.text))
+    check(up.make.text == 'To make a flyout, drag a spell, item, macro, gear set, pet, mount, and more onto the "+" of another spot on your action bars.',
+        "it says in a line how a flyout is made, and with what: " .. tostring(up.make.text))
+    -- His words (2026-11-26): "why is okay button not centered horizontally? also the flyout part should say
+    -- \"spell, item, macro, gear set, pet, mount, and more onto the \"+\" of another spot on your action bars.\""
+    check(up.okay.point[1] == "BOTTOM" and up.okay.point[3] == "BOTTOM" and up.okay.point[4] == 0,
+        "its Okay stands in the middle of its row")
     -- His words (2026-11-23): "why does our initial user popout not mention the right click to change flyout
     -- icon? ppl literally won't even know."
     check(up.icon.text == "Right-click a flyout's bar button to give it an icon and a name of its own."
@@ -5093,7 +5097,7 @@ do
         "in gamepad mode the line names Add to Flyout, not a drag: " .. tostring(up.make.text))
     padBar.shown = false
     NS.Welcome.Show()
-    check(up.make.text:find("drop it on the +", 1, true) ~= nil, "out of that mode it names the drag")
+    check(up.make.text:find('onto the "+"', 1, true) ~= nil, "out of that mode it names the drag")
     up.okay.scripts.OnClick(up.okay)
     -- saved data from before this version, with a flyout in it: nobody new, never shown
     FallensFlyoutsDB = { profiles = { ["Tester W - Realm"] = { flyouts = { { host = "ActionButton1",

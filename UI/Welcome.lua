@@ -26,7 +26,10 @@ local WAIT = 4
 local OWED, DONE = "owed", "done"
 local TEXT = {
     title = "Fallen's Flyouts",
-    make = "To make a flyout, drag a spell, item or macro onto a bar button and drop it on the +.",
+    -- His words (2026-11-26): "why is okay button not centered horizontally? also the flyout part should say
+    -- \"spell, item, macro, gear set, pet, mount, and more onto the \"+\" of another spot on your action bars.\""
+    make = "To make a flyout, drag a spell, item, macro, gear set, pet, mount, and more onto the \"+\" of another "
+        .. "spot on your action bars.",
     -- in the game's gamepad mode nothing is dragged
     makePad = "To make a flyout, bind an ability onto a button that already holds one and choose Add to Flyout.",
     -- His words (2026-11-23): "why does our initial user popout not mention the right click to change
@@ -184,7 +187,8 @@ local function Build()
     frame.okay = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.okay:SetSize(OKAY_W, OKAY_H)
     frame.okay:SetText(OKAY)
-    frame.okay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -EDGE, FOOT)
+    -- in the middle of its row, as the What's New window has its own
+    frame.okay:SetPoint("BOTTOM", frame, "BOTTOM", 0, FOOT)
     frame.okay:SetScript("OnClick", Dismiss)
     -- at the end of what it opens: these and more can be changed any time, and the way to the settings, in the
     -- game's own words
