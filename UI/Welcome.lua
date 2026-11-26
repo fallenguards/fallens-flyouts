@@ -533,7 +533,7 @@ end
 -- What changed in each version, newest first: CHANGELOG.md's, written here by tools/changes.py.
 -- BEGIN generated: changes (tools/changes.py, from CHANGELOG.md)
 W.CHANGES = {
-    { version = "1.1.9", date = "2026-11-25", parts = {
+    { version = "1.1.9", date = "2026-11-26", parts = {
         { name = "Added", items = {
             "\"Show the last one used on its button\" in /ff makes a flyout's bar button show the icon you " ..
                 "picked from it last.",

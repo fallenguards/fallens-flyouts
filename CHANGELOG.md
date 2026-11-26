@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.9] - 2026-11-25
+## [1.1.9] - 2026-11-26
 
 ### Added
 - "Show the last one used on its button" in `/ff` makes a flyout's bar button show the icon you picked from it last.
